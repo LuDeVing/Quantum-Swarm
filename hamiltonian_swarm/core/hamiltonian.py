@@ -272,3 +272,150 @@ class HamiltonianFunction:
                 logger.debug("Leapfrog step=%d, H=%.6f", step, H)
 
         return trajectory
+
+
+class ResourceHamiltonian:
+    """
+    Hamiltonian applied to measurable data/resource flow through agents.
+
+    Measurable quantities:
+        q = [tokens_processed, messages_sent, memory_reads]  — real integer counts
+        p = dq/dt — rate of change of those counts over timestep dt
+
+    Energy interpretation:
+        T(p) = (1/2)||p||²  — kinetic energy = current processing rate
+        V(q) = (1/2)||q||²  — potential energy = accumulated data pressure
+
+    Conservation law:
+        H_total = Σ H_i should remain approximately constant in a healthy swarm.
+        A spike in H_i signals agent overload or data leak.
+        A drop in H_i signals agent silence (crash / timeout).
+    """
+
+    def __init__(self, n_resource_dims: int = 3) -> None:
+        self.n_dims = n_resource_dims
+        self._prev_q: dict[str, torch.Tensor] = {}
+        logger.debug("ResourceHamiltonian created: n_dims=%d", n_resource_dims)
+
+    def compute_q(self, agent_id: str, counts: torch.Tensor) -> torch.Tensor:
+        """
+        q = real resource counts: [tokens_processed, messages_sent, memory_reads].
+
+        Parameters
+        ----------
+        agent_id : str
+        counts : torch.Tensor
+            Shape [n_dims], real non-negative counts.
+
+        Returns
+        -------
+        torch.Tensor
+            Normalized coordinate vector.
+        """
+        return counts.float()
+
+    def compute_p(
+        self,
+        agent_id: str,
+        current_counts: torch.Tensor,
+        dt: float,
+    ) -> torch.Tensor:
+        """
+        p = dq/dt — rate of change of resource counts.
+
+        Parameters
+        ----------
+        agent_id : str
+        current_counts : torch.Tensor
+        dt : float
+            Elapsed time since last measurement.
+
+        Returns
+        -------
+        torch.Tensor
+            Momentum vector (resource velocity).
+        """
+        if agent_id not in self._prev_q:
+            self._prev_q[agent_id] = current_counts.float()
+            return torch.zeros_like(current_counts)
+        prev = self._prev_q[agent_id]
+        p = (current_counts.float() - prev) / max(dt, 1e-8)
+        self._prev_q[agent_id] = current_counts.float()
+        return p
+
+    def kinetic_energy(self, p: torch.Tensor) -> float:
+        """T(p) = (1/2) ||p||²"""
+        return 0.5 * float(p.pow(2).sum().item())
+
+    def potential_energy(self, q: torch.Tensor) -> float:
+        """V(q) = (1/2) ||q||²"""
+        return 0.5 * float(q.pow(2).sum().item())
+
+    def total_energy(self, q: torch.Tensor, p: torch.Tensor) -> float:
+        """H(q, p) = T(p) + V(q)"""
+        return self.kinetic_energy(p) + self.potential_energy(q)
+
+    def total_swarm_energy(
+        self,
+        agent_qs: dict[str, torch.Tensor],
+        agent_ps: dict[str, torch.Tensor],
+    ) -> float:
+        """
+        H_total = Σ H_i(q_i, p_i) — should be approximately conserved.
+
+        Parameters
+        ----------
+        agent_qs, agent_ps : dict[str, torch.Tensor]
+            Per-agent resource coordinates and momenta.
+
+        Returns
+        -------
+        float
+        """
+        total = 0.0
+        for aid in agent_qs:
+            if aid in agent_ps:
+                total += self.total_energy(agent_qs[aid], agent_ps[aid])
+        return total
+
+    def detect_agent_failure(
+        self,
+        agent_id: str,
+        agent_qs: dict[str, torch.Tensor],
+        agent_ps: dict[str, torch.Tensor],
+        threshold: float = 3.0,
+    ) -> bool:
+        """
+        True if agent's H deviates > threshold * σ from swarm mean.
+
+        Parameters
+        ----------
+        agent_id : str
+        agent_qs, agent_ps : dict
+        threshold : float
+            Z-score threshold.
+
+        Returns
+        -------
+        bool
+        """
+        energies = {
+            aid: self.total_energy(agent_qs[aid], agent_ps[aid])
+            for aid in agent_qs
+            if aid in agent_ps
+        }
+        if len(energies) < 2 or agent_id not in energies:
+            return False
+        values = list(energies.values())
+        mean_H = float(torch.tensor(values).mean().item())
+        std_H = float(torch.tensor(values).std().item())
+        if std_H < 1e-8:
+            return False
+        z = abs(energies[agent_id] - mean_H) / std_H
+        if z > threshold:
+            logger.warning(
+                "ResourceHamiltonian: agent %s z-score=%.2f > %.2f — possible failure.",
+                agent_id, z, threshold,
+            )
+            return True
+        return False

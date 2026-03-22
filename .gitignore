@@ -60,3 +60,6 @@ secrets.toml
 
 # OS
 desktop.ini
+
+# Claude
+.claude/
