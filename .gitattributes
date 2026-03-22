@@ -1,0 +1,10 @@
+# Normalize line endings: LF in repo, auto-convert on checkout
+* text=auto eol=lf
+
+# Force binary for generated files
+*.pt binary
+*.pth binary
+*.ckpt binary
+*.png binary
+*.gif binary
+*.mp4 binary
