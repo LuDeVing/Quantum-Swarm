@@ -1,341 +1,388 @@
-# Design Review — HamiltonianSwarm: An AI Agent Company
+# Design Review: HamiltonianSwarm
 
 **Course:** CS-AI-2025 — Building AI-Powered Applications | Spring 2026
-**Team Lead:** Luka Mikautadze
-**Team Members:** Luka Mikautadze, Rezo Darsavelidze, davit mzhavanadze
-**Submission Date:** 3/22/2026
+**Team Name:** Quantum Swarm
+**Team Members:** Luka Mikautadze | Rezo Darsavelidze | Davit Mzhavanadze
+**Team Lead (LMS submitter):** Luka Mikautadze
+**Total Points:** 10
 
 ---
 
-## Section 1: Problem Statement and Real User Need
+## Section 1: Problem Statement and Real User Need (2.0 pts)
 
-**User:** Operations managers and founders at SMBs (5–50 employees) in
-knowledge-intensive industries — legal, finance, market research, technical due
-diligence — who need coordinated multi-step analysis but cannot afford specialist
-teams for each project.
+### 1.1 — Who has this problem?
 
-*Example:* A 12-person fintech startup needs a competitive landscape analysis, a
-regulatory compliance review, and a technical risk assessment before a Series A
-pitch in 48 hours. That normally requires three specialists working in sequence,
-which the company cannot staff or schedule on short notice.
+Technical teams and operators running AI agents on long, multi-step tasks —
+autonomous research, financial analysis, code generation, scientific search —
+who currently cannot trust those agents to stay coherent without constant human
+supervision.
 
-**The problem:** Complex analytical work requires a researcher, an analyst, a
-validator, and a coordinator working in sequence. SMBs outsource these roles
-individually on Upwork/Fiverr and coordinate handoffs by email — which is slow,
-error-prone, and expensive.
-
-**Evidence:**
-- Upwork (2023): 60% of SMB clients manage 3+ freelancers per project, averaging
-  4.2 coordination touchpoints per handoff.
-- McKinsey (2023): knowledge workers spend 28% of their workday on coordination,
-  not work — costing $800–1,200 in wasted time per 4-person project.
-- Deloitte (2024): SMBs in knowledge-intensive sectors run ~18 analytical projects
-  per year at $2,400 each — ~$43,200/year.
-
-**Quantified cost:**
-
-| Dimension | Current state |
-|---|---|
-| Cost per outsourced project (4-person team) | $1,600–$3,200 |
-| Coordination overhead per project | ~$306 wasted |
-| Average projects/year per SMB | 18 |
-| Annual spend | ~$43,200 |
-| Median turnaround | 3.1 business days |
-| Time-sensitive decisions missed | ~1 in 4 projects |
+A concrete example: a prediction market trader on Polymarket runs an AI agent
+to scan hundreds of open markets, identify mispriced probabilities, and
+recommend positions before odds shift. By the time the agent finishes, it has
+contradicted its own earlier probability estimates for correlated markets,
+forgotten the risk constraints set at the start of the run, and recommended
+conflicting positions — with no indication that anything went wrong.
 
 ---
 
-## Section 2: Proposed Solution and AI-Powered Differentiator
+### 1.2 — What is the problem?
 
-**HamiltonianSwarm** is an AI agent company: a system of specialized AI agents
-— Researcher, Analyst, Validator, Orchestrator — that runs in parallel, validates
-its own coordination, and delivers a multi-perspective report in minutes.
-
-The user submits a task. The Orchestrator decomposes it, assigns sub-tasks to
-agents running concurrently, validates every handoff for information consistency,
-and returns a structured report with per-claim confidence scores.
-
-**What companies can actually use this for:**
-
-- *Legal firm:* Feed in a 200-page contract. The Search Agent finds relevant case
-  law, the Task Agent identifies risk clauses, the Validator flags contradictions
-  between jurisdiction sections, and the Memory Agent tracks defined terms across
-  the whole document. Output: a risk-ranked clause summary in under 10 minutes.
-
-- *Startup pre-fundraise:* Submit "Analyse the EU payments regulatory landscape
-  for a new entrant." Agents run competitor mapping, regulatory barrier extraction,
-  and technical risk assessment in parallel. A human analyst team takes 3 days;
-  the swarm delivers in minutes.
-
-- *Financial analyst:* "Compare Q3 earnings for the top 5 US banks and flag
-  outliers." Agents pull filings, extract key metrics, cross-validate numbers,
-  and surface discrepancies — in one run, not one analyst reading five PDFs.
-
-- *Medical researcher:* "Summarise clinical trials for Drug X published 2020–2025
-  and identify conflicting efficacy results." The swarm searches, extracts, and
-  explicitly surfaces trials where agents disagree — rather than averaging them
-  into a false consensus.
-
-**Core features:**
-
-1. **Parallel agent execution** — Search, Task, Memory, and Validator agents run
-   concurrently. Tasks that take a human team 3 days sequentially finish in
-   minutes. *Benefit: same-day turnaround.*
-
-2. **Energy-validated handoffs** — When an agent passes work to the next, the
-   Validator checks Hamiltonian energy conservation: information content before
-   and after the handoff must match within 5%. If it doesn't, the handoff is
-   rejected and the agent reruns the sub-task. *Benefit: no silent information
-   loss or contradiction between sub-tasks.*
-
-3. **Quantum belief states for uncertainty** — Each agent holds competing
-   hypotheses in superposition and reports probability-weighted confidence.
-   Claims where agents disagree are surfaced explicitly, not silently averaged.
-   *Benefit: the user sees what the system is uncertain about.*
-
-4. **Self-improving agents** — A background evolutionary loop (QPSO mutation +
-   Pareto fitness) improves agent configurations — prompts, reasoning style,
-   search depth — based on task performance. *Benefit: the swarm gets better at
-   the user's specific domain over 10–20 uses.*
-
-5. **Containment-safe evolution** — Evolution cannot change the semantic goal.
-   Every mutation is tested: `|H(mutated) − H_goal| / |H_goal| < 10%`. Mutations
-   that fail are rejected. *Benefit: the system cannot evolve away from what the
-   user asked for.*
-
-**Why quantum functions specifically:**
-Classical optimization gets stuck in local optima and degrades under noise.
-Quantum-inspired methods follow laws of nature that have been proven over billions
-of years — energy conservation, wave-particle duality, quantum tunneling — which
-are mathematically optimal for search and evolution in high-dimensional spaces.
-
-Concretely:
-- **QPSO** uses the quantum delta potential to let particles tunnel through
-  barriers that trap classical PSO, producing better global search with fewer
-  function evaluations.
-- **Hamiltonian mechanics** conserves energy exactly, giving us a provable
-  invariant to detect when an agent has drifted — something a plain "check the
-  output" heuristic cannot provide.
-- **Quantum belief states** represent uncertainty natively (superposition of
-  hypotheses) rather than forcing a premature binary decision, which is how
-  genuine experts actually reason before they have enough evidence.
-- **Evolutionary containment via H conservation** means the system cannot improve
-  its way out of your goal — the same reason a physical system cannot spontaneously
-  violate conservation laws.
-
-**AI capabilities used:**
-- **Claude claude-sonnet-4-6** (LLM reasoning): each agent calls the Claude API
-  with a role-specific prompt. Open-ended language tasks — interpreting a
-  regulatory document, assessing strategic risk — require LLM reasoning;
-  deterministic rules cannot do this.
-- **Function calling / tool use**: the Validator extracts structured claims
-  (entity, assertion, confidence, source) from free-text agent outputs, enabling
-  machine-readable contradiction detection.
-- **EmbeddingHamiltonianNN**: embeds agent outputs and checks energy drift from
-  the goal embedding, detecting semantic drift that is syntactically valid but
-  off-target.
-
-**Non-AI comparison:**
-
-| | Human team (non-AI) | HamiltonianSwarm |
-|---|---|---|
-| Turnaround | 3.1 days | Minutes |
-| Cost per project | $1,600–$3,200 | ~$2–5 API cost |
-| Availability | Business hours | 24/7 |
-| Uncertainty | Single narrative, no confidence | Per-claim confidence scores |
-| Handoff errors | ~1 in 5 projects | Validated <5% energy mismatch |
-| Improves over time | Requires retraining | Automatic evolutionary loop |
+Current AI agents — GPT-4, Claude, Gemini — are intelligent enough to reason,
+search, and execute tasks. The failure is architectural. Over long operations
+they reliably break in the same ways: they forget the original goal mid-task,
+contradict their own earlier decisions, get stuck on locally obvious but globally
+wrong solutions, lose context across agent handoffs, and have no mechanism to
+improve between runs. This is not a model intelligence problem. It is a
+structural one. Every stable system in nature — from atoms to organisms —
+persists because it obeys conservation laws. Current AI agents obey none. There
+is no underlying invariant keeping their logic coherent over time.
 
 ---
 
-## Section 3: Technical Architecture with Diagram
+### 1.3 — How do they currently solve it?
+
+The dominant workaround is manual supervision: engineers set short context
+windows and restart agents every 20–30 steps, manually copy state between
+sessions, and run separate validation passes after the fact to catch
+contradictions. For overnight or long-horizon tasks, a human reviews the output
+the next morning and corrects errors before any results are used. This is
+documented practice across AI engineering teams — it is why tools like LangChain
+added explicit memory modules, and why agent benchmarks (AgentBench, SWE-bench)
+specifically measure coherence failure rates across multi-step tasks.
+
+---
+
+### 1.4 — What is the cost of this problem?
+
+- **40–60% task failure rate** on tasks requiring more than 10 sequential
+  decisions, due to coherence failures — not reasoning failures on individual
+  steps (AgentBench, 2023).
+- **2–4 hours of next-morning cleanup** for any overnight agent run, where a
+  human must verify coherence before results are acted on.
+- For agents operating on consequential outputs — financial positions, legal
+  analysis, medical queries — a coherence failure with no detection mechanism
+  is not just lost time. It is a liability with no upper bound.
+
+---
+
+### 1.5 — Evidence of the problem
+
+AgentBench (Liu et al., 2023) and SWE-bench (Jimenez et al., 2024) are public
+benchmarks that measure AI agent performance on multi-step tasks. Both document
+that failure rates rise sharply with task length — not because models fail on
+individual reasoning steps, but because they lose coherence across steps. The
+workaround described in 1.3 (manual restarts, short context windows, post-hoc
+validation) is publicly documented in the engineering blogs of Cognition AI and
+the Devin team as standard practice for production agent deployments.
+
+---
+
+## Section 2: Proposed Solution and AI-Powered Differentiator (2.0 pts)
+
+### 2.1 — What does your application do?
+
+HamiltonianSwarm deploys a coordinated company of specialized AI agents —
+Researcher, Analyst, Validator, Orchestrator — that divides a complex task,
+runs the sub-tasks in parallel, and validates every handoff between agents using
+physics-based conservation checks. The user submits a task description. The
+Orchestrator decomposes it and assigns sub-tasks to concurrent agents. Each
+agent calls the Claude API with a role-specific prompt. The Validator confirms
+that information is not lost or contradicted between handoffs. The system
+returns a structured report with per-claim confidence scores, flagging
+explicitly where agents disagree rather than silently averaging to a false
+consensus.
+
+---
+
+### 2.2 — Core features (3–5)
+
+| Feature | What the user can do | Why this matters |
+|---------|---------------------|-----------------|
+| 1. Parallel agent execution | Submit a complex multi-part task and receive all sub-analyses simultaneously | Tasks that take a human team days sequentially complete in minutes |
+| 2. Energy-validated handoffs | Trust that information is not silently lost or contradicted between agents | Hamiltonian conservation check ensures sub-task results are consistent before they combine |
+| 3. Quantum belief states | See per-claim confidence scores and explicit flags where agents disagree | User knows what the system is uncertain about instead of receiving a falsely confident single narrative |
+| 4. Self-improving agents | The swarm improves its configuration over 10–20 uses in the user's domain | QPSO evolutionary loop tunes agent prompts and reasoning style based on real task performance |
+| 5. Containment-safe evolution | The system cannot evolve away from the user's stated goal | Every mutation is tested against H_goal; mutations that exceed 10% semantic drift are rejected |
+
+---
+
+### 2.3 — The AI-powered differentiator
+
+The core differentiator is **physics-enforced coherence over time using LLM
+reasoning + conservation laws**, which would be impossible without AI.
+
+Three specific AI capabilities are used:
+
+1. **LLM text generation and reasoning** (Claude claude-sonnet-4-6 via Anthropic
+   API): each specialized agent calls the Claude API with a role-specific system
+   prompt. Open-ended tasks — interpreting a regulatory document, assessing
+   strategic risk, synthesising contradictory sources — require language model
+   reasoning. A rule-based system cannot do this.
+
+2. **Structured extraction via function calling**: the Validator Agent uses
+   Claude's tool-use capability to extract structured claims (entity, assertion,
+   confidence, source) from each agent's free-text output. This makes
+   contradiction detection machine-readable. Without function calling, outputs
+   are unstructured text with no consistency guarantee.
+
+3. **Embedding-based semantic drift detection** (EmbeddingHamiltonianNN): agent
+   outputs are embedded at each step and checked against the initial goal
+   embedding using Hamiltonian energy. This detects when an agent is producing
+   syntactically valid but semantically off-target output — something a keyword
+   check or prompt heuristic cannot catch.
+
+Removing the AI collapses the product entirely. The physics layer governs
+stability; the AI layer provides the reasoning. Neither works without the other.
+
+---
+
+### 2.4 — What would the non-AI version look like?
+
+The non-AI version is a project manager assigning tasks to human specialists,
+coordinating handoffs by email, and manually reading all outputs to detect
+contradictions. This takes days, costs thousands of dollars per project, requires
+human availability, produces no confidence scores, and does not improve between
+runs. A simpler AI version — a single LLM with a long context window — has the
+coherence failure problem described in Section 1: it forgets, drifts, and
+contradicts itself. The architecture, not just the model, is what is new here.
+
+---
+
+## Section 3: Technical Architecture (2.5 pts)
+
+### 3.1 — Architecture Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    USER / BROWSER                           │
-│          React + Vite  —  hosted on Vercel                  │
-└───────────────────────────┬─────────────────────────────────┘
-                            │ HTTPS
-                            ▼
-┌─────────────────────────────────────────────────────────────┐
-│               BACKEND  —  FastAPI (Python 3.14)             │
-│              hosted Railway  •  POST /tasks                 │
-│              GET /tasks/{id}/report                         │
-└──────┬──────────────────────────────────┬───────────────────┘
-       │                                  │
-       ▼                                  ▼
-┌─────────────────────┐       ┌───────────────────────────┐
-│    SwarmManager     │       │  SQLite  +  Redis         │
-│  spawn / submit /   │       │  task store + event queue │
-│  monitor health     │       └───────────────────────────┘
-└──────┬──────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                      USER / BROWSER                          │
+│             React + Vite  —  hosted on Vercel                │
+└────────────────────────────┬─────────────────────────────────┘
+                             │ HTTPS
+                             ▼
+┌──────────────────────────────────────────────────────────────┐
+│              BACKEND  —  FastAPI (Python 3.12)               │
+│             hosted Railway  •  POST /tasks                   │
+│             GET /tasks/{id}/report                           │
+└──────┬───────────────────────────────────┬────────────────────┘
+       │                                   │
+       ▼                                   ▼
+┌──────────────────────┐      ┌────────────────────────────┐
+│    SwarmManager      │      │  SQLite  +  Redis          │
+│  spawn / submit /    │      │  task store + event queue  │
+│  monitor health      │      └────────────────────────────┘
+└──────┬───────────────┘
        ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      ORCHESTRATOR                           │
-│            QPSO task assignment  •  health monitor          │
-└───┬──────────────┬───────────────┬───────────────┬──────────┘
-    ▼              ▼               ▼               ▼
-┌────────┐  ┌──────────┐  ┌─────────────┐  ┌────────────┐
-│ Search │  │  Task    │  │   Memory    │  │ Validator  │
-│ Agent  │  │  Agent   │  │   Agent     │  │  Agent     │
-│ (QPSO) │  │ (Claude) │  │  (φ-space)  │  │ (H-audit)  │
-└───┬────┘  └────┬─────┘  └──────┬──────┘  └─────┬──────┘
-    └────────────┴───────────────┴────────────────┘
-                            │
-                            ▼  text generation + function calling
-                ┌───────────────────────────────┐
-                │      Anthropic Claude API     │
-                │    model: claude-sonnet-4-6   │
-                └───────────────────────────────┘
-                            │
-                            ▼
-                ┌───────────────────────────────┐
-                │   HAMILTONIAN / QUANTUM CORE  │
-                │   PyTorch 2.1                 │
-                │   Conservation Monitor        │
-                │   QuantumBeliefState          │
-                │   EmbeddingHamiltonianNN      │
-                │   EvolutionaryContainment     │
-                └───────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                        ORCHESTRATOR                          │
+│           QPSO task assignment  •  health monitor            │
+└────┬─────────────────┬──────────────────┬──────────┬─────────┘
+     ▼                 ▼                  ▼          ▼
+┌─────────┐   ┌──────────┐   ┌──────────────┐  ┌───────────┐
+│ Search  │   │  Task    │   │   Memory     │  │ Validator │
+│  Agent  │   │  Agent   │   │   Agent      │  │  Agent    │
+│ (QPSO)  │   │ (Claude) │   │  (φ-space)   │  │ (H-audit) │
+└────┬────┘   └────┬─────┘   └──────┬───────┘  └─────┬─────┘
+     └─────────────┴────────────────┴────────────────┘
+                             │
+                             ▼  text generation + function calling
+                 ┌───────────────────────────────┐
+                 │      Anthropic Claude API      │
+                 │    model: claude-sonnet-4-6    │
+                 └───────────────────────────────┘
+                             │
+                             ▼
+                 ┌───────────────────────────────┐
+                 │   HAMILTONIAN / QUANTUM CORE   │
+                 │   PyTorch 2.1                  │
+                 │   Conservation Monitor         │
+                 │   QuantumBeliefState           │
+                 │   EmbeddingHamiltonianNN       │
+                 │   EvolutionaryContainment      │
+                 └───────────────────────────────┘
 ```
 
-**→ Redraw in Excalidraw/draw.io before PDF submission.**
-
-**Stack:**
-
-| Layer | Technology | Justification |
-|---|---|---|
-| Frontend | React + Vite | Async component model fits live agent-trace polling; Vite keeps dev iteration fast |
-| Frontend hosting | Vercel | Zero-config Git deploy; edge CDN for fast dashboard load |
-| Backend | FastAPI (Python 3.14) | asyncio-native matches multi-agent concurrency; Python required for hamiltonian_swarm library |
-| Backend hosting | Railway | One-command deploy with persistent SQLite volumes; no AWS overhead for course scale |
-| Queue | Redis | pub/sub for agent completion events; avoids polling on the API layer |
-| Storage | SQLite | Task records + agent logs fit in a single file; no separate DB server needed |
-| AI model | Claude claude-sonnet-4-6 | Cleaner tool-use interface than GPT-4o for structured claim extraction; $3/$15 per MTok |
-| ML framework | PyTorch 2.1 | Required for autograd Hamiltonian gradients and EmbeddingHamiltonianNN |
-
-**Data flow — core feature (task → report):**
-
-1. User submits task text via React → `POST /tasks`
-2. FastAPI writes `PENDING` record to SQLite, publishes to Redis
-3. SwarmManager receives event, calls `submit_task()` → Orchestrator
-4. Orchestrator runs `decompose_task()` via QPSO, spawns 4 agents concurrently
-5. Each agent calls Claude claude-sonnet-4-6 with role-specific prompt; function
-   calling extracts structured claims (entity, assertion, confidence, source)
-6. ConservationMonitor checks energy after each update; drift >5% triggers
-   AgentStateQEC correction
-7. HandoffProtocol validates `|ΔH_sender + ΔH_receiver| ≈ 0` between agents;
-   failing handoffs trigger agent re-run
-8. QuantumBeliefState aggregates claims; entropy >0.8 nats → "conflicting
-   evidence" label
-9. Results written to SQLite; Redis completion event published
-10. React polls `GET /tasks/{id}/report`; renders structured report with
-    confidence scores and agent trace
+**Redraw in Excalidraw or draw.io before PDF export.**
 
 ---
 
-## Section 4: Risk and Failure Mode Analysis
+### 3.2 — Technology Stack
 
-### FM1 — Hallucination cascade (AI-specific, High impact)
-
-One agent produces a fabricated claim. Downstream agents treat it as fact, building
-further analysis on top of it. Unlike single-agent hallucination, the cascade looks
-credible because multiple agents appear to agree.
-
-**Mitigations:**
-- Function-calling extraction requires every claim to carry `source_type:
-  agent_inference | retrieved_fact`. A chain of `agent_inference` with no
-  `retrieved_fact` ancestor is labelled `UNVERIFIED` in the report.
-- QuantumBeliefState entropy check: entropy > 0.8 nats on a claim triggers a
-  "conflicting evidence" flag before consensus is declared.
-- A handoff that fabricates information registers as energy mismatch >5% and is
-  rejected; the sending agent reruns the sub-task.
-
-### FM2 — Agent goal drift (AI-specific, High impact)
-
-The evolutionary loop produces faster agents that silently omit nuance, optimising
-for speed over accuracy and drifting from the user's stated objective over time.
-
-**Mitigations:**
-- EvolutionaryContainment encodes the core goal as `H_goal`. Every mutation is
-  tested: `|H(mutated) − H_goal| / |H_goal| < 0.10`. Failures are rejected and
-  logged to a dashboard-visible audit trail.
-- Containment runs every generation, not only at startup.
-
-### FM3 — Coordination deadlock (Infrastructure, Medium impact)
-
-Two agents wait on each other, or one crashes mid-task, leaving status `RUNNING`
-indefinitely.
-
-**Mitigations:**
-- ConservationMonitor: no energy update in >30 s fires `reset_callback`, signalling
-  the SwarmManager that the agent is stalled.
-- Hard 5-minute task timeout; timed-out tasks are marked `FAILED` and partial
-  output is returned.
-- AgentStateQEC restores a stalled agent from a 3-copy checkpoint without full
-  restart, preserving work already done.
-
-### FM4 — API cost overrun (Business, Medium impact)
-
-A complex task with many agent iterations hits $50+ in Claude API costs in a
-single run.
-
-**Mitigations:**
-- `max_tokens_budget` required at task submission (default: 100k tokens ≈ $0.60).
-  SwarmManager tracks usage via SDK `usage` field and blocks new calls at limit.
-- Dashboard shows real-time token counter; 80% consumed triggers a warning with
-  extend/conclude options.
+| Layer | Technology | Why this choice |
+|-------|-----------|-----------------|
+| Frontend framework | React + Vite | Component model fits live agent-trace polling; Vite's HMR keeps iteration fast during development |
+| UI library / styling | Tailwind CSS | Utility-first classes allow rapid dashboard layout without a component library dependency |
+| Backend language | Python 3.12 | Required — the hamiltonian_swarm physics library is Python-only (PyTorch autograd) |
+| Backend framework | FastAPI | asyncio-native matches multi-agent concurrency; automatic OpenAPI docs reduce integration friction |
+| Database | SQLite + Redis | SQLite stores task records and agent logs; Redis pub/sub handles agent completion events without polling |
+| AI model(s) | claude-sonnet-4-6 | Chosen for cleaner tool-use interface for structured claim extraction; reasoning quality sufficient for analytical tasks |
+| AI access method | Anthropic Python SDK (direct) | Direct SDK gives access to tool-use / function-calling; no routing overhead needed for single-model deployment |
+| Hosting — frontend | Vercel | Zero-config deploy from Git; edge CDN ensures fast dashboard load globally |
+| Hosting — backend | Railway | One-command Python deploy with persistent volumes for SQLite; no cold-start penalty at course scale |
+| Version control | GitHub | Course standard |
 
 ---
 
-## Section 5: Team Roles and Week-by-Week Plan
+### 3.3 — Core Data Flow
 
-| Member | Role | Owns |
-|---|---|---|
-| [A — Lead] | Product & Backend | FastAPI, SwarmManager, Redis, SQLite, API design |
-| [B] | AI & Agent Logic | Claude API, agent prompts, function-calling extraction, QuantumBeliefState |
-| [C] | Physics & Safety | Hamiltonian core, EvolutionaryContainment, ConservationMonitor, AgentStateQEC |
-| [D] | Frontend | React dashboard, task form, agent trace view, report rendering, Vercel deploy |
-
-| Week | Dates | Deliverables | Owner | Risk |
-|---|---|---|---|---|
-| 2 | Mar 23–29 | Repo, FastAPI skeleton, React boilerplate, Claude API call confirmed | A, D | Low |
-| 3 | Mar 30–Apr 5 | SwarmManager + Orchestrator wired to FastAPI; single-agent end-to-end | A, B | Medium |
-| **4** | **Apr 6–12** | **🟦 DESIGN REVIEW due Apr 2** | All | — |
-| 5 | Apr 13–19 | All 4 agents running in parallel; handoff protocol; Redis pub/sub | A, B, C | **High** — first full integration; async bugs expected |
-| 6 | Apr 20–26 | Conservation monitor live; energy logged; stall detection working | C | Medium |
-| 7 | Apr 27–May 3 | QuantumBeliefState in outputs; confidence scores in report; function-calling extraction | B, C | Medium |
-| 8 | May 4–10 | React: live agent trace, token counter, confidence display; 3 real end-to-end task tests | D, A | Medium |
-| 9 | May 11–17 | Evolutionary loop running; containment violations logged; 10-generation test passing | C | **High** — compute-heavy; may need async offload |
-| 10 | May 18–24 | Token budget enforcement; error handling; internal team end-to-end test | All | Medium |
-| **11** | **May 25–31** | **🟥 SAFETY AUDIT** — containment log reviewed; failure modes tested adversarially | C, A | High |
-| **12** | **Jun 1–7** | **🟧 PEER REVIEW PRESENTATION** — live demo + 3 pre-recorded fallback runs | All | Medium |
-
-**High-risk weeks:**
-- **Week 5:** First time all agents run together. Integration bugs (async ordering,
-  Redis race conditions, false-positive handoff rejections) are expected. Friday is
-  kept clear for debugging.
-- **Week 9:** Evolutionary loop under production API latency. Fallback: run
-  asynchronously offline if per-request latency is unacceptable.
+1. User types a task description into the React dashboard and submits
+2. Frontend sends `POST /tasks` with task text and optional token budget to FastAPI
+3. FastAPI validates the request, writes a `PENDING` record to SQLite, publishes a task event to Redis
+4. SwarmManager receives the Redis event and calls `submit_task()` → Orchestrator
+5. Orchestrator runs `decompose_task()` using QPSO to assign sub-tasks, spawns Search, Task, Memory, and Validator agents concurrently
+6. Each agent calls the Anthropic Claude API (`claude-sonnet-4-6`) with a role-specific system prompt; function calling extracts structured claims (entity, assertion, confidence, source) from each response
+7. After each agent update, ConservationMonitor checks Hamiltonian energy; if drift exceeds 5%, AgentStateQEC corrects the agent state without a full restart
+8. HandoffProtocol validates `|ΔH_sender + ΔH_receiver| ≈ 0` before each agent passes output to the next; failing handoffs trigger a re-run of the sending agent
+9. QuantumBeliefState aggregates all agent claims; claims with entropy above 0.8 nats are flagged as "conflicting evidence" in the report
+10. Final structured report is written to SQLite; a Redis completion event is published
+11. React dashboard polls `GET /tasks/{id}/report` and renders the report with confidence scores, agent trace, and token usage
 
 ---
 
-## Section 6: IRB-Light Checklist
+## Section 4: Risk and Failure Mode Analysis (1.5 pts)
 
-| # | Question | Answer | Explanation |
-|---|---|---|---|
-| 1 | Collects PII? | **Yes** | Task text may contain names, business details, or financial data typed by the user |
-| 2 | Stores user data beyond session? | **Yes** | Task text and agent outputs stored in SQLite for report retrieval |
-| 3 | Shares data with third parties? | **Yes** | Task prompts sent to Anthropic Claude API; Anthropic's API terms prohibit using API data for training |
-| 4 | Targets minors? | **No** | Business operators (18+) only; no age gate needed for prototype |
-| 5 | Decisions with material impact? | **Yes** | Reports may inform financial or legal decisions; a hallucination could influence real business action |
-| 6 | Human subjects research? | **No** | No surveys, interviews, or behavioral tracking |
+### Risk 1: Hallucination cascade
 
-**Data handling (required because Q1, Q2, Q3, Q5 are Yes):**
-- First-use consent screen states: task text is stored and sent to the Anthropic
-  API; outputs are AI-generated and must be independently verified before acting.
-- No accounts or emails collected. Tasks identified by client-generated UUID.
-  Users can delete via `DELETE /tasks/{id}`.
-- Every report page shows: *"AI-generated. Verify before acting."*
+**What happens when this occurs:**
+One agent produces a fabricated claim. Downstream agents treat it as
+established fact and build further analysis on top of it. The final report
+looks credible because multiple agents appear to agree — harder for a human
+reviewer to detect than a single-agent hallucination.
+
+**Likelihood:** Medium
+
+**Impact on user:** High
+
+**Mitigation strategy:**
+Function-calling extraction requires every claim to carry a `source_type` field
+(`agent_inference` or `retrieved_fact`). A chain of `agent_inference` claims
+with no `retrieved_fact` ancestor is automatically labelled `UNVERIFIED` in the
+report. Additionally, QuantumBeliefState entropy above 0.8 nats triggers a
+"conflicting evidence" flag before consensus is declared. A handoff that creates
+information (fabrication) registers as energy mismatch above 5% and is rejected.
+
+---
+
+### Risk 2: Agent goal drift during evolution (AI-specific)
+
+**What happens when this occurs:**
+The evolutionary loop produces agents that are faster and more energy-efficient
+but have drifted from the user's stated objective — for example, an agent that
+summarises aggressively to improve speed scores, omitting nuance the user needs.
+
+**Likelihood:** Medium
+
+**Impact on user:** High
+
+**Mitigation strategy:**
+EvolutionaryContainment encodes the user's original task as `H_goal` using both
+vector norm (kinetic term) and goal-prompt embedding (potential term). Every
+mutation is tested: `|H(mutated) − H_goal| / |H_goal| < 0.10`. Mutations that
+fail are rejected and a safe fallback mutation is substituted. All rejections
+are written to an audit log visible on the dashboard. Containment runs every
+generation, not only at startup.
+
+---
+
+### Risk 3: Coordination deadlock
+
+**What happens when this occurs:**
+Two agents wait on each other's output (circular dependency), or one agent
+crashes mid-task, leaving the task status as `RUNNING` indefinitely with no
+output returned to the user.
+
+**Likelihood:** Low
+
+**Impact on user:** Medium
+
+**Mitigation strategy:**
+ConservationMonitor records energy updates on a sliding window; no update for
+more than 30 seconds fires a `reset_callback` that signals SwarmManager the
+agent is stalled. A hard 5-minute task timeout marks timed-out tasks `FAILED`
+and returns partial output. AgentStateQEC can restore a stalled agent from a
+3-copy encoded checkpoint without full restart, preserving work completed before
+the stall.
+
+---
+
+### Risk 4: API cost overrun
+
+**What happens when this occurs:**
+A complex task triggers many agent iterations. At Anthropic API pricing, a
+poorly bounded task could generate unexpected costs in a single run, surprising
+the user.
+
+**Likelihood:** Low
+
+**Impact on user:** Medium
+
+**Mitigation strategy:**
+`max_tokens_budget` is required at task submission (default: 100k tokens).
+SwarmManager tracks cumulative token usage via the SDK `usage` response field
+and blocks new agent calls when the budget is reached. The dashboard shows a
+real-time token counter; at 80% consumed, a warning prompts the user to extend
+or conclude the run.
+
+---
+
+## Section 5: Team Roles and Week-by-Week Plan (1.5 pts)
+
+### 5.1 — Team Roles
+
+| Team Member | Primary Role | Secondary Role | What they own |
+|-------------|-------------|----------------|---------------|
+| Luka Mikautadze | Backend & Physics Lead | Deployment | FastAPI server, SwarmManager, Hamiltonian core, ConservationMonitor, Railway deploy |
+| Rezo Darsavelidze | AI & Agent Logic | Testing | Claude API integration, agent system prompts, function-calling extraction, QuantumBeliefState, EvolutionaryContainment |
+| Davit Mzhavanadze | Frontend | Integration | React dashboard, task form, live agent trace, report rendering, confidence display, Vercel deploy |
+
+---
+
+### 5.2 — Week-by-Week Plan
+
+| Week | Dates | What you will build / complete | Who leads | Risk level |
+|------|-------|-------------------------------|-----------|------------|
+| 2 | 20 Mar | Repo scaffolded; FastAPI skeleton; React boilerplate; Claude API call confirmed working end-to-end | Luka, Davit | Low |
+| 3 | 27 Mar | SwarmManager + Orchestrator wired to FastAPI; single-agent task round-trip working; SQLite schema final | Luka, Rezo | Medium |
+| **4** | **3 Apr** | **Design Review due 2 Apr.** Multi-agent parallel execution first attempt; handoff protocol integrated | All | High |
+| 5 | 10 Apr | All 4 agents running stably in parallel; Redis pub/sub for completion events; ConservationMonitor live | Luka, Rezo | **High** — first full integration; async race conditions expected |
+| 6 | 17 Apr | QuantumBeliefState in agent outputs; confidence scores in report; structured claim extraction working | Rezo | Medium |
+| 7 | 24 Apr | React dashboard: live agent trace, token counter, confidence display; first full user-facing demo | Davit, Luka | Medium |
+| 8 | 1 May | EvolutionaryContainment + evolutionary loop running; containment audit log on dashboard; 10-gen test passing | Rezo, Luka | Medium |
+| 9 | 8 May | Midterm week — no new features; bug fixes and internal end-to-end test with 3 real task types | — | — |
+| 10 | 15 May | Token budget enforcement; error handling for all edge cases; performance optimisation; team-wide test | All | Medium |
+| **11** | **22 May** | **Safety Audit** — containment log reviewed; all 4 failure modes tested with adversarial inputs; safety docs | Luka, Rezo | High |
+| **12** | **29 May** | **Peer Review Presentation** — slide deck and live demo; 3 pre-recorded task runs as fallback | All | Medium |
+
+---
+
+### 5.3 — Honest Assessment
+
+**Hardest week:** Week 5 — first time all four agents run together. We've
+tested each part separately but combining them will probably break something.
+We're keeping Friday of that week free just for fixing issues.
+
+**Biggest risk:** The evolutionary loop in Week 8. Every generation needs
+multiple Claude API calls which might be too slow to run live. If that's the
+case we'll move it to run in the background instead.
+
+---
+
+## Section 6: IRB-Light Checklist (0.5 pts)
+
+| Question | Answer | If yes: explain |
+|----------|--------|-----------------|
+| 1. Does your app collect images of real people? | No | |
+| 2. Does your app process photographs of faces? | No | |
+| 3. Does your app handle sensitive documents (medical, legal, financial, ID)? | Yes | Users may submit financial analysis tasks, legal documents, or medical research queries as task text |
+| 4. Does your app store user-uploaded data? | Yes | Task text and agent outputs are stored in SQLite on the Railway server |
+| 5. If storing data: for how long and where? | Until deleted | Stored in SQLite on Railway until user calls `DELETE /tasks/{id}`; no automatic expiry in the prototype |
+| 6. Do users need to give informed consent before using the app? | Yes | First-use screen discloses data storage, Anthropic API transmission, and AI-generated output limitations |
+
+**Consent and data handling:**
+On first use, a screen tells the user that their task text gets stored and sent
+to the Anthropic API. Anthropic doesn't use API data for training. No accounts
+or emails are collected — tasks are just tracked by a random ID. Users can
+delete their data anytime. Every report shows a banner: "AI-generated output.
+Verify before acting on it."
 
 ---
