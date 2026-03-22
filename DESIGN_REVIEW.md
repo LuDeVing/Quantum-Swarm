@@ -1,9 +1,9 @@
 # Design Review — HamiltonianSwarm: An AI Agent Company
 
 **Course:** CS-AI-2025 — Building AI-Powered Applications | Spring 2026
-**Team Lead:** [Team Lead Name]
-**Team Members:** [Member A], [Member B], [Member C], [Member D]
-**Submission Date:** [Date]
+**Team Lead:** Luka Mikautadze
+**Team Members:** Luka Mikautadze, Rezo Darsavelidze, davit mzhavanadze
+**Submission Date:** 3/22/2026
 
 ---
 
