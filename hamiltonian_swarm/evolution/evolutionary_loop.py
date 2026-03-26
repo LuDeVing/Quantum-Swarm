@@ -226,7 +226,7 @@ class QuantumSwarmEvolution:
         self._running = False
         # Return Pareto front
         all_scores = [g.fitness_scores for g in self.population]
-        pareto = self.fitness_evaluator.pareto_front(all_scores) if all_scores[0] else list(range(len(self.population)))
+        pareto = self.fitness_evaluator.pareto_front(all_scores) if all_scores else list(range(len(self.population)))
         return [self.population[i] for i in pareto]
 
     def stop(self) -> None:

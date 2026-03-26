@@ -213,7 +213,7 @@ class MemoryAgent(BaseAgent):
         if len(self._memories) >= self.max_memories:
             self._memories.sort(key=lambda m: float(m.p.norm().item()), reverse=True)
             removed = len(self._memories) - self.max_memories + 1
-            self._memories = self._memories[:self.max_memories - 1]
+            self._memories = self._memories[:self.max_memories]
             logger.debug("GC: removed %d low-energy memories.", removed)
 
     # ------------------------------------------------------------------
@@ -267,12 +267,7 @@ class MemoryAgent(BaseAgent):
         else:
             output = {"error": f"Unknown task type: {task_type}"}
 
-        # Update phase state (activity nudge)
-        dq = torch.randn(self.n_dims) * 0.01
-        dp = torch.randn(self.n_dims) * 0.01
-        H_after = self.update_phase_state(
-            self.phase_state.q + dq, self.phase_state.p + dp
-        )
+        H_after = self.step_phase_state(dt=0.01)
 
         return TaskResult(
             task_id=task_id,

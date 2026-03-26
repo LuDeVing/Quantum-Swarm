@@ -60,7 +60,7 @@ class TestAgentGenome:
         # Run many crossovers; child hidden_dim must be 64 or 256
         for _ in range(30):
             child = g1.crossover(g2)
-            assert child.hidden_dim in (64, 256) or True  # from_vector clamps
+            assert child.hidden_dim in (64, 256)
 
 
 class TestFitnessEvaluator:
@@ -177,7 +177,7 @@ class TestNaturalSelection:
         scores = [evaluator.evaluate(g, pop) for g in pop]
         pareto = evaluator.pareto_front(scores)
         survivors = selector.select_survivors(pop, scores, pareto, target_size=4)
-        assert len(survivors) <= 4
+        assert len(survivors) == 4
 
     def test_reproduce_fills_population(self):
         """reproduce() returns exactly target_size genomes."""

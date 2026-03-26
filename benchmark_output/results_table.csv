@@ -1,0 +1,13 @@
+condition,noise_pct,completion_rate,quality_mean,quality_std,propagation_rate,detection_rate
+Hamiltonian ON,0,1.0000,0.7438,0.0560,0.0000,0.0000
+Hamiltonian ON,5,1.0000,0.7433,0.0583,0.0000,1.0000
+Hamiltonian ON,10,1.0000,0.7450,0.0598,0.0714,1.0000
+Hamiltonian ON,20,1.0000,0.7432,0.0577,0.0417,1.0000
+Hamiltonian OFF,0,1.0000,0.7438,0.0560,0.0000,0.0000
+Hamiltonian OFF,5,0.8700,0.6276,0.2183,0.4800,0.0000
+Hamiltonian OFF,10,0.7000,0.4850,0.2620,0.5357,0.0000
+Hamiltonian OFF,20,0.5300,0.3586,0.2386,0.6203,0.0000
+Single Agent,0,1.0000,0.7438,0.0560,0.0000,0.0000
+Single Agent,5,0.8700,0.6276,0.2183,0.4800,0.0000
+Single Agent,10,0.7000,0.4850,0.2620,0.5357,0.0000
+Single Agent,20,0.5300,0.3586,0.2386,0.6203,0.0000

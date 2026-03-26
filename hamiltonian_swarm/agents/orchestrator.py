@@ -20,6 +20,7 @@ import torch
 
 from .base_agent import BaseAgent, AgentDriftException, TaskResult
 from ..quantum.qpso import QPSO
+from ..coordination.shared_belief_state import SharedBeliefState
 
 logger = logging.getLogger(__name__)
 
@@ -226,6 +227,12 @@ class Orchestrator(BaseAgent):
             subtask.assigned_agent_id = selected.agent_id
             return selected
 
+        # Adapt w3 based on total swarm energy:
+        # high H_total → swarm is chaotic → prefer stable agents (raise w3)
+        H_total = self.log_swarm_energy()
+        H_per_agent = H_total / max(len(agents), 1)
+        w3_adaptive = w3 * (1.0 + min(H_per_agent, 2.0))
+
         # Build fitness function over agent indices
         agent_list = agents
 
@@ -237,7 +244,7 @@ class Orchestrator(BaseAgent):
             load = self._current_load(agent)
             energy_compat = self._energy_compatibility(agent, subtask)
             # Negative because QPSO minimizes
-            return -(w1 * cap - w2 * load + w3 * energy_compat)
+            return -(w1 * cap - w2 * load + w3_adaptive * energy_compat)
 
         qpso = QPSO(
             n_particles=min(10, len(agent_list) * 2),
@@ -358,6 +365,45 @@ class Orchestrator(BaseAgent):
         """Stop the health monitoring loop."""
         self._health_monitor_running = False
 
+    def _qpso_sync_agents(self) -> None:
+        """Pull all agent phase-space positions toward the swarm global best.
+
+        Implements the QPSO position update rule directly:
+            local_attractor = φ·q + (1-φ)·q_gbest
+            q_new = local_attractor ± β·|q_mbest - q|·log(1/u)
+
+        The global best agent is the one whose energy has drifted least
+        from its initial value (most stable = most reliable belief).
+        """
+        agents = [a for a in self._agents.values() if a.energy_history]
+        if len(agents) < 2:
+            return
+
+        gbest_agent = min(
+            agents,
+            key=lambda a: abs(a.energy_history[-1] - a.energy_history[0]),
+        )
+        gbest_q = gbest_agent.phase_state.q
+        mbest_q = torch.stack([a.phase_state.q for a in agents]).mean(dim=0)
+
+        beta = 0.5
+        for agent in agents:
+            if agent.agent_id == gbest_agent.agent_id:
+                continue
+            phi  = torch.rand(agent.n_dims)
+            u    = torch.rand(agent.n_dims).clamp(min=1e-8)
+            sign = torch.sign(torch.rand(agent.n_dims) - 0.5)
+            local_attractor = phi * agent.phase_state.q + (1.0 - phi) * gbest_q
+            delta = beta * (mbest_q - agent.phase_state.q).abs() * torch.log(1.0 / u)
+            q_new = local_attractor + sign * delta
+            agent.update_phase_state(q_new, agent.phase_state.p)
+
+        logger.debug(
+            "QPSO sync complete: gbest_agent=%s, %d agents updated.",
+            gbest_agent.agent_id,
+            len(agents) - 1,
+        )
+
     # ------------------------------------------------------------------
     # Task interface
     # ------------------------------------------------------------------
@@ -380,6 +426,13 @@ class Orchestrator(BaseAgent):
             self.hamiltonian.total_energy(self.phase_state.q, self.phase_state.p).item()
         )
 
+        # Initialise shared belief state for this task
+        hypotheses = task.get("hypotheses", ["success", "failure"])
+        shared_belief = SharedBeliefState(
+            hypotheses=hypotheses,
+            agent_ids=list(self._agents.keys()),
+        )
+
         subtasks = self.decompose_task(task)
         results = []
 
@@ -392,6 +445,8 @@ class Orchestrator(BaseAgent):
                         "type": subtask.task_type,
                         "payload": subtask.payload,
                         "complexity": subtask.complexity,
+                        "hypotheses": hypotheses,
+                        "_shared_belief": shared_belief,
                     }
                 )
                 results.append(
@@ -402,17 +457,24 @@ class Orchestrator(BaseAgent):
                     }
                 )
 
-        dq = torch.randn(self.n_dims) * 0.05
-        dp = torch.randn(self.n_dims) * 0.05
-        H_after = self.update_phase_state(
-            self.phase_state.q + dq, self.phase_state.p + dp
-        )
+        # Sync all agent positions toward swarm global best via QPSO update
+        self._qpso_sync_agents()
+
+        H_after = self.step_phase_state(dt=0.01)
+
+        # Collapse shared belief to a single answer
+        final_answer = shared_belief.collapse()
 
         return TaskResult(
             task_id=task_id,
             agent_id=self.agent_id,
             success=True,
-            output={"subtasks_dispatched": len(results), "assignments": results},
+            output={
+                "subtasks_dispatched": len(results),
+                "assignments": results,
+                "final_answer": final_answer,
+                "belief_entropy": shared_belief.entropy(),
+            },
             energy_before=H_before,
             energy_after=H_after,
         )

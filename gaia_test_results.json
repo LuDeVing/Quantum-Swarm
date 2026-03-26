@@ -1,0 +1,227 @@
+[
+  {
+    "question": "A car gets 35 miles per gallon. Gas costs $3.80 per gallon. How much does it cost in dollars (to 2 decimal places) to drive 245 miles?",
+    "correct_answer": "26.60",
+    "baseline_answer": "26.60",
+    "baseline_correct": true,
+    "swarm_answer": "26.60",
+    "swarm_correct": true,
+    "disagreement": false,
+    "agent_answers": {
+      "search": "26.60",
+      "task": "26.60",
+      "memory": "26.60**",
+      "validator": "26.60"
+    }
+  },
+  {
+    "question": "A bank account has $2500. You withdraw 30% then deposit $400. What is the final balance in dollars?",
+    "correct_answer": "2150",
+    "baseline_answer": "2150",
+    "baseline_correct": true,
+    "swarm_answer": "2150",
+    "swarm_correct": true,
+    "disagreement": false,
+    "agent_answers": {
+      "search": "2150",
+      "task": "2150",
+      "memory": "2150**",
+      "validator": "2150"
+    }
+  },
+  {
+    "question": "A rectangle's length is 3 times its width. Its perimeter is 48cm. What is its area in cm\u00b2?",
+    "correct_answer": "108",
+    "baseline_answer": "108",
+    "baseline_correct": true,
+    "swarm_answer": "108",
+    "swarm_correct": true,
+    "disagreement": false,
+    "agent_answers": {
+      "search": "108",
+      "task": "108",
+      "memory": "108**",
+      "validator": "108"
+    }
+  },
+  {
+    "question": "Convert 98.6 degrees Fahrenheit to Celsius using the formula C = (F-32) \u00d7 5/9. Give a whole number.",
+    "correct_answer": "37",
+    "baseline_answer": "37",
+    "baseline_correct": true,
+    "swarm_answer": "37",
+    "swarm_correct": true,
+    "disagreement": false,
+    "agent_answers": {
+      "search": "37",
+      "task": "37",
+      "memory": "37",
+      "validator": "37"
+    }
+  },
+  {
+    "question": "A train departs at 14:35 and arrives at 17:20. How many minutes did the journey take?",
+    "correct_answer": "165",
+    "baseline_answer": "165",
+    "baseline_correct": true,
+    "swarm_answer": "165",
+    "swarm_correct": true,
+    "disagreement": false,
+    "agent_answers": {
+      "search": "165",
+      "task": "165",
+      "memory": "165",
+      "validator": "165"
+    }
+  },
+  {
+    "question": "If you roll two fair six-sided dice, how many combinations give a sum of 7?",
+    "correct_answer": "6",
+    "baseline_answer": "6",
+    "baseline_correct": true,
+    "swarm_answer": "6",
+    "swarm_correct": true,
+    "disagreement": false,
+    "agent_answers": {
+      "search": "6",
+      "task": "6",
+      "memory": "6",
+      "validator": "6"
+    }
+  },
+  {
+    "question": "In a class of 40 students, 75% passed an exam. Of those who passed, 80% scored above 80%. How many students scored above 80%?",
+    "correct_answer": "24",
+    "baseline_answer": "24",
+    "baseline_correct": true,
+    "swarm_answer": "24",
+    "swarm_correct": true,
+    "disagreement": false,
+    "agent_answers": {
+      "search": "24",
+      "task": "24",
+      "memory": "24",
+      "validator": "24"
+    }
+  },
+  {
+    "question": "A recipe needs 2.5 cups of flour to make 12 cookies. How many cups of flour are needed to make 30 cookies?",
+    "correct_answer": "6.25",
+    "baseline_answer": "6.25",
+    "baseline_correct": true,
+    "swarm_answer": "6.25",
+    "swarm_correct": true,
+    "disagreement": false,
+    "agent_answers": {
+      "search": "6.25**",
+      "task": "6.25",
+      "memory": "6.25**",
+      "validator": "6.25"
+    }
+  },
+  {
+    "question": "A stock is bought at $45. It falls 20% then rises 25%. What is the final price in dollars?",
+    "correct_answer": "45",
+    "baseline_answer": "45",
+    "baseline_correct": true,
+    "swarm_answer": "45",
+    "swarm_correct": true,
+    "disagreement": false,
+    "agent_answers": {
+      "search": "$45**",
+      "task": "45",
+      "memory": "45",
+      "validator": "45"
+    }
+  },
+  {
+    "question": "How many seconds are in 2 hours and 45 minutes?",
+    "correct_answer": "9900",
+    "baseline_answer": "9900",
+    "baseline_correct": true,
+    "swarm_answer": "9900",
+    "swarm_correct": true,
+    "disagreement": false,
+    "agent_answers": {
+      "search": "9900",
+      "task": "9900",
+      "memory": "9900**",
+      "validator": "9900"
+    }
+  },
+  {
+    "question": "A password must be exactly 4 digits (0-9) and cannot start with 0. How many valid passwords exist?",
+    "correct_answer": "9000",
+    "baseline_answer": "9000",
+    "baseline_correct": true,
+    "swarm_answer": "9000",
+    "swarm_correct": true,
+    "disagreement": false,
+    "agent_answers": {
+      "search": "9000",
+      "task": "9000",
+      "memory": "9000**",
+      "validator": "9000"
+    }
+  },
+  {
+    "question": "What is the compound interest earned (not total value, just the interest) on $5000 at 4% annual rate after 2 years?",
+    "correct_answer": "408",
+    "baseline_answer": "$408",
+    "baseline_correct": true,
+    "swarm_answer": "$408",
+    "swarm_correct": true,
+    "disagreement": false,
+    "agent_answers": {
+      "search": "408",
+      "task": "$408",
+      "memory": "$408",
+      "validator": "$408"
+    }
+  },
+  {
+    "question": "A store sells apples for $0.75 each and oranges for $1.20 each. What is the total cost for 8 apples and 5 oranges?",
+    "correct_answer": "12",
+    "baseline_answer": "$12.00",
+    "baseline_correct": true,
+    "swarm_answer": "$12.00",
+    "swarm_correct": true,
+    "disagreement": false,
+    "agent_answers": {
+      "search": "$12.00**",
+      "task": "$12.00",
+      "memory": "$12.00**",
+      "validator": "$12.00"
+    }
+  },
+  {
+    "question": "If PI = 3.14159, what is the circumference of a circle with radius 7cm? Round to 2 decimal places.",
+    "correct_answer": "43.98",
+    "baseline_answer": "43.98 cm",
+    "baseline_correct": true,
+    "swarm_answer": "43.98",
+    "swarm_correct": true,
+    "disagreement": false,
+    "agent_answers": {
+      "search": "43.98**",
+      "task": "43.98",
+      "memory": "43.98**",
+      "validator": "43.98"
+    }
+  },
+  {
+    "question": "Working 40 hours per week and 52 weeks per year, how many total hours does someone work in a decade?",
+    "correct_answer": "20800",
+    "baseline_answer": "20800",
+    "baseline_correct": true,
+    "swarm_answer": "20800",
+    "swarm_correct": true,
+    "disagreement": false,
+    "agent_answers": {
+      "search": "20800**",
+      "task": "20800",
+      "memory": "20800**",
+      "validator": "20800"
+    }
+  }
+]

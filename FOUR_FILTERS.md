@@ -222,7 +222,7 @@ empirically in weeks 5-6. Fallback: use it as a soft warning, not a hard stop.
 **What is the MVP?**
 
 ```
-One Polymarket agent that fetches markets, estimates probabilities with Claude,
+One Polymarket agent that fetches markets, estimates probabilities with the swarm,
 aggregates with QuantumBeliefState, and returns a ranked list with confidence
 scores. No evolution, no parallel agents. Already useful on its own.
 ```

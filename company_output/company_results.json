@@ -1,0 +1,20 @@
+{
+  "project": "todo",
+  "output_file": "C:\\Users\\User\\Desktop\\Quantum Swarm\\company_output\\todo.py",
+  "elapsed_ms": 1224.8,
+  "qa": {
+    "passed": 9,
+    "total": 9
+  },
+  "coverage_score": 1.0,
+  "approved": true,
+  "visualizations": [
+    "C:\\Users\\User\\Desktop\\Quantum Swarm\\company_output\\visualizations\\code_metrics.png",
+    "C:\\Users\\User\\Desktop\\Quantum Swarm\\company_output\\visualizations\\energy_handoffs.png",
+    "C:\\Users\\User\\Desktop\\Quantum Swarm\\company_output\\visualizations\\feature_coverage.png",
+    "C:\\Users\\User\\Desktop\\Quantum Swarm\\company_output\\visualizations\\pipeline_timeline.png",
+    "C:\\Users\\User\\Desktop\\Quantum Swarm\\company_output\\visualizations\\qa_results.png",
+    "C:\\Users\\User\\Desktop\\Quantum Swarm\\company_output\\visualizations\\summary_dashboard.png",
+    "C:\\Users\\User\\Desktop\\Quantum Swarm\\company_output\\visualizations\\tool_usage.png"
+  ]
+}

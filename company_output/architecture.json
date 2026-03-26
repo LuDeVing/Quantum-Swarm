@@ -1,0 +1,64 @@
+{
+  "functions": [
+    {
+      "name": "load_data",
+      "signature": "() -> List[dict]",
+      "purpose": "Load records from todo.json"
+    },
+    {
+      "name": "save_data",
+      "signature": "(records: List[dict]) -> None",
+      "purpose": "Persist records to JSON file"
+    },
+    {
+      "name": "next_id",
+      "signature": "(records: List[dict]) -> int",
+      "purpose": "Return max(id)+1"
+    },
+    {
+      "name": "find_record",
+      "signature": "(records, record_id: int) -> Optional[dict]",
+      "purpose": "Return record with given id or None"
+    },
+    {
+      "name": "cmd_add",
+      "signature": "(args) -> None",
+      "purpose": "Handler for 'add <description> [--priority high|medium|low]' command"
+    },
+    {
+      "name": "cmd_list",
+      "signature": "(args) -> None",
+      "purpose": "Handler for 'list [--filter <priority>]' command"
+    },
+    {
+      "name": "cmd_done",
+      "signature": "(args) -> None",
+      "purpose": "Handler for 'done <id>' command"
+    },
+    {
+      "name": "cmd_delete",
+      "signature": "(args) -> None",
+      "purpose": "Handler for 'delete <id>' command"
+    },
+    {
+      "name": "cmd_clear",
+      "signature": "(args) -> None",
+      "purpose": "Handler for 'clear' command"
+    },
+    {
+      "name": "main",
+      "signature": "() -> None",
+      "purpose": "Build argparse parser and dispatch to cmd_* handlers"
+    }
+  ],
+  "data_model": {
+    "id": "int \u2014 auto-incremented",
+    "created_at": "str \u2014 ISO timestamp",
+    "description": "str \u2014 free text",
+    "priority": "str \u2014 high|medium|low"
+  },
+  "file_structure": [
+    "todo.py",
+    "todo.json (auto-created)"
+  ]
+}

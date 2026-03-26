@@ -247,11 +247,7 @@ class PolymarketAgent(BaseAgent):
 
         opportunities = await self.predict_markets()
 
-        dq = torch.randn(self.n_dims) * 0.05
-        dp = torch.randn(self.n_dims) * 0.05
-        H_after = self.update_phase_state(
-            self.phase_state.q + dq, self.phase_state.p + dp
-        )
+        H_after = self.step_phase_state(dt=0.01)
 
         return TaskResult(
             task_id=task_id,

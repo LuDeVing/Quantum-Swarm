@@ -1,0 +1,63 @@
+{
+  "tests_run": 9,
+  "tests_passed": 9,
+  "tests_failed": 0,
+  "code_runs": true,
+  "syntax_valid": true,
+  "test_details": [
+    {
+      "name": "--help",
+      "passed": true,
+      "output": "usage: todo [-h] {add,list,done,delete,clear} ...\n\npositional arguments:\n  {add,list,done,delete,clear}\n\noptions:\n  -h, --help            show this he",
+      "duration_ms": 102.6
+    },
+    {
+      "name": "add Buy milk --priority",
+      "passed": true,
+      "output": "Added task #1: Buy milk [high]",
+      "duration_ms": 136.5
+    },
+    {
+      "name": "add Read book",
+      "passed": true,
+      "output": "Added task #2: Read book [medium]",
+      "duration_ms": 117.9
+    },
+    {
+      "name": "list",
+      "passed": true,
+      "output": "ID   Pri      Status     Description\n  --------------------------------------------------\n  1    \u001b[91mhigh    \u001b[0m [ ]       Buy milk\n  2    \u001b[93mmedi",
+      "duration_ms": 112.5
+    },
+    {
+      "name": "list --filter high",
+      "passed": true,
+      "output": "ID   Pri      Status     Description\n  --------------------------------------------------\n  1    \u001b[91mhigh    \u001b[0m [ ]       Buy milk",
+      "duration_ms": 119.0
+    },
+    {
+      "name": "done 1",
+      "passed": true,
+      "output": "Task #1 marked as done.",
+      "duration_ms": 97.8
+    },
+    {
+      "name": "done 999",
+      "passed": true,
+      "output": "Error: no task 999.",
+      "duration_ms": 105.2
+    },
+    {
+      "name": "delete 2",
+      "passed": true,
+      "output": "Task #2 deleted.",
+      "duration_ms": 107.8
+    },
+    {
+      "name": "clear",
+      "passed": true,
+      "output": "Cleared 1 completed tasks.",
+      "duration_ms": 101.1
+    }
+  ]
+}

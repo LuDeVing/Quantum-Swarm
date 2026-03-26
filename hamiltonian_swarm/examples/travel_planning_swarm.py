@@ -273,7 +273,7 @@ async def plan_trip():
         logger.info(
             "  [%s] %s→%s: ΔH_sender=%.4f, mismatch=%.4f",
             status, entry.sender_id, entry.receiver_id,
-            entry.dH_sender, 0.0,
+            entry.dH_sender, entry.dH_sender + entry.dH_receiver,
         )
     logger.info("=" * 60)
 

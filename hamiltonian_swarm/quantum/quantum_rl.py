@@ -127,8 +127,7 @@ class QuantumPolicy(nn.Module):
         """
         m = F.normalize(self.M_basis[action_idx].float(), dim=-1).to(torch.complex64)
         M = torch.outer(m, m.conj())
-        prob = torch.trace(M @ rho).real
-        return float(prob.item())
+        return torch.trace(M @ rho).real
 
     def select_action(self, state: torch.Tensor) -> int:
         """
@@ -153,10 +152,9 @@ class QuantumPolicy(nn.Module):
         for layer in range(self.n_circuit_layers):
             rho = self.apply_unitary(rho, layer)
 
-        probs = torch.tensor(
-            [self.measure_action(rho, a) for a in range(self.n_actions)],
-            dtype=torch.float32,
-        )
+        probs = torch.stack(
+            [self.measure_action(rho, a) for a in range(self.n_actions)]
+        ).float()
         # Ensure valid probability distribution
         probs = probs.clamp(min=0.0)
         prob_sum = probs.sum()
@@ -185,10 +183,9 @@ class QuantumPolicy(nn.Module):
         for layer in range(self.n_circuit_layers):
             rho = self.apply_unitary(rho, layer)
 
-        probs = torch.tensor(
-            [self.measure_action(rho, a) for a in range(self.n_actions)],
-            dtype=torch.float32,
-        ).clamp(min=0.0)
+        probs = torch.stack(
+            [self.measure_action(rho, a) for a in range(self.n_actions)]
+        ).float().clamp(min=0.0)
 
         prob_sum = probs.sum()
         return probs / (prob_sum + 1e-8)

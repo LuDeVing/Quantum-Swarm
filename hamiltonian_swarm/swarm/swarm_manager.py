@@ -51,6 +51,7 @@ class SwarmManager:
         backpressure_limit: int = 100,
     ) -> None:
         self.n_dims = n_dims
+        self.topology_type = topology_type
         self.bus = CommunicationBus(backpressure_limit=backpressure_limit)
         self.handoff_protocol = HandoffProtocol()
         self.orchestrator = Orchestrator(n_dims=n_dims)
@@ -92,7 +93,7 @@ class SwarmManager:
 
         # Rebuild topology with new agent count
         n = len(self._agents) + 1  # +1 for orchestrator
-        self._topology = SwarmTopology(n, TopologyType.FULLY_CONNECTED)
+        self._topology = SwarmTopology(n, self.topology_type)
 
         logger.info("Spawned %s agent: %s", agent_type, agent.agent_id)
         return agent

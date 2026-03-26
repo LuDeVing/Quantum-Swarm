@@ -14,6 +14,7 @@ No single scalar — Pareto-front multi-objective optimization.
 
 from __future__ import annotations
 import logging
+import math
 import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
@@ -121,6 +122,9 @@ class FitnessEvaluator:
             scores["novelty"] = self.novelty_score(genome, population)
         else:
             scores["novelty"] = 0.5
+
+        # 7. Quantum fitness: QPSO convergence speed + belief collapse efficiency
+        scores["quantum"] = self.quantum_fitness(genome)
 
         return scores
 

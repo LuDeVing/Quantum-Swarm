@@ -223,7 +223,7 @@ class QuantumAnnealingOptimizer:
             else:
                 thermal_prob = math.exp(-delta_E / (T + 1e-8))
                 tunnel_prob = self.tunneling_rate(s, abs(delta_E))
-                accept = np.random.rand() < (thermal_prob + tunnel_prob)
+                accept = np.random.rand() < min(thermal_prob + tunnel_prob, 1.0)
 
             if accept:
                 x = x_new

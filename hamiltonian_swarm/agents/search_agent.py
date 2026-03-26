@@ -143,7 +143,7 @@ class SearchAgent(BaseAgent):
         """Async wrapper for non-blocking orchestrator use."""
         import asyncio
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None,
             lambda: self.search(objective_fn, bounds, n_particles, n_iterations),

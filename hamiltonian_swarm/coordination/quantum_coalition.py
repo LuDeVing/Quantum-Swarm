@@ -80,6 +80,9 @@ class QuantumCoalition:
         # Sort by score, take top max_coalition_size
         ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
         coalition = [aid for aid, _ in ranked[:self.max_coalition_size] if _ > 0]
+        # Fallback: if no agent matches any requirement, take top agents anyway
+        if not coalition:
+            coalition = [aid for aid, _ in ranked[:self.max_coalition_size]]
 
         record = {
             "task_requirements": task_requirements,

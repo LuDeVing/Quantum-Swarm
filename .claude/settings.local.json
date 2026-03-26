@@ -1,5 +1,19 @@
 {
   "permissions": {
+    "allow": [
+      "Bash(pip install:*)",
+      "WebSearch",
+      "WebFetch(domain:arxiv.org)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.evidentlyai.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(source .venv/Scripts/activate)",
+      "Bash(python -m pytest hamiltonian_swarm/tests/ -v --tb=short)",
+      "Bash(python -m hamiltonian_swarm.examples.software_company)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''company_test.py''\\).read\\(\\)\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''company_test.py'', encoding=''utf-8''\\).read\\(\\)\\)\")",
+      "Bash(python company_test.py)"
+    ],
     "additionalDirectories": [
       "c:\\Users\\User\\Desktop\\Quantum Swarm\\hamiltonian_swarm"
     ]

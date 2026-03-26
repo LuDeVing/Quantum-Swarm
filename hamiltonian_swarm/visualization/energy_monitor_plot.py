@@ -96,6 +96,9 @@ def animate_energy_dashboard(
     def update(frame):
         snapshot = energy_stream[frame]
         for aid, val in snapshot.items():
+            if aid not in histories:
+                # Agent joined after the first snapshot — skip silently
+                continue
             histories[aid].append(val)
             t = list(range(len(histories[aid])))
             lines[aid].set_data(t, histories[aid])

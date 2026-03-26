@@ -59,9 +59,13 @@ class NaturalSelection:
         for _ in range(max(0, remaining_slots)):
             if not non_pareto:
                 break
-            t1, t2 = random.sample(non_pareto, min(2, len(non_pareto)))
-            winner = t1 if (fitness_scores[t1].get("task_performance", 0) >=
-                            fitness_scores[t2].get("task_performance", 0)) else t2
+            candidates = random.sample(non_pareto, min(2, len(non_pareto)))
+            if len(candidates) == 1:
+                winner = candidates[0]
+            else:
+                t1, t2 = candidates
+                winner = t1 if (fitness_scores[t1].get("task_performance", 0) >=
+                                fitness_scores[t2].get("task_performance", 0)) else t2
             survivors.append(population[winner])
 
         return survivors[:target_size]

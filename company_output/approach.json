@@ -1,0 +1,12 @@
+{
+  "language": "Python 3.8+ (stdlib only)",
+  "storage": "json file",
+  "cli_library": "argparse",
+  "key_modules": [
+    "argparse",
+    "json",
+    "datetime",
+    "pathlib"
+  ],
+  "rationale": "argparse for clean subcommand CLI. JSON for human-readable storage. All modules available in stdlib: argparse, json, datetime, pathlib."
+}

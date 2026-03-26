@@ -169,6 +169,9 @@ class CommunicationBus:
             "timestamp": time.time(),
         }
         self._energy_broadcasts.append(record)
+        # Cap history to prevent unbounded memory growth
+        if len(self._energy_broadcasts) > 1000:
+            self._energy_broadcasts = self._energy_broadcasts[-1000:]
         energy_msg = Message(
             sender_id=agent_id,
             receiver_id="broadcast",

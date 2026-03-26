@@ -175,24 +175,30 @@ class AgentStateQEC:
     # Full repair pipeline
     # ------------------------------------------------------------------
 
-    def repair(self, state_vector: torch.Tensor) -> torch.Tensor:
+    def repair(self, encoded_state: List[torch.Tensor]) -> torch.Tensor:
         """
-        Encode → detect → correct → decode in one call.
+        Detect and correct errors in an already-encoded (3-copy) state,
+        then decode back to a single vector.
 
-        For freshly corrupted states, this is cheaper than a full restart.
+        This is the correct entry point for on-the-fly repair.  The caller
+        is responsible for maintaining the three copies independently so
+        that genuine bit-flip divergence can be detected via syndrome
+        measurement.  Passing three *identical* copies will always produce
+        syndrome (0,0) and perform no correction.
 
         Parameters
         ----------
-        state_vector : torch.Tensor
+        encoded_state : list of 3 torch.Tensor
+            The three redundant copies that may have independently drifted.
 
         Returns
         -------
         torch.Tensor
-            Repaired state vector (same shape as input).
+            Repaired state vector (mean of corrected copies, same shape
+            as each copy in encoded_state).
         """
-        encoded = self.encode(state_vector)
-        syndrome = self.measure_syndrome(encoded)
-        corrected = self.correct(encoded, syndrome)
+        syndrome = self.measure_syndrome(encoded_state)
+        corrected = self.correct(encoded_state, syndrome)
         return self.decode(corrected)
 
     # ------------------------------------------------------------------

@@ -10,6 +10,7 @@ detects when an agent's behaviour has drifted from its intended trajectory.
 from __future__ import annotations
 import asyncio
 import logging
+import math
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -21,6 +22,7 @@ import torch
 from ..core.phase_space import PhaseSpaceState
 from ..core.hamiltonian import HamiltonianFunction
 from ..core.conservation_monitor import ConservationMonitor
+from ..quantum.quantum_belief import QuantumBeliefState
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +105,9 @@ class BaseAgent(ABC):
             reset_callback=self._on_energy_reset,
         )
 
+        # Quantum belief state (initialised lazily via init_belief)
+        self.belief: Optional[QuantumBeliefState] = None
+
         # Task queue and memory
         self.task_queue: asyncio.Queue = asyncio.Queue()
         self.memory: Dict[str, Any] = {}
@@ -113,6 +118,11 @@ class BaseAgent(ABC):
             self.agent_type,
             n_dims,
         )
+
+    def init_belief(self, hypotheses: List[str]) -> None:
+        """Initialise (or reinitialise) the agent's quantum belief state."""
+        self.belief = QuantumBeliefState(hypotheses)
+        logger.debug("Agent %s belief initialised: %d hypotheses", self.agent_id, len(hypotheses))
 
     # ------------------------------------------------------------------
     # Abstract interface
@@ -162,6 +172,26 @@ class BaseAgent(ABC):
         logger.debug("Agent %s phase state updated: H=%.6f", self.agent_id, H)
         return H
 
+    def step_phase_state(self, dt: float = 0.01) -> float:
+        """Advance phase state one leapfrog step.
+
+        Uses the symplectic leapfrog integrator instead of random noise,
+        so energy is conserved to 2nd order by construction.
+
+        Parameters
+        ----------
+        dt : float
+            Integration timestep.
+
+        Returns
+        -------
+        float
+            Updated Hamiltonian value H(q, p).
+        """
+        trajectory = self.hamiltonian.integrate_leapfrog(self.phase_state, dt=dt, n_steps=1)
+        next_state = trajectory[-1]
+        return self.update_phase_state(next_state.q, next_state.p)
+
     def check_stability(self) -> bool:
         """
         Check whether the agent's energy is conserved within tolerance.
@@ -187,15 +217,25 @@ class BaseAgent(ABC):
         return True
 
     def _on_energy_reset(self) -> None:
-        """Callback fired by ConservationMonitor when drift exceeds critical level."""
+        """Callback fired by ConservationMonitor when drift exceeds critical level.
+
+        Keeps q (learned belief position) and rescales p so that H returns to
+        the initial target energy, rather than zeroing the entire state.
+        """
         logger.error(
-            "CRITICAL energy drift detected in agent %s — resetting phase state.",
+            "CRITICAL energy drift detected in agent %s — rescaling momentum.",
             self.agent_id,
         )
-        # Reset to origin with zero energy
-        q0 = torch.zeros(self.n_dims)
-        p0 = torch.zeros(self.n_dims)
-        self.phase_state = PhaseSpaceState(q=q0, p=p0, agent_id=self.agent_id)
+        q = self.phase_state.q
+        H_target = self.energy_history[0] if self.energy_history else 1.0
+        V_q = float(self.hamiltonian.potential_energy(q).item())
+        T_p = float(self.hamiltonian.kinetic_energy(self.phase_state.p).item())
+        if T_p > 1e-12:
+            scale = math.sqrt(max(0.0, (H_target - V_q) / T_p))
+            p_new = self.phase_state.p * scale
+        else:
+            p_new = torch.randn(self.n_dims) * 0.1
+        self.phase_state = PhaseSpaceState(q=q.clone(), p=p_new, agent_id=self.agent_id)
         self._monitor.reset()
 
     # ------------------------------------------------------------------

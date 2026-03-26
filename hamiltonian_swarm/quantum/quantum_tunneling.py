@@ -84,6 +84,7 @@ class QuantumTunneling:
         current_value: float,
         local_min_value: float,
         barrier_estimate: float,
+        barrier_width: float = 1.0,
         rng: float | None = None,
     ) -> bool:
         """
@@ -99,6 +100,10 @@ class QuantumTunneling:
             Value at the local minimum (barrier floor).
         barrier_estimate : float
             Estimated barrier height above the local minimum.
+        barrier_width : float, optional
+            Spatial width of the barrier in problem-space units. Defaults to 1.0
+            (normalized). Pass the actual search-space extent for more accurate
+            WKB tunneling probabilities.
         rng : float, optional
             Pre-supplied random number in [0,1] (for testing). Otherwise drawn uniformly.
 
@@ -110,7 +115,7 @@ class QuantumTunneling:
         V0 = local_min_value + barrier_estimate
         T = self.tunneling_probability(
             barrier_height=V0,
-            barrier_width=1.0,  # normalized width
+            barrier_width=barrier_width,
             particle_energy=current_value,
         )
         u = rng if rng is not None else float(torch.rand(1).item())

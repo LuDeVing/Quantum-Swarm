@@ -156,6 +156,18 @@ class MutationEngine:
         candidate = genome.mutate(mutation_rate=0.15)
 
         if containment is not None:
+            # Check H_conserved / tolerance from the caller's perspective first
+            H_candidate = containment.compute_genome_hamiltonian(candidate)
+            relative_error = abs(H_candidate - H_conserved) / (abs(H_conserved) + 1e-8)
+            if relative_error > tolerance:
+                logger.debug(
+                    "Hamiltonian-constrained mutation rejected: H_candidate=%.4f "
+                    "vs H_conserved=%.4f, relative_error=%.4f > tolerance=%.4f",
+                    H_candidate, H_conserved, relative_error, tolerance,
+                )
+                return genome
+
+            # Also enforce the containment's own goal constraint
             safe, reason = containment.enforce(candidate)
             if not safe:
                 logger.debug("Hamiltonian-constrained mutation rejected: %s", reason)

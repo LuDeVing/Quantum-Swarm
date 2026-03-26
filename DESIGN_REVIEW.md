@@ -114,15 +114,15 @@ reasoning + conservation laws**, which would be impossible without AI.
 
 Three specific AI capabilities are used:
 
-1. **LLM text generation and reasoning** (Claude claude-sonnet-4-6 via Anthropic
-   API): each specialized agent calls the Claude API with a role-specific system
-   prompt. Open-ended tasks — interpreting a regulatory document, assessing
-   strategic risk, synthesising contradictory sources — require language model
-   reasoning. A rule-based system cannot do this.
+1. **LLM text generation and reasoning** (Gemini 2.0 Flash via Google AI API):
+   each specialized agent calls Gemini with a role-specific system prompt.
+   Open-ended tasks — interpreting a regulatory document, assessing strategic
+   risk, synthesising contradictory sources — require language model reasoning.
+   A rule-based system cannot do this.
 
 2. **Structured extraction via function calling**: the Validator Agent uses
-   Claude's tool-use capability to extract structured claims (entity, assertion,
-   confidence, source) from each agent's free-text output. This makes
+   Gemini's function-calling capability to extract structured claims (entity,
+   assertion, confidence, source) from each agent's free-text output. This makes
    contradiction detection machine-readable. Without function calling, outputs
    are unstructured text with no consistency guarantee.
 
@@ -215,8 +215,8 @@ contradicts itself. The architecture, not just the model, is what is new here.
 | Backend language | Python 3.12 | Required — the hamiltonian_swarm physics library is Python-only (PyTorch autograd) |
 | Backend framework | FastAPI | asyncio-native matches multi-agent concurrency; automatic OpenAPI docs reduce integration friction |
 | Database | SQLite + Redis | SQLite stores task records and agent logs; Redis pub/sub handles agent completion events without polling |
-| AI model(s) | claude-sonnet-4-6 | Chosen for cleaner tool-use interface for structured claim extraction; reasoning quality sufficient for analytical tasks |
-| AI access method | Anthropic Python SDK (direct) | Direct SDK gives access to tool-use / function-calling; no routing overhead needed for single-model deployment |
+| AI model(s) | gemini-2.0-flash | Fast inference, strong reasoning, supports function calling; free tier sufficient for course-scale testing |
+| AI access method | Google GenAI Python SDK (google-genai) | Direct SDK access to Gemini with function-calling support; no routing overhead |
 | Hosting — frontend | Vercel | Zero-config deploy from Git; edge CDN ensures fast dashboard load globally |
 | Hosting — backend | Railway | One-command Python deploy with persistent volumes for SQLite; no cold-start penalty at course scale |
 | Version control | GitHub | Course standard |
@@ -230,7 +230,7 @@ contradicts itself. The architecture, not just the model, is what is new here.
 3. FastAPI validates the request, writes a `PENDING` record to SQLite, publishes a task event to Redis
 4. SwarmManager receives the Redis event and calls `submit_task()` → Orchestrator
 5. Orchestrator runs `decompose_task()` using QPSO to assign sub-tasks, spawns Search, Task, Memory, and Validator agents concurrently
-6. Each agent calls the Anthropic Claude API (`claude-sonnet-4-6`) with a role-specific system prompt; function calling extracts structured claims (entity, assertion, confidence, source) from each response
+6. Each agent calls the Gemini API (`gemini-2.0-flash`) with a role-specific system prompt; function calling extracts structured claims (entity, assertion, confidence, source) from each response
 7. After each agent update, ConservationMonitor checks Hamiltonian energy; if drift exceeds 5%, AgentStateQEC corrects the agent state without a full restart
 8. HandoffProtocol validates `|ΔH_sender + ΔH_receiver| ≈ 0` before each agent passes output to the next; failing handoffs trigger a re-run of the sending agent
 9. QuantumBeliefState aggregates all agent claims; claims with entropy above 0.8 nats are flagged as "conflicting evidence" in the report

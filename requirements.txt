@@ -1,0 +1,28 @@
+# Core ML
+torch==2.11.0
+numpy==2.4.3
+scipy==1.17.1
+
+# AI
+google-genai==1.68.0
+
+# Web / API
+requests==2.32.5
+httpx==0.28.1
+
+# Visualization
+matplotlib==3.10.8
+
+# Backend
+fastapi
+uvicorn
+
+# Utils
+pydantic==2.12.5
+tenacity==9.1.4
+tqdm==4.67.3
+
+python-dotenv
+
+# Dev / Testing
+pytest==9.0.2
