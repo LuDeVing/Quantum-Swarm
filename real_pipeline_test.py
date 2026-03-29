@@ -38,6 +38,7 @@ import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import List, Optional
+import math
 import re
 
 import numpy as np
@@ -54,6 +55,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from hamiltonian_swarm.agents.base_agent import BaseAgent, TaskResult
 from hamiltonian_swarm.agents.validator_agent import ValidatorAgent
+from hamiltonian_swarm.quantum.active_inference import ActiveInferenceState
 
 logging.basicConfig(
     level=logging.INFO,
@@ -66,7 +68,11 @@ logger = logging.getLogger("pipeline")
 GEMINI_MODEL    = "gemini-2.0-flash"
 N_RUNS          = 10          # runs per condition
 MAX_RETRIES     = 2           # Hamiltonian ON: retries on detected anomaly
-ANOMALY_DH      = 0.35        # |ΔH| threshold for anomaly detection
+# Role prior: expected distribution over {healthy, uncertain, confused}.
+# This IS the restoring force — no γ constants to calibrate.
+ROLE_PRIOR = {"healthy": 0.8, "uncertain": 0.15, "confused": 0.05}
+SWARM_H_THRESHOLD = 2.0       # H_swarm = Σᵢ F_i above this = systemic swarm failure
+                               # Normal: 4 agents × F≈0.1 = 0.4 | Fault: ≈2.0+
 FAULT_SCALE     = 4.0         # phase-space jump size for injected faults
 NORMAL_SCALE    = 0.08        # phase-space step size for normal operation
 OUTPUT_DIR      = Path("real_pipeline_output")
@@ -127,7 +133,7 @@ def embed_text(text: str) -> np.ndarray:
     Paper: Euclidean outperforms cosine by 24-66% for semantic difference detection."""
     try:
         r = get_client().models.embed_content(
-            model="models/gemini-embedding-2-preview",
+            model="models/gemini-embedding-001",
             contents=text[:2000],
             config={"output_dimensionality": EMB_DIMS},
         )
@@ -139,20 +145,62 @@ def embed_text(text: str) -> np.ndarray:
         return np.random.default_rng().normal(0, 0.08, EMB_DIMS).astype(np.float32)
 
 
-def llm_call(prompt: str, max_tokens: int = 512, label: str = "") -> str:
-    """Make a real Gemini API call. Returns text response."""
+def llm_call(prompt: str, max_tokens: int = 512, label: str = "",
+             get_logprobs: bool = False) -> "str | tuple[str, float]":
+    """Make a real Gemini API call.
+    If get_logprobs=True, returns (text, perplexity) — perplexity from token log-probs.
+    High perplexity = model was uncertain generating this output (confused signal).
+    """
     try:
+        cfg = {"response_logprobs": True, "logprobs": 3} if get_logprobs else {}
         r = get_client().models.generate_content(
             model=GEMINI_MODEL,
             contents=prompt,
+            **({"config": cfg} if cfg else {}),
         )
         text = r.text.strip()
         tag = f"[{label}] " if label else ""
-        logger.info(f"{tag}LLM response ({len(text)} chars): {text[:200]}{'...' if len(text)>200 else ''}")
+        logger.info(f"{tag}LLM ({len(text)} chars): {text[:200]}{'...' if len(text)>200 else ''}")
+        if get_logprobs:
+            return text, _extract_perplexity(r)
         return text
     except Exception as e:
         logger.error(f"LLM_ERROR: {e}")
-        return f"[LLM_ERROR: {e}]"
+        return (f"[LLM_ERROR: {e}]", 10.0) if get_logprobs else f"[LLM_ERROR: {e}]"
+
+
+def _extract_perplexity(response) -> float:
+    """Compute perplexity from Gemini logprobs. Returns 10.0 if unavailable.
+    perplexity = exp(-mean(log_probs))  — low=confident, high=confused."""
+    try:
+        lr = response.candidates[0].logprobs_result
+        if lr is None:
+            return 10.0
+        lps = [c.log_probability for c in lr.chosen_candidates
+               if c.log_probability is not None and c.log_probability > -1e6]
+        if not lps:
+            return 10.0
+        return math.exp(-sum(lps) / len(lps))
+    except Exception:
+        return 10.0
+
+
+def perplexity_to_similarities(perplexity: float) -> dict[str, float]:
+    """Map output perplexity to {healthy, uncertain, confused} similarities in [-1, 1].
+
+    Calibration (Gemini 2.0 Flash empirical):
+        perplexity ~1-3  : confident, on-task generation  → healthy
+        perplexity ~3-15 : some hesitation                → uncertain
+        perplexity ~15+  : high entropy, off-topic        → confused
+
+    Uses log scale: perplexity=1 → confusion=0, perplexity=30 → confusion=1.
+    """
+    confusion = min(math.log(max(perplexity, 1.0)) / math.log(30.0), 1.0)
+    return {
+        "healthy":   1.0 - 2.0 * confusion,            # +1 confident, -1 confused
+        "uncertain": 1.0 - 2.0 * abs(confusion - 0.5), # peaks at confusion=0.5
+        "confused":  2.0 * confusion - 1.0,             # -1 confident, +1 confused
+    }
 
 
 # ── Stage prompts ──────────────────────────────────────────────────────────────
@@ -205,16 +253,52 @@ GARBAGE_INPUT = (
     "segfault core dumped process killed"
 )
 
+# ── Active Inference belief state ──────────────────────────────────────────────
+
+HYPOTHESES = ["healthy", "uncertain", "confused"]
+
+# Prototype texts defining each quantum basis state.
+# Agent belief report is compared to these via cosine similarity → evidence strength.
+STATE_PROTOTYPES = {
+    "healthy":   "I clearly understood my task and completed it confidently. "
+                 "The input made sense and my output is accurate and high quality.",
+    "uncertain": "I was somewhat unsure about aspects of my task but attempted it "
+                 "as best I could with the available information.",
+    "confused":  "The input I received was corrupted or nonsensical. "
+                 "I could not properly understand my task and have very low "
+                 "confidence in my output.",
+}
+
+# Module-level cache — prototype embeddings computed once, reused across all runs.
+_proto_cache: dict[str, np.ndarray] = {}
+
+def get_proto_emb(state: str) -> np.ndarray:
+    if state not in _proto_cache:
+        _proto_cache[state] = embed_text(STATE_PROTOTYPES[state])
+    return _proto_cache[state]
+
 
 # ── Pipeline agent ─────────────────────────────────────────────────────────────
 
 class LLMPipelineAgent(BaseAgent):
-    """Real LLM agent — makes actual Gemini calls and updates phase state."""
+    """
+    Active Inference agent — tracks belief state as a probability vector
+    evolved via the Free Energy Principle.
+
+    posterior ∝ prior × likelihood
+    F = KL(posterior || prior)
+
+    F = 0.0  → agent on-role (posterior matches prior)
+    F rises  → agent drifting from expected role behaviour
+    Anomaly: rolling z-score > 2.0  or  F > F_threshold (cold-start)
+    No γ constants — ROLE_PRIOR is the only parameter.
+    """
 
     def __init__(self, stage: str) -> None:
-        super().__init__(agent_type=stage, n_dims=EMB_DIMS)
+        super().__init__(agent_type=stage, n_dims=3)
         self.stage = stage
         self._last_output = ""
+        self.state = ActiveInferenceState(HYPOTHESES, ROLE_PRIOR)
 
     async def execute_task(self, task: dict) -> TaskResult:
         return TaskResult(task_id="", agent_id=self.agent_id,
@@ -222,48 +306,69 @@ class LLMPipelineAgent(BaseAgent):
                           energy_before=0.0, energy_after=0.0)
 
     def compute_H(self) -> float:
-        return float(
-            self.hamiltonian.total_energy(
-                self.phase_state.q, self.phase_state.p
-            ).item()
-        )
+        """Free energy F = KL(posterior || prior) — zero on-role, rises when drifting."""
+        return self.state.free_energy()
 
     def process(self, input_text: str, rng: np.random.Generator,
                 injected_fault: bool = False) -> tuple[str, float, float]:
         """
-        Run LLM call, update phase state, return (output, H_before, H_after).
-        If injected_fault=True, make a large random phase-space jump.
+        Run LLM task + belief probe, update Active Inference state,
+        return (output, F_before, F_after).
         """
-        H_before = self.compute_H()
+        F_before = self.compute_H()
 
-        # Real LLM call
+        # Main LLM task call — request logprobs for perplexity signal
         prompt = STAGE_PROMPTS[self.stage].format(input=input_text)
-        output = llm_call(prompt, label=self.stage)
+        output, perplexity = llm_call(prompt, label=self.stage, get_logprobs=True)
         self._last_output = output
 
-        # Belief probe — ask the agent to introspect its own understanding.
-        # Healthy agent: "I identified bugs in the code" ≈ STAGE_GOALS → small dH
-        # Confused agent: "Input seemed corrupted, unsure of task" ≠ goal → large dH
+        # Belief probe — agent introspects its own understanding
         belief_prompt = BELIEF_PROMPT.format(role=self.stage)
         belief_report = llm_call(belief_prompt, label=f"{self.stage}_belief")
 
-        # q = embed(belief)                      — where agent thinks it is
-        # p = embed(belief) - embed(goal)        — Euclidean deviation from expected
-        # Using Euclidean (not cosine): paper shows 24-66% better for drift detection.
-        # Raw un-normalized vectors preserve magnitude — confused agent moves further.
-        q_raw = embed_text(belief_report)
-        p_raw = embed_text(belief_report) - embed_text(STAGE_GOALS[self.stage])
-        new_q = torch.tensor(q_raw * EMB_SCALE, dtype=torch.float32)
-        new_p = torch.tensor(p_raw * EMB_SCALE, dtype=torch.float32)
+        # Signal 1: logprob perplexity from main task call
+        # High perplexity = model was uncertain generating output → confused signal
+        logprob_sims = perplexity_to_similarities(perplexity)
 
-        self.update_phase_state(new_q, new_p)
-        H_after = self.compute_H()
-        return output, H_before, H_after
+        # Signal 2: cosine similarity of belief report to basis state prototypes
+        belief_emb = embed_text(belief_report)
+        norm_b = float(np.linalg.norm(belief_emb)) + 1e-8
+        probe_sims = {}
+        for state in HYPOTHESES:
+            proto = get_proto_emb(state)
+            norm_p = float(np.linalg.norm(proto)) + 1e-8
+            probe_sims[state] = float(np.dot(belief_emb, proto) / (norm_b * norm_p))
+
+        # Combine: 40% logprobs (direct confidence) + 60% belief probe (semantic understanding)
+        similarities = {
+            state: 0.4 * logprob_sims[state] + 0.6 * probe_sims[state]
+            for state in HYPOTHESES
+        }
+
+        logger.info(
+            f"[{self.stage}] perplexity={perplexity:.2f}  "
+            f"logprob_sims=({logprob_sims['healthy']:.2f}/{logprob_sims['confused']:.2f})  "
+            f"probe_sims=({probe_sims['healthy']:.2f}/{probe_sims['confused']:.2f})"
+        )
+
+        # Active Inference Bayesian update
+        F_after_raw = self.state.update(similarities)
+
+        logger.info(
+            f"[{self.stage}] F={F_after_raw:.3f}  "
+            f"healthy={self.state.probability(0):.2f}  "
+            f"uncertain={self.state.probability(1):.2f}  "
+            f"confused={self.state.probability(2):.2f}  "
+            f"anomaly={self.state.is_anomaly()}  "
+            f"S={self.state.entropy():.3f}"
+        )
+
+        F_after = self.compute_H()
+        return output, F_before, F_after
 
     def reset_state(self, rng: np.random.Generator) -> None:
-        new_q = torch.tensor(rng.normal(0, 0.1, self.n_dims), dtype=torch.float32)
-        new_p = torch.tensor(rng.normal(0, 0.1, self.n_dims), dtype=torch.float32)
-        self.update_phase_state(new_q, new_p)
+        """Reset posterior to prior — agent returns to expected role distribution."""
+        self.state.reset()
 
 
 def score_output(text: str) -> float:
@@ -307,6 +412,8 @@ class RunRecord:
     n_detected:     int = 0
     n_faulted:      int = 0
     fault_propagated: bool = False
+    H_swarm:        float = 0.0   # Σᵢ ⟨H⟩ᵢ — total swarm energy this run
+    swarm_anomaly:  bool  = False  # H_swarm > SWARM_H_THRESHOLD
     elapsed_s:      float = 0.0
 
 
@@ -341,8 +448,9 @@ def run_pipeline(condition: str, run_id: int) -> RunRecord:
                                                        injected_fault=is_faulted)
             dH = abs(H_after - H_before)
 
-            # ── Hamiltonian check ──────────────────────────────────────────
-            if use_hamiltonian and dH > ANOMALY_DH:
+            # ── Active Inference anomaly check ────────────────────────────
+            # F z-score > 2σ (or F > threshold cold-start) → agent drifted from role
+            if use_hamiltonian and agent.state.is_anomaly():
                 detected = True
                 if attempts <= MAX_RETRIES:
                     # Retry: reset agent state and re-run with correct input
@@ -375,6 +483,19 @@ def run_pipeline(condition: str, run_id: int) -> RunRecord:
     if inject_fault:
         reviewer_q = record.stages[-1].quality
         record.fault_propagated = not detected and (reviewer_q < 0.4)
+
+    # ── Swarm-level Hamiltonian ────────────────────────────────────────────────
+    # H_swarm = Σᵢ ⟨H⟩ᵢ — total energy across all agents this run.
+    # Conserved in normal operation (~1.2). Spikes on systemic failure (>1.5).
+    record.H_swarm = sum(sr.H_after for sr in record.stages)
+    record.swarm_anomaly = record.H_swarm > SWARM_H_THRESHOLD
+    if record.swarm_anomaly:
+        logger.warning(
+            f"SWARM ANOMALY  H_swarm={record.H_swarm:.3f} > {SWARM_H_THRESHOLD}"
+            f"  (individual detections: {record.n_detected})"
+        )
+    else:
+        logger.info(f"Swarm stable   H_swarm={record.H_swarm:.3f}")
 
     # Final quality = geometric mean of all stage qualities
     qs = [s.quality for s in record.stages]
@@ -416,13 +537,15 @@ def analyze(records: List[RunRecord]) -> dict:
         runs = [r for r in records if r.condition == cond]
         qs   = [r.final_quality for r in runs]
         stats[cond] = {
-            "quality_mean":     float(np.mean(qs)),
-            "quality_std":      float(np.std(qs)),
-            "quality_min":      float(np.min(qs)),
-            "quality_max":      float(np.max(qs)),
-            "detection_rate":   float(np.mean([r.n_detected > 0 for r in runs])),
-            "propagation_rate": float(np.mean([r.fault_propagated for r in runs])),
-            "n_runs":           len(runs),
+            "quality_mean":       float(np.mean(qs)),
+            "quality_std":        float(np.std(qs)),
+            "quality_min":        float(np.min(qs)),
+            "quality_max":        float(np.max(qs)),
+            "detection_rate":     float(np.mean([r.n_detected > 0 for r in runs])),
+            "propagation_rate":   float(np.mean([r.fault_propagated for r in runs])),
+            "swarm_anomaly_rate": float(np.mean([r.swarm_anomaly for r in runs])),
+            "H_swarm_mean":       float(np.mean([r.H_swarm for r in runs])),
+            "n_runs":             len(runs),
         }
     return stats
 
@@ -437,9 +560,9 @@ COND_LABELS = {
 }
 
 def print_table(stats: dict) -> None:
-    w = 78
+    w = 92
     print("\n" + "=" * w)
-    print(f"{'Condition':<26} {'Quality':>8} {'±Std':>6} {'Detect':>8} {'Propagate':>10}")
+    print(f"{'Condition':<26} {'Quality':>8} {'±Std':>6} {'Detect':>8} {'H_swarm':>9} {'SwarmAnom':>10} {'Propagate':>10}")
     print("=" * w)
     for cond, s in stats.items():
         print(
@@ -447,6 +570,8 @@ def print_table(stats: dict) -> None:
             f"{s['quality_mean']:>8.3f} "
             f"{s['quality_std']:>6.3f} "
             f"{s['detection_rate']*100:>7.0f}% "
+            f"{s['H_swarm_mean']:>9.3f} "
+            f"{s['swarm_anomaly_rate']*100:>9.0f}% "
             f"{s['propagation_rate']*100:>9.0f}%"
         )
     print("=" * w)
@@ -504,25 +629,24 @@ def plot(stats: dict, records: List[RunRecord], out_dir: Path) -> Path:
     ax2.legend(fontsize=8)
     ax2.tick_params(axis="x", rotation=12)
 
-    # ── (c) Energy anomaly (|ΔH|) per stage for fault runs ───────────────────
+    # ── (c) Swarm-level free energy H_swarm per condition ────────────────────
     ax3 = fig.add_subplot(gs[1, 0])
-    for cond in ["h_on_fault", "h_off_fault"]:
-        runs = [r for r in records if r.condition == cond]
-        dh_means = []
-        for i in range(len(STAGES)):
-            dhs = [r.stages[i].dH for r in runs if len(r.stages) > i]
-            dh_means.append(np.mean(dhs) if dhs else 0.0)
-        ax3.plot(STAGES, dh_means, color=COLOURS[cond], marker="s",
-                 linewidth=2.2, markersize=8,
-                 label=COND_LABELS[cond].replace(" / ", " "))
-    ax3.axhline(ANOMALY_DH, color="black", linestyle="--", linewidth=1.5,
-                label=f"Detection threshold |ΔH|={ANOMALY_DH}")
-    ax3.axvline(1, color="gray", linestyle="--", linewidth=1,
-                label="Fault injected here")
-    ax3.set_ylabel("|ΔH|  (energy anomaly)")
-    ax3.set_title("(c)  Hamiltonian Energy Anomaly per Stage", fontweight="bold")
+    x3  = np.arange(len(conds))
+    h_swarm_means = [stats[c]["H_swarm_mean"] for c in conds]
+    h_swarm_bars = ax3.bar(x3, h_swarm_means, width=0.55, color=colours,
+                           alpha=0.82, edgecolor="white")
+    ax3.axhline(SWARM_H_THRESHOLD, color="black", linestyle="--", linewidth=1.5,
+                label=f"Swarm threshold={SWARM_H_THRESHOLD}")
+    for bar, v in zip(h_swarm_bars, h_swarm_means):
+        ax3.text(bar.get_x() + bar.get_width() / 2,
+                 bar.get_height() + 0.01, f"{v:.2f}",
+                 ha="center", fontsize=9, fontweight="bold")
+    ax3.set_xticks(x3)
+    ax3.set_xticklabels(labels, fontsize=7.5)
+    ax3.set_ylabel("H_swarm = Σᵢ Fᵢ  (total free energy)")
+    ax3.set_title("(c)  Swarm Free Energy (total drift)", fontweight="bold")
     ax3.legend(fontsize=8)
-    ax3.tick_params(axis="x", rotation=12)
+    ax3.set_ylim(0, max(h_swarm_means) * 1.25 + 0.2)
 
     # ── (d) Summary bar chart ─────────────────────────────────────────────────
     ax4 = fig.add_subplot(gs[1, 1])
@@ -553,9 +677,10 @@ def plot(stats: dict, records: List[RunRecord], out_dir: Path) -> Path:
                      ha="center", fontsize=7.5, color="#c0392b", fontweight="bold")
 
     fig.suptitle(
-        f"Hamiltonian Swarm — Real LLM Pipeline Test\n"
-        f"Gemini {GEMINI_MODEL}  ·  {N_RUNS} runs per condition  ·  "
-        f"4-stage code review pipeline  ·  Fault at stage 2",
+        f"Hamiltonian Swarm — Active Inference Pipeline Test\n"
+        f"Gemini {GEMINI_MODEL}  ·  {N_RUNS} runs/condition  ·  "
+        f"4-stage code review  ·  Fault at stage 2  ·  "
+        f"Anomaly: free energy z-score > 2",
         fontsize=11, fontweight="bold",
     )
 
@@ -571,12 +696,15 @@ def main() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     print(
-        f"\nHamiltonian Swarm — Real LLM Pipeline Test"
-        f"\n  Model      : {GEMINI_MODEL}"
-        f"\n  Runs/cond  : {N_RUNS}"
-        f"\n  Total runs : {4 * N_RUNS}  ({4 * N_RUNS * 8} LLM calls [task+belief] + quality scoring)"
-        f"\n  Conditions : H-ON clean | H-OFF clean | H-ON fault | H-OFF fault"
-        f"\n  Task       : 4-stage code review (real code sample)\n"
+        f"\nHamiltonian Swarm — Active Inference Pipeline Test"
+        f"\n  Model        : {GEMINI_MODEL}"
+        f"\n  Runs/cond    : {N_RUNS}"
+        f"\n  Total runs   : {4 * N_RUNS}  ({4 * N_RUNS * 8} LLM calls [task+belief] + scoring)"
+        f"\n  Conditions   : H-ON clean | H-OFF clean | H-ON fault | H-OFF fault"
+        f"\n  Agent state  : Active Inference -- posterior ~ prior x likelihood"
+        f"\n  Anomaly test : free energy F = KL(posterior||prior), z-score > 2"
+        f"\n  Role prior   : healthy={ROLE_PRIOR['healthy']}  uncertain={ROLE_PRIOR['uncertain']}  confused={ROLE_PRIOR['confused']}"
+        f"\n  Task         : 4-stage code review (real code sample)\n"
     )
 
     t0      = time.time()

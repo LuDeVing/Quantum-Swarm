@@ -12,7 +12,21 @@
       "Bash(python -m hamiltonian_swarm.examples.software_company)",
       "Bash(python -c \"import ast; ast.parse\\(open\\(''company_test.py''\\).read\\(\\)\\)\")",
       "Bash(python -c \"import ast; ast.parse\\(open\\(''company_test.py'', encoding=''utf-8''\\).read\\(\\)\\)\")",
-      "Bash(python company_test.py)"
+      "Bash(python company_test.py)",
+      "Bash(grep \"\\\\.py$\")",
+      "Read(//c/Users/User/Desktop/Quantum Swarm/**)",
+      "Bash(python -c \":*)",
+      "Bash(find '/c/Users/User/Desktop/Quantum Swarm' -maxdepth 3 -type f -name *.py -path *memory* -o -name *memory*.py)",
+      "Bash(python -c \"import long_run_team_test; print\\(''OK''\\)\")",
+      "Read(//c/Users/User/Desktop/**)",
+      "Bash(pip list:*)",
+      "Bash(python -c \"import software_company; print\\(''import OK''\\)\")",
+      "Bash(python -c \"import software_company; print\\(''''OK''''\\)\")",
+      "Bash(ls company_output/ceo_summary*.md)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Bash(done)",
+      "Bash(python -m playwright install chromium)"
     ],
     "additionalDirectories": [
       "c:\\Users\\User\\Desktop\\Quantum Swarm\\hamiltonian_swarm"
