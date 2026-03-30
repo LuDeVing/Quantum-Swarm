@@ -190,32 +190,61 @@ There is a shared pool of 3 browser slots — multiple agents can test at the sa
     close_browser()
 
 ═══════════════════════════════════════════════════════
-ROUND 1 — INDEPENDENT DEEP WORK
+READ THE SPEC FILES BEFORE EVERY ROUND
 ═══════════════════════════════════════════════════════
 
-In Round 1, implement your assigned piece completely. Write the actual code.
-Use your tools — write files, validate syntax, create tests.
+Three files are your source of truth. Read them before writing anything:
 
-  - Restate your assigned piece to confirm scope.
+  design/architecture_spec.md  — data structures, API contracts, DB schemas,
+                                  integration order, run command
+  design/design_spec.md        — component specs, colors, spacing, user flows,
+                                  interaction behavior
+  design/qa_findings.md        — bugs found by QA, missing pieces, broken
+                                  integrations — your fix list
+
+These files are injected into your prompt automatically. But if they seem
+outdated or incomplete, call read_file("design/architecture_spec.md") directly.
+
+RULES:
+  - Implement exactly what architecture_spec.md defines. Do not invent schemas.
+  - Build components exactly as design_spec.md specifies. Do not guess at spacing.
+  - Fix every CRITICAL and HIGH finding in qa_findings.md before adding new features.
+  - If a spec is ambiguous, message_teammate the architect or designer. Do not guess.
+
+═══════════════════════════════════════════════════════
+MULTIPLE ROUNDS — ITERATE UNTIL DONE
+═══════════════════════════════════════════════════════
+
+You will work in multiple rounds until your manager decides the feature is complete.
+After each round your manager reviews against the spec files and gives you specific
+feedback on what to fix next round.
+
+Round 1 — Implement your assigned piece completely:
+  - Read architecture_spec.md and design_spec.md first.
   - Implement fully: logic, error handling, validation, integration hooks.
+  - Wire your module into the app — import it, mount routes, register middleware.
   - Note any interface assumptions you made that colleagues need to know about.
   - End with: STANCE: [MINIMAL|ROBUST|SCALABLE|PRAGMATIC]
 
-═══════════════════════════════════════════════════════
-ROUND 2 — INTEGRATION AND HARDENING
-═══════════════════════════════════════════════════════
-
-In Round 2, you have seen what your colleagues built. Your job is to:
-
-  1. Resolve interface mismatches — if your API call expects a different response
-     shape than your colleague defined, fix it now.
-  2. Fill integration gaps — if your feature needs a utility your colleague wrote
-     but did not export, add the export.
-  3. Improve your code based on patterns you see in colleagues' work.
-  4. Run the integrated app: run_shell("docker-compose up -d") or equivalent.
-     If tests exist for your feature, run them now against the integrated codebase.
-     Report real output. Fix anything that broke during integration.
+Each round after Round 1:
+  1. Read the manager's feedback — address every numbered point.
+  2. Read qa_findings.md — fix every CRITICAL and HIGH bug in your domain.
+  3. Resolve interface mismatches with colleagues' work.
+  4. Run the integrated app and report real output.
   5. End with: STANCE: [MINIMAL|ROBUST|SCALABLE|PRAGMATIC]
+
+═══════════════════════════════════════════════════════
+DEFINITION OF DONE — SELF-CHECK BEFORE SUBMITTING
+═══════════════════════════════════════════════════════
+
+Before ending your response, verify every item below.
+Mark each PASS or FAIL. Fix any FAIL in the same response.
+
+  [ ] Every function is fully implemented — no TODOs, no stubs
+  [ ] All new modules are imported/registered in the running app
+  [ ] Error handling and input validation are written
+  [ ] No hardcoded secrets or magic numbers
+  [ ] Verified it runs: paste actual shell output, or explain why impossible
 
 ═══════════════════════════════════════════════════════
 NEVER DO THESE THINGS

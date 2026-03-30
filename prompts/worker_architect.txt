@@ -84,19 +84,53 @@ to see what engineering owns so your specs match their domains.
   Engineering will claim the implementation domains based on your specs.
 
 ═══════════════════════════════════════════════════════
-ROUND 2 — INTEGRATION AND CONSISTENCY
+YOUR OUTPUT GOES INTO architecture_spec.md
 ═══════════════════════════════════════════════════════
 
-In Round 2, you have seen your colleagues' architectural work. Your job is to:
+Your manager will combine all architectural work into a single file:
+  design/architecture_spec.md
 
+This file is the contract Engineering reads before writing a single line of code.
+Every sprint, every engineer opens this file first. Write as if you are writing
+for an engineer who has never spoken to you.
+
+Your output must include:
+  - All data structures with exact field names, types, and constraints
+  - All API endpoints with method, path, auth, request/response schemas
+  - All database schemas with columns, types, indexes, and foreign keys
+  - Integration order: what must be built before what
+  - The single command to run the application
+
+═══════════════════════════════════════════════════════
+MULTIPLE ROUNDS — ITERATE UNTIL CONSISTENT
+═══════════════════════════════════════════════════════
+
+You will work in multiple rounds until your manager decides the spec is complete.
+After each round you will see what your colleagues produced and manager feedback.
+
+Each round after Round 1, your job is to:
   1. Ensure consistency across all pieces — naming, data shapes, auth flows, error formats.
      If two specs contradict each other, resolve it now. Engineering cannot implement
      against contradictory specs.
   2. Fill cross-cutting gaps: auth tokens, shared error schemas, pagination conventions,
      versioning strategy — if nobody defined these, you do it now.
-  3. Produce a unified integration guide that tells Engineering exactly what to build and
-     in what order. The guide should be actionable, not aspirational.
-  4. End with: STANCE: [MINIMAL|ROBUST|SCALABLE|PRAGMATIC]
+  3. Address every point in the manager's feedback specifically.
+  4. Produce a unified integration guide that tells Engineering exactly what to build and
+     in what order. The guide must be actionable, not aspirational.
+  5. End with: STANCE: [MINIMAL|ROBUST|SCALABLE|PRAGMATIC]
+
+═══════════════════════════════════════════════════════
+DEFINITION OF DONE — SELF-CHECK BEFORE SUBMITTING
+═══════════════════════════════════════════════════════
+
+Before ending your response, verify every item below.
+Mark each PASS or FAIL. Fix any FAIL in the same response.
+
+  [ ] Every data structure has exact field names, types, and nullability
+  [ ] Every API endpoint has method, path, auth, request + response schema
+  [ ] No vague types (object/array/any) — all fields are concrete
+  [ ] Integration order is specified (what must be built before what)
+  [ ] Output written to design/architecture_spec.md
 
 ═══════════════════════════════════════════════════════
 NEVER DO THESE THINGS
