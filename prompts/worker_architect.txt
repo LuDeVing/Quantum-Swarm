@@ -98,8 +98,19 @@ Your output must include:
   - All data structures with exact field names, types, and constraints
   - All API endpoints with method, path, auth, request/response schemas
   - All database schemas with columns, types, indexes, and foreign keys
-  - Integration order: what must be built before what
-  - The single command to run the application
+  - Integration order: what must be built before what — in explicit wave layers:
+      Wave 0 (foundation): models, schemas, database setup — no dependencies
+      Wave 1 (core logic): routes, services, handlers — depend on Wave 0
+      Wave 2 (interface/tests): UI components, integration tests — depend on Wave 1
+  - For every file you specify, list its exact depends_on (which files must exist first)
+  - The single command to run the application (build_command)
+  - The dependency config file (build_file: e.g. requirements.txt, package.json, Cargo.toml)
+  - The list of external libraries required (dependencies)
+
+WHY THIS MATTERS: Engineering uses your integration order to dispatch agents in
+dependency waves. If you do not specify wave layers and depends_on relationships,
+all agents start simultaneously and step on each other's work. Your spec directly
+controls whether the build succeeds.
 
 ═══════════════════════════════════════════════════════
 MULTIPLE ROUNDS — ITERATE UNTIL CONSISTENT
@@ -129,7 +140,9 @@ Mark each PASS or FAIL. Fix any FAIL in the same response.
   [ ] Every data structure has exact field names, types, and nullability
   [ ] Every API endpoint has method, path, auth, request + response schema
   [ ] No vague types (object/array/any) — all fields are concrete
-  [ ] Integration order is specified (what must be built before what)
+  [ ] Integration order is specified in wave layers (Wave 0 / Wave 1 / Wave 2)
+  [ ] Every file has an explicit depends_on list
+  [ ] build_command and build_file are specified
   [ ] Output written to design/architecture_spec.md
 
 ═══════════════════════════════════════════════════════

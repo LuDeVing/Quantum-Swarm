@@ -57,7 +57,8 @@ import time
 import textwrap
 import threading
 import yaml
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
+import subprocess
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -87,7 +88,7 @@ logging.basicConfig(
 logger = logging.getLogger("company")
 
 # ── Config ────────────────────────────────────────────────────────────────────
-GEMINI_MODEL       = "gemini-3.1-flash-lite-preview"
+GEMINI_MODEL       = "gemini-2.0-flash"
 OUTPUT_DIR         = Path("company_output")
 
 # Canonical cross-team reference files written by each team's manager
@@ -113,6 +114,8 @@ STANCE_DESC = {
 # ── Tool implementations (pure Python, no LLM) ───────────────────────────────
 def _strip_subdir_prefix(filename: str, subdir: str) -> str:
     """Remove leading 'subdir/' prefix from filename if present, to prevent double-nesting."""
+    # Normalise to forward slashes so Windows paths like code\foo.py are handled correctly
+    filename = filename.replace("\\", "/")
     prefix = subdir + "/"
     while filename.startswith(prefix):
         filename = filename[len(prefix):]
@@ -151,25 +154,82 @@ def _write_canonical_file(team_name: str, content: str, append: bool = False) ->
     logger.info(f"[{team_name}] canonical file updated: {path.name}")
 
 
-def _tool_write_code_file(filename: str, content: str) -> str:
-    filename = _strip_subdir_prefix(filename, "code")
-    owner = get_dashboard().get_file_owner(filename)
-    if owner and owner != _get_agent_id():
+def _check_write_safety(filename: str, subdir: str, path: Path) -> Optional[str]:
+    """
+    Shared safety check for all write tools.
+    Returns a BLOCKED/warning string if the write should be rejected, or None if allowed.
+    """
+    dashboard = get_dashboard()
+    agent_id = _get_agent_id()
+
+    # ── Shared file redirect (checked first — before path traversal) ─────────
+    if dashboard.is_shared_file(filename):
+        sections = dashboard.get_shared_file_sections(filename)
+        section_list = ", ".join(f"'{s}' (owner: {o})" for s, o in sections.items())
+        return (
+            f"REDIRECT: '{filename}' is a shared file with section-based ownership. "
+            f"Do NOT overwrite the whole file. Use write_file_section('{filename}', "
+            f"'<your_section>', content) to write your part. "
+            f"Available sections: {section_list}. "
+            f"You can also create a new section with your agent ID as the section name."
+        )
+
+    # ── Path traversal guard ──────────────────────────────────────────────────
+    resolved = path.resolve()
+    allowed_roots = [str((OUTPUT_DIR / subdir).resolve())]
+    wt = _get_worktree_manager()
+    if wt and subdir == "code":
+        allowed_roots.append(str(wt.worktree_root.resolve()))
+    if not any(str(resolved).startswith(root) for root in allowed_roots):
+        logger.warning(f"[write_{subdir}_file] PATH TRAVERSAL blocked: {filename!r}")
+        return f"BLOCKED: path traversal detected — '{filename}' resolves outside {subdir}/ directory."
+
+    # ── Warn if agent identity is unknown ────────────────────────────────────
+    if not agent_id:
+        logger.warning(f"[write_{subdir}_file] agent_id is empty when writing '{filename}' — "
+                       f"context propagation may have failed")
+
+    owner = dashboard.get_file_owner(filename)
+
+    # ── Dashboard ownership block ─────────────────────────────────────────────
+    if owner and owner != agent_id:
+        logger.warning(f"[write_{subdir}_file] BLOCKED {agent_id!r} → '{filename}' owned by {owner!r}")
         return (
             f"BLOCKED: '{filename}' belongs to {owner} — they claimed this file. "
             f"Call message_teammate('{owner}', '...') to coordinate, "
-            f"or claim a different domain for your work."
+            f"or write your feature in a new file and ask them to import it."
         )
-    path = OUTPUT_DIR / "code" / filename
+
+    # ── Hard file-existence block (belt-and-suspenders) ──────────────────────
+    # With worktrees, skeleton stubs exist in every worktree — allow overwrites
+    in_worktree = _get_worktree_manager() is not None and subdir == "code"
+    if path.exists() and owner and owner != agent_id:
+        return (
+            f"BLOCKED: '{filename}' already exists on disk and is owned by {owner}. "
+            f"Use read_file('{filename}') to read their implementation. "
+            f"Write your feature in a separate file instead."
+        )
+    if path.exists() and not owner and not in_worktree:
+        size = path.stat().st_size
+        return (
+            f"BLOCKED: '{filename}' already exists ({size} bytes) with no registered owner. "
+            f"Call read_file('{filename}') to inspect it first, then call claim_domain "
+            f"with this filename if it is truly yours to modify. "
+            f"If it belongs to a teammate, write your feature in a different file."
+        )
+    return None
+
+
+def _tool_write_code_file(filename: str, content: str) -> str:
+    filename = _strip_subdir_prefix(filename, "code")
+    code_dir = _get_code_dir()
+    path     = code_dir / filename
+    block    = _check_write_safety(filename, "code", path)
+    if block:
+        return block
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
-    # Embed in background so agents can search mid-sprint without blocking writes
-    threading.Thread(
-        target=lambda p: _bg_index_file(p),
-        args=(path,),
-        daemon=True,
-        name=f"rag-{filename}",
-    ).start()
+    threading.Thread(target=_bg_index_file, args=(path,), daemon=True, name=f"rag-{filename}").start()
     return f"Written {len(content)} chars to code/{filename}"
 
 
@@ -182,32 +242,49 @@ def _bg_index_file(path: Path) -> None:
 
 def _tool_write_test_file(filename: str, content: str) -> str:
     filename = _strip_subdir_prefix(filename, "tests")
-    path = OUTPUT_DIR / "tests" / filename
+    path     = OUTPUT_DIR / "tests" / filename
+    block    = _check_write_safety(filename, "tests", path)
+    if block:
+        return block
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
+    threading.Thread(target=_bg_index_file, args=(path,), daemon=True, name=f"rag-{filename}").start()
     return f"Written {len(content)} chars to tests/{filename}"
 
 
 def _tool_write_design_file(filename: str, content: str) -> str:
     filename = _strip_subdir_prefix(filename, "design")
-    path = OUTPUT_DIR / "design" / filename
+    path     = OUTPUT_DIR / "design" / filename
+    block    = _check_write_safety(filename, "design", path)
+    if block:
+        return block
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
+    threading.Thread(target=_bg_index_file, args=(path,), daemon=True, name=f"rag-{filename}").start()
     return f"Written {len(content)} chars to design/{filename}"
 
 
 def _tool_write_config_file(filename: str, content: str) -> str:
     filename = _strip_subdir_prefix(filename, "config")
-    path = OUTPUT_DIR / "config" / filename
+    path     = OUTPUT_DIR / "config" / filename
+    block    = _check_write_safety(filename, "config", path)
+    if block:
+        return block
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
+    threading.Thread(target=_bg_index_file, args=(path,), daemon=True, name=f"rag-{filename}").start()
     return f"Written {len(content)} chars to config/{filename}"
 
 
 def _tool_read_file(filename: str) -> str:
+    # Check agent's worktree first for code files
+    code_dir = _get_code_dir()
+    wt_path = (code_dir / _strip_subdir_prefix(filename, "code")).resolve()
+    if wt_path.exists():
+        return wt_path.read_text(encoding="utf-8")[:2000]
+
     for subdir in ["code", "tests", "design", "config", ""]:
         p = (OUTPUT_DIR / subdir / filename if subdir else OUTPUT_DIR / filename).resolve()
-        # Prevent path traversal outside the output directory
         if not str(p).startswith(str(OUTPUT_DIR.resolve())):
             return "[ACCESS DENIED: path outside project directory]"
         if p.exists():
@@ -240,72 +317,77 @@ class CodebaseRAG:
 
     # ── public API ────────────────────────────────────────────────────────
 
+    # Serialises full update() and partial update_file() so they never corrupt the index
+    _update_lock = threading.Lock()
+
     def update(self):
         """Scan all output files, embed new/changed chunks, persist cache."""
-        new_chunks = self._scan_files()
-        if not new_chunks:
-            return
-        to_embed = [c for c in new_chunks if not self._already_embedded(c["hash"])]
-        if not to_embed:
-            return
-        logger.info(f"[RAG] embedding {len(to_embed)} new chunks across {len(set(c['file'] for c in to_embed))} files")
-        vecs = self._embed_batch([c["text"] for c in to_embed])
-        if vecs is None:
-            return
-        for chunk, vec in zip(to_embed, vecs):
-            chunk["vec"] = vec
-        self.chunks = [c for c in self.chunks if c["hash"] in {n["hash"] for n in new_chunks}]
-        existing_new = {c["hash"] for c in to_embed}
-        for c in new_chunks:
-            if c["hash"] not in existing_new:
-                # keep existing vec
-                old = next((x for x in self.chunks if x["hash"] == c["hash"]), None)
-                if old:
-                    c["vec"] = old["vec"]
-        self.chunks = [c for c in new_chunks if "vec" in c]
-        if self.chunks:
-            self.embeddings = np.stack([c["vec"] for c in self.chunks])
-        self._save_cache()
-        logger.info(f"[RAG] index updated: {len(self.chunks)} chunks")
-
-    def update_file(self, path: Path) -> None:
-        """Embed a single file and replace its chunks in the index. Thread-safe."""
-        try:
-            text = path.read_text(encoding="utf-8", errors="ignore")
-        except Exception as e:
-            logger.warning(f"[RAG] update_file read failed for {path}: {e}")
-            return
-        rel = str(path.relative_to(OUTPUT_DIR))
-        new_chunk_texts = self._split_into_chunks(text, path.suffix)
-        new_chunks = []
-        for chunk_text in new_chunk_texts:
-            h = hashlib.md5((rel + chunk_text).encode()).hexdigest()
-            new_chunks.append({"file": rel, "text": chunk_text, "hash": h})
-        # Only embed chunks not already in the index
-        to_embed = [c for c in new_chunks if not self._already_embedded(c["hash"])]
-        if to_embed:
+        with self._update_lock:
+            new_chunks = self._scan_files()
+            if not new_chunks:
+                return
+            with self._lock:
+                to_embed = [c for c in new_chunks if not self._already_embedded(c["hash"])]
+            if not to_embed:
+                return
+            logger.info(f"[RAG] embedding {len(to_embed)} new chunks across {len(set(c['file'] for c in to_embed))} files")
             vecs = self._embed_batch([c["text"] for c in to_embed])
             if vecs is None:
                 return
             for chunk, vec in zip(to_embed, vecs):
                 chunk["vec"] = vec
-        # Fill in existing vecs for unchanged chunks
-        with self._lock:
-            existing_by_hash = {c["hash"]: c for c in self.chunks if "vec" in c}
-        for c in new_chunks:
-            if "vec" not in c and c["hash"] in existing_by_hash:
-                c["vec"] = existing_by_hash[c["hash"]]["vec"]
-        valid_new = [c for c in new_chunks if "vec" in c]
-        with self._lock:
-            # Remove old chunks for this file, add new ones
-            kept = [c for c in self.chunks if c["file"] != rel]
-            self.chunks = kept + valid_new
-            if self.chunks:
-                self.embeddings = np.stack([c["vec"] for c in self.chunks])
-            else:
-                self.embeddings = None
-            self._save_cache()
-        logger.debug(f"[RAG] indexed {path.name} ({len(valid_new)} chunks)")
+            with self._lock:
+                self.chunks = [c for c in self.chunks if c["hash"] in {n["hash"] for n in new_chunks}]
+                existing_new = {c["hash"] for c in to_embed}
+                for c in new_chunks:
+                    if c["hash"] not in existing_new:
+                        old = next((x for x in self.chunks if x["hash"] == c["hash"]), None)
+                        if old:
+                            c["vec"] = old["vec"]
+                self.chunks = [c for c in new_chunks if "vec" in c]
+                if self.chunks:
+                    self.embeddings = np.stack([c["vec"] for c in self.chunks])
+                self._save_cache()
+            logger.info(f"[RAG] index updated: {len(self.chunks)} chunks")
+
+    def update_file(self, path: Path) -> None:
+        """Embed a single file and replace its chunks in the index. Thread-safe."""
+        with self._update_lock:
+            try:
+                text = path.read_text(encoding="utf-8", errors="ignore")
+            except Exception as e:
+                logger.warning(f"[RAG] update_file read failed for {path}: {e}")
+                return
+            rel = str(path.relative_to(OUTPUT_DIR))
+            new_chunk_texts = self._split_into_chunks(text, path.suffix)
+            new_chunks = []
+            for chunk_text in new_chunk_texts:
+                h = hashlib.md5((rel + chunk_text).encode()).hexdigest()
+                new_chunks.append({"file": rel, "text": chunk_text, "hash": h})
+            # Only embed chunks not already in the index — check inside lock
+            with self._lock:
+                to_embed = [c for c in new_chunks if not self._already_embedded(c["hash"])]
+                existing_by_hash = {c["hash"]: c for c in self.chunks if "vec" in c}
+            if to_embed:
+                vecs = self._embed_batch([c["text"] for c in to_embed])
+                if vecs is None:
+                    return
+                for chunk, vec in zip(to_embed, vecs):
+                    chunk["vec"] = vec
+            # Fill in existing vecs for unchanged chunks
+            for c in new_chunks:
+                if "vec" not in c and c["hash"] in existing_by_hash:
+                    c["vec"] = existing_by_hash[c["hash"]]["vec"]
+            valid_new = [c for c in new_chunks if "vec" in c]
+            with self._lock:
+                kept = [c for c in self.chunks if c["file"] != rel]
+                self.chunks = kept + valid_new
+                if self.chunks:
+                    self.embeddings = np.stack([c["vec"] for c in self.chunks])
+                else:
+                    self.embeddings = None
+                self._save_cache()
+            logger.debug(f"[RAG] indexed {path.name} ({len(valid_new)} chunks)")
 
     def query(self, query: str, top_k: int = TOP_K) -> str:
         """Return top_k most relevant code chunks for the query."""
@@ -453,6 +535,181 @@ def get_rag() -> CodebaseRAG:
     return _rag
 
 
+# ── Interface Contracts ────────────────────────────────────────────────────────
+
+@dataclass
+class EndpointContract:
+    method: str          # GET, POST, PUT, DELETE
+    path: str            # e.g. "/tasks", "/tasks/{task_id}"
+    request_model: str   # e.g. "TaskCreate" or "" for no body
+    response_model: str  # e.g. "Task", "List[Task]"
+
+@dataclass
+class ModelContract:
+    name: str            # e.g. "Task"
+    fields: str          # e.g. "id: str, title: str, completed: bool"
+    file: str            # e.g. "models.py"
+
+@dataclass
+class FileContract:
+    file: str            # e.g. "routes.py"
+    owner: str           # e.g. "dev_2"
+    imports_from: List[str]   # files this depends on, e.g. ["models.py"]
+    exports: List[str]        # symbols this file must export, e.g. ["create_task", "get_tasks"]
+    description: str     # what this file does
+    depends_on: List[str] = field(default_factory=list)  # files that must be complete before this one starts
+
+class InterfaceContractRegistry:
+    """
+    Holds typed interface contracts generated during sprint planning.
+    All agents reference these to ensure shared signatures, import paths,
+    and data shapes — eliminating the integration gap.
+    """
+    def __init__(self):
+        self.endpoints: List[EndpointContract] = []
+        self.models: List[ModelContract] = []
+        self.file_map: Dict[str, FileContract] = {}   # filename -> FileContract
+        self.entry_point: str = "main.py"
+        self.entry_imports: List[str] = []  # modules the entry point must import
+        self.build_command: str = ""   # e.g. "python server.py", "cargo build", "npm run build"
+        self.build_file: str = ""      # e.g. "requirements.txt", "Cargo.toml", "package.json"
+        self.dependencies: List[str] = []  # external deps e.g. ["fastapi", "sqlalchemy"]
+        self.init_order: List[str] = []    # ordered module init e.g. ["database", "routes", "server"]
+        self._lock = threading.RLock()
+
+    def set_from_parsed(self, parsed: Dict) -> None:
+        """Populate from parsed LLM output."""
+        with self._lock:
+            for ep in parsed.get("endpoints", []):
+                self.endpoints.append(EndpointContract(
+                    method=ep.get("method", "GET"),
+                    path=ep.get("path", "/"),
+                    request_model=ep.get("request_model", ""),
+                    response_model=ep.get("response_model", ""),
+                ))
+            for m in parsed.get("models", []):
+                self.models.append(ModelContract(
+                    name=m.get("name", ""),
+                    fields=m.get("fields", ""),
+                    file=m.get("file", "models.py"),
+                ))
+            for f in parsed.get("files", []):
+                fc = FileContract(
+                    file=f.get("file", ""),
+                    owner=f.get("owner", ""),
+                    imports_from=f.get("imports_from", []),
+                    exports=f.get("exports", []),
+                    description=f.get("description", ""),
+                    depends_on=f.get("depends_on", []),
+                )
+                self.file_map[fc.file] = fc
+            self.entry_point = parsed.get("entry_point", "main.py")
+            self.entry_imports = parsed.get("entry_imports", [])
+            self.build_command = parsed.get("build_command", "")
+            self.build_file = parsed.get("build_file", "")
+            self.dependencies = parsed.get("dependencies", [])
+            self.init_order = parsed.get("init_order", [])
+
+    def get_contract_for_dev(self, dev_key: str) -> str:
+        """Return a prompt-injectable contract summary for a specific developer."""
+        with self._lock:
+            lines = []
+            dev_files = [f for f in self.file_map.values() if f.owner == dev_key]
+            if not dev_files and not self.models:
+                return ""
+
+            lines.append("═══════════════════════════════════════════════════════")
+            lines.append("INTERFACE CONTRACTS (you MUST use these exact signatures)")
+            lines.append("═══════════════════════════════════════════════════════")
+
+            if self.models:
+                lines.append("\nSHARED DATA MODELS (defined in shared files — import, do NOT redefine):")
+                for m in self.models:
+                    lines.append(f"  class {m.name}: {m.fields}  (in {m.file})")
+
+            if dev_files:
+                lines.append("\nYOUR FILES:")
+                for f in dev_files:
+                    lines.append(f"  File: {f.file}")
+                    lines.append(f"    Description: {f.description}")
+                    if f.imports_from:
+                        lines.append(f"    Imports from: {', '.join(f.imports_from)}")
+                    if f.exports:
+                        lines.append(f"    Must export: {', '.join(f.exports)}")
+
+            other_files = [f for f in self.file_map.values() if f.owner != dev_key]
+            if other_files:
+                lines.append("\nTEAMMATE FILES (import from these, do NOT rewrite them):")
+                for f in other_files:
+                    lines.append(f"  {f.file} (owner: {f.owner}) — exports: {', '.join(f.exports)}")
+
+            if self.endpoints:
+                lines.append("\nAPI ENDPOINTS (all devs must agree on these signatures):")
+                for ep in self.endpoints:
+                    req = f" (body: {ep.request_model})" if ep.request_model else ""
+                    lines.append(f"  {ep.method} {ep.path}{req} -> {ep.response_model}")
+
+            if self.entry_point:
+                lines.append(f"\nENTRY POINT: {self.entry_point}")
+                if self.entry_imports:
+                    lines.append(f"  Must import: {', '.join(self.entry_imports)}")
+
+            lines.append("═══════════════════════════════════════════════════════")
+            return "\n".join(lines)
+
+    def get_full_summary(self) -> str:
+        """Return a full contract summary for manager review / validation."""
+        with self._lock:
+            if not self.models and not self.endpoints and not self.file_map:
+                return ""
+            lines = ["INTERFACE CONTRACTS:"]
+            if self.models:
+                lines.append("  Models:")
+                for m in self.models:
+                    lines.append(f"    {m.name}: {m.fields} (in {m.file})")
+            if self.endpoints:
+                lines.append("  Endpoints:")
+                for ep in self.endpoints:
+                    req = f" ({ep.request_model})" if ep.request_model else ""
+                    lines.append(f"    {ep.method} {ep.path}{req} -> {ep.response_model}")
+            if self.file_map:
+                lines.append("  File ownership:")
+                for fname, fc in sorted(self.file_map.items()):
+                    lines.append(f"    {fname} -> {fc.owner}: {fc.description[:60]}")
+            return "\n".join(lines)
+
+    def to_dict(self) -> Dict:
+        with self._lock:
+            return {
+                "endpoints": [{"method": e.method, "path": e.path,
+                               "request_model": e.request_model,
+                               "response_model": e.response_model} for e in self.endpoints],
+                "models": [{"name": m.name, "fields": m.fields, "file": m.file} for m in self.models],
+                "files": [{"file": f.file, "owner": f.owner,
+                           "imports_from": f.imports_from, "exports": f.exports,
+                           "description": f.description} for f in self.file_map.values()],
+                "entry_point": self.entry_point,
+                "entry_imports": self.entry_imports,
+            }
+
+
+_contracts: Optional[InterfaceContractRegistry] = None
+_contracts_lock = threading.Lock()
+
+def get_contracts() -> InterfaceContractRegistry:
+    global _contracts
+    if _contracts is None:
+        with _contracts_lock:
+            if _contracts is None:
+                _contracts = InterfaceContractRegistry()
+    return _contracts
+
+def reset_contracts() -> None:
+    global _contracts
+    with _contracts_lock:
+        _contracts = None
+
+
 # ── Work Dashboard ────────────────────────────────────────────────────────────
 
 class WorkDashboard:
@@ -466,11 +723,33 @@ class WorkDashboard:
     def __init__(self):
         self.domains:  Dict[str, Dict] = {}
         self.messages: Dict[str, List] = {}
+        self.sections: Dict[str, Dict[str, Dict]] = {}  # {file: {section_id: {owner, content, order}}}
         self._lock = threading.RLock()
         self._load()
 
+    @staticmethod
+    def _pattern_matches(pat: str, filename: str) -> bool:
+        """
+        True if *filename* matches *pat*.
+        - Exact match: "main.py" matches "main.py"
+        - Suffix glob:  "*.py" matches "foo.py" but NOT "foo.pyc" or just ".py"
+        - Bare "*" is treated as non-matching (too broad — use explicit patterns)
+        """
+        pat = pat.strip()
+        if not pat or pat == "*":
+            return False
+        if pat == filename:
+            return True
+        if pat.startswith("*"):
+            suffix = pat[1:]      # e.g. ".py" from "*.py"
+            return bool(suffix) and filename.endswith(suffix) and len(filename) > len(suffix)
+        return False
+
     def claim(self, domain: str, owner: str, description: str, file_patterns: str, sprint: int) -> str:
+        if not owner or not owner.strip():
+            return "ERROR: owner must not be empty — pass your agent ID as the owner."
         with self._lock:
+            # Block by domain name conflict
             existing = self.domains.get(domain)
             if existing and existing["owner"] != owner and existing["status"] == "active":
                 return (
@@ -478,6 +757,28 @@ class WorkDashboard:
                     f"(sprint {existing['sprint']}). Their work: {existing['description'][:100]}. "
                     f"Use a different domain name or message them to coordinate."
                 )
+            # Block by file pattern overlap with existing active domains
+            # Uses _pattern_matches bidirectionally: "routes.py" overlaps with "*.py"
+            new_pats = [f.strip() for f in file_patterns.split(",") if f.strip()]
+            for d_name, d in self.domains.items():
+                if d["owner"] == owner or d["status"] != "active":
+                    continue
+                existing_pats = [f.strip() for f in d["file_patterns"].split(",") if f.strip()]
+                overlap = []
+                for np in new_pats:
+                    for ep in existing_pats:
+                        if np in ("", "*") or ep in ("", "*"):
+                            continue
+                        # Exact match OR either pattern matches the other as a filename
+                        if (np == ep
+                                or self._pattern_matches(ep, np)
+                                or self._pattern_matches(np, ep)):
+                            overlap.append(f"{np}/{ep}")
+                if overlap:
+                    return (
+                        f"CONFLICT: file patterns {[p.split('/')[0] for p in overlap]} already claimed "
+                        f"by {d['owner']} under domain '{d_name}'. Message them to coordinate."
+                    )
             self.domains[domain] = {
                 "owner": owner, "description": description,
                 "file_patterns": file_patterns, "sprint": sprint, "status": "active",
@@ -493,8 +794,7 @@ class WorkDashboard:
                     continue
                 patterns = [p.strip() for p in d["file_patterns"].split(",")]
                 for pat in patterns:
-                    # Simple glob-style match: exact name or wildcard prefix
-                    if pat == filename or (pat.startswith("*") and filename.endswith(pat[1:])):
+                    if self._pattern_matches(pat, filename):
                         return d["owner"]
         return None
 
@@ -529,19 +829,141 @@ class WorkDashboard:
 
     def get_messages(self, agent_id: str) -> str:
         with self._lock:
-            msgs = self.messages.pop(agent_id, [])
-            self._save()
+            msgs = self.messages.get(agent_id, [])
             if not msgs:
                 return "No messages from teammates."
+            # Save with the inbox cleared BEFORE returning, so a save failure leaves inbox intact
+            self.messages[agent_id] = []
+            try:
+                self._save()
+                del self.messages[agent_id]
+            except Exception:
+                # Restore on failure so messages are not lost
+                self.messages[agent_id] = msgs
+                return "\n".join(
+                    f"FROM {m['from']} (sprint {m['sprint']}): {m['text']}" for m in msgs
+                )
             return "\n".join(
                 f"FROM {m['from']} (sprint {m['sprint']}): {m['text']}" for m in msgs
             )
+
+    def peek_messages(self, agent_id: str) -> str:
+        """Read messages without clearing the inbox — used for auto-injection into prompts."""
+        with self._lock:
+            msgs = self.messages.get(agent_id, [])
+            if not msgs:
+                return ""
+            return "\n".join(
+                f"FROM {m['from']} (sprint {m['sprint']}): {m['text']}" for m in msgs
+            )
+
+    # ── Section-based ownership (partial file locking) ─────────────────────────
+
+    def register_shared_file(self, filename: str, section_defs: List[Dict]) -> None:
+        """Register a file as shared with named sections.
+        section_defs: [{"id": "imports", "owner": "system", "order": 0}, ...]
+        """
+        with self._lock:
+            if filename not in self.sections:
+                self.sections[filename] = {}
+            for sd in section_defs:
+                sid = sd["id"]
+                self.sections[filename][sid] = {
+                    "owner": sd.get("owner", "system"),
+                    "content": sd.get("content", ""),
+                    "order": sd.get("order", 0),
+                }
+            self._save()
+
+    def is_shared_file(self, filename: str) -> bool:
+        with self._lock:
+            return filename in self.sections
+
+    def claim_section(self, filename: str, section_id: str, owner: str) -> str:
+        with self._lock:
+            if filename not in self.sections:
+                return f"ERROR: '{filename}' is not a shared file. Use claim_domain for exclusive files."
+            sec = self.sections[filename].get(section_id)
+            if sec and sec["owner"] not in ("system", owner, ""):
+                return (
+                    f"CONFLICT: section '{section_id}' in {filename} is owned by {sec['owner']}. "
+                    f"Message them to coordinate."
+                )
+            if section_id not in self.sections[filename]:
+                self.sections[filename][section_id] = {
+                    "owner": owner, "content": "", "order": len(self.sections[filename]),
+                }
+            else:
+                self.sections[filename][section_id]["owner"] = owner
+            self._save()
+            return f"CLAIMED section '{section_id}' in {filename}."
+
+    def write_section(self, filename: str, section_id: str, owner: str, content: str) -> Optional[str]:
+        """Write content to a section. Returns error string or None on success."""
+        with self._lock:
+            if filename not in self.sections:
+                return f"ERROR: '{filename}' is not a shared file."
+            sec = self.sections[filename].get(section_id)
+            if sec and sec["owner"] not in ("system", owner, ""):
+                return (
+                    f"BLOCKED: section '{section_id}' in {filename} is owned by {sec['owner']}. "
+                    f"Use write_file_section with a different section name, "
+                    f"or message {sec['owner']} to coordinate."
+                )
+            if section_id not in self.sections[filename]:
+                self.sections[filename][section_id] = {
+                    "owner": owner, "content": content,
+                    "order": len(self.sections[filename]),
+                }
+            else:
+                self.sections[filename][section_id]["content"] = content
+                if self.sections[filename][section_id]["owner"] == "system":
+                    pass  # system sections keep system ownership
+                else:
+                    self.sections[filename][section_id]["owner"] = owner
+            self._save()
+            return None
+
+    def assemble_shared_file(self, filename: str) -> str:
+        """Combine all sections into final file content, ordered by 'order' field."""
+        with self._lock:
+            if filename not in self.sections:
+                return ""
+            ordered = sorted(
+                self.sections[filename].items(),
+                key=lambda kv: kv[1].get("order", 0),
+            )
+            parts = []
+            for sid, sec in ordered:
+                c = sec.get("content", "").strip()
+                if c:
+                    parts.append(f"# ── section: {sid} ──\n{c}")
+            return "\n\n".join(parts)
+
+    def get_section_owner(self, filename: str, section_id: str) -> Optional[str]:
+        with self._lock:
+            if filename in self.sections and section_id in self.sections[filename]:
+                return self.sections[filename][section_id].get("owner")
+            return None
+
+    def get_shared_file_sections(self, filename: str) -> Dict[str, str]:
+        """Return {section_id: owner} for a shared file."""
+        with self._lock:
+            if filename not in self.sections:
+                return {}
+            return {sid: sec["owner"] for sid, sec in self.sections[filename].items()}
+
+    # ─────────────────────────────────────────────────────────────────────────────
 
     def _save(self):
         try:
             self.SAVE_PATH.parent.mkdir(parents=True, exist_ok=True)
             self.SAVE_PATH.write_text(
-                json.dumps({"domains": self.domains, "messages": self.messages}, indent=2),
+                json.dumps({
+                    "domains": self.domains,
+                    "messages": self.messages,
+                    "sections": self.sections,
+                }, indent=2),
                 encoding="utf-8",
             )
         except Exception as e:
@@ -553,7 +975,8 @@ class WorkDashboard:
                 data = json.loads(self.SAVE_PATH.read_text(encoding="utf-8"))
                 self.domains  = data.get("domains", {})
                 self.messages = data.get("messages", {})
-                logger.info(f"[Dashboard] loaded {len(self.domains)} domains")
+                self.sections = data.get("sections", {})
+                logger.info(f"[Dashboard] loaded {len(self.domains)} domains, {len(self.sections)} shared files")
         except Exception as e:
             logger.warning(f"[Dashboard] load failed: {e}")
 
@@ -574,36 +997,63 @@ def get_dashboard() -> WorkDashboard:
 
 class BrowserPool:
     """Pool of N Playwright browser instances for visual app testing.
-    Agents call open_app() to acquire a slot, interact, then close_browser() to release."""
+    Agents call open_app() to acquire a slot, interact, then close_browser() to release.
+
+    State is keyed by agent ID (from _get_agent_id()) rather than by thread so that
+    LangGraph's asyncio.to_thread() calls — which may use different threads for each
+    tool call from the same agent — can still share the same browser session.
+    """
 
     POOL_SIZE   = 3
     TIMEOUT_SEC = 120
 
     def __init__(self):
         self._semaphore = threading.Semaphore(self.POOL_SIZE)
-        self._local     = threading.local()   # per-thread: .page, .browser, .playwright
+        # agent_id → {"page": ..., "browser": ..., "playwright": ...}
+        self._sessions: Dict[str, Dict] = {}
+        self._sessions_lock = threading.Lock()
+
+    def _session(self) -> Dict:
+        """Return the session dict for the current agent, creating if absent."""
+        agent_id = _get_agent_id() or f"thread-{threading.get_ident()}"
+        with self._sessions_lock:
+            if agent_id not in self._sessions:
+                self._sessions[agent_id] = {"page": None, "browser": None, "playwright": None}
+            return self._sessions[agent_id]
+
+    def _clear_session(self) -> None:
+        agent_id = _get_agent_id() or f"thread-{threading.get_ident()}"
+        with self._sessions_lock:
+            self._sessions.pop(agent_id, None)
 
     def acquire(self, url: str) -> str:
         got = self._semaphore.acquire(timeout=self.TIMEOUT_SEC)
         if not got:
             return "[BROWSER POOL FULL: all 3 slots busy after 120s — try again later]"
+        pw = browser = page = None
         try:
             from playwright.sync_api import sync_playwright
             pw      = sync_playwright().start()
             browser = pw.chromium.launch(headless=True)
             page    = browser.new_page()
             page.goto(url, wait_until="networkidle", timeout=30_000)
-            self._local.page       = page
-            self._local.browser    = browser
-            self._local.playwright = pw
+            sess = self._session()
+            sess["page"]       = page
+            sess["browser"]    = browser
+            sess["playwright"] = pw
             return self._describe("Page loaded")
         except Exception as e:
+            # Clean up any partially initialized resources before releasing slot
+            for obj, method in [(page, "close"), (browser, "close"), (pw, "stop")]:
+                if obj is not None:
+                    try: getattr(obj, method)()
+                    except Exception: pass
+            self._clear_session()
             self._semaphore.release()
-            self._local.page = None
             return f"[BROWSER ERROR: {e}]"
 
     def action(self, action: str, selector: str, value: str = "") -> str:
-        page = getattr(self._local, "page", None)
+        page = self._session().get("page")
         if page is None:
             return "[BROWSER: no open browser — call open_app() first]"
         try:
@@ -624,9 +1074,10 @@ class BrowserPool:
             return f"[BROWSER ACTION ERROR: {e}]"
 
     def release(self) -> str:
-        page = getattr(self._local, "page",       None)
-        brow = getattr(self._local, "browser",    None)
-        pw   = getattr(self._local, "playwright", None)
+        sess = self._session()
+        page = sess.get("page")
+        brow = sess.get("browser")
+        pw   = sess.get("playwright")
         try:
             if page: page.close()
             if brow: brow.close()
@@ -634,14 +1085,12 @@ class BrowserPool:
         except Exception:
             pass
         finally:
-            self._local.page       = None
-            self._local.browser    = None
-            self._local.playwright = None
+            self._clear_session()
             self._semaphore.release()
         return "Browser closed. Pool slot released."
 
     def _describe(self, context: str) -> str:
-        page = self._local.page
+        page = self._session().get("page")
         try:
             import base64
             screenshot_bytes = page.screenshot(full_page=False)
@@ -683,13 +1132,18 @@ def get_browser_pool() -> BrowserPool:
 
 # Per-thread agent identity — each worker thread sets its own context so parallel
 # threads don't overwrite each other's agent ID / sprint number.
-_thread_ctx = threading.local()   # .agent_id: str, .sprint_num: int
+# Use contextvars instead of threading.local — ContextVar is propagated through
+# asyncio tasks AND through asyncio.to_thread(), which threading.local is NOT.
+# This ensures agent identity survives LangGraph's internal async/thread machinery.
+import contextvars as _cv
+_agent_id_ctx:   _cv.ContextVar[str] = _cv.ContextVar("agent_id",   default="")
+_sprint_num_ctx: _cv.ContextVar[int] = _cv.ContextVar("sprint_num", default=1)
 
-def _get_agent_id()   -> str: return getattr(_thread_ctx, "agent_id",   "")
-def _get_sprint_num() -> int: return getattr(_thread_ctx, "sprint_num", 1)
+def _get_agent_id()   -> str: return _agent_id_ctx.get()
+def _get_sprint_num() -> int: return _sprint_num_ctx.get()
 def _set_agent_ctx(agent_id: str, sprint_num: int) -> None:
-    _thread_ctx.agent_id   = agent_id
-    _thread_ctx.sprint_num = sprint_num
+    _agent_id_ctx.set(agent_id)
+    _sprint_num_ctx.set(sprint_num)
 
 # Sprint goal is set once per sprint before any threads start — read-only during execution
 _current_sprint_goal: str = ""
@@ -723,7 +1177,9 @@ def _tool_validate_json(content: str) -> str:
 
 def _tool_validate_yaml(content: str) -> str:
     try:
-        yaml.safe_load(content)
+        parsed = yaml.safe_load(content)
+        if parsed is None:
+            return "YAML warning: file is empty or contains only comments"
         return "YAML valid"
     except yaml.YAMLError as e:
         return f"YAML error: {e}"
@@ -873,16 +1329,150 @@ def _tool_run_shell(command: str) -> str:
             shell=True,
             capture_output=True,
             text=True,
-            timeout=120,
-            cwd=str(OUTPUT_DIR),
+            timeout=30,
+            cwd=str(_get_code_dir()),
         )
         out = result.stdout + result.stderr
         out = out[-3000:] if len(out) > 3000 else out
         return out or "(no output)"
     except subprocess.TimeoutExpired:
-        return "ERROR: command timed out after 120s"
+        return (
+            "ERROR: command timed out after 30s. "
+            "To start a long-running server use start_service(), not run_shell()."
+        )
     except Exception as e:
         return f"ERROR: {e}"
+
+
+# ── Background service registry (start_service / stop_service) ───────────────
+_services: Dict[str, object] = {}        # name → subprocess.Popen
+_services_ports: Dict[str, int] = {}     # name → port
+_services_lock = threading.Lock()
+
+def _extract_port(command: str) -> Optional[int]:
+    """Try to extract a port number from a command string."""
+    import re
+    m = re.search(r'(?:--port|-p|:)\s*(\d{4,5})\b', command)
+    if m:
+        return int(m.group(1))
+    # http.server 8000 / uvicorn app:app --port 8080 style
+    m = re.search(r'\b(8\d{3}|9\d{3}|3000|4000|5000)\b', command)
+    return int(m.group(1)) if m else None
+
+def _kill_proc_tree(proc) -> None:
+    """Kill a process and all its children (cross-platform)."""
+    import signal as _signal
+    try:
+        import psutil
+        parent = psutil.Process(proc.pid)
+        children = parent.children(recursive=True)
+        for child in children:
+            try:
+                child.kill()
+            except Exception:
+                pass
+        proc.kill()
+    except ImportError:
+        # psutil not available — fall back to simple kill
+        try:
+            if sys.platform == "win32":
+                import subprocess as _sp
+                _sp.call(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                         stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
+            else:
+                import os, signal as _signal
+                os.killpg(os.getpgid(proc.pid), _signal.SIGKILL)
+        except Exception:
+            proc.kill()
+    except Exception:
+        proc.kill()
+
+
+def _tool_start_service(name: str, command: str) -> str:
+    """Start a long-running process (server/worker) in the background. Returns startup output."""
+    import subprocess, time, queue, threading as _th
+    with _services_lock:
+        if name in _services and _services[name].poll() is None:
+            return f"[{name}] already running (pid={_services[name].pid})"
+        # Check port conflict
+        port = _extract_port(command)
+        if port:
+            for svc_name, svc_port in _services_ports.items():
+                if svc_port == port and svc_name in _services and _services[svc_name].poll() is None:
+                    return (
+                        f"PORT CONFLICT: port {port} is already used by service '{svc_name}'. "
+                        f"Choose a different port or stop '{svc_name}' first with stop_service('{svc_name}')."
+                    )
+    try:
+        proc = subprocess.Popen(
+            command,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            cwd=str(OUTPUT_DIR / "code"),
+        )
+        time.sleep(2)   # let the process boot
+        # Collect early output non-blocking via a drain thread (works on all platforms)
+        output_lines: list = []
+        q: queue.Queue = queue.Queue()
+
+        def _drain():
+            for line in iter(proc.stdout.readline, ""):
+                q.put(line.rstrip())
+
+        _th.Thread(target=_drain, daemon=True).start()
+        deadline = time.time() + 1.5
+        while time.time() < deadline:
+            try:
+                output_lines.append(q.get_nowait())
+            except queue.Empty:
+                time.sleep(0.05)
+        with _services_lock:
+            _services[name] = proc
+            if port:
+                _services_ports[name] = port   # populate so port-conflict detection works
+        status = "running" if proc.poll() is None else f"exited (rc={proc.returncode})"
+        early = "\n".join(output_lines[-20:]) if output_lines else "(no output yet)"
+        return f"[{name}] started (pid={proc.pid}, port={port}, status={status})\n{early}"
+    except Exception as e:
+        return f"ERROR starting service '{name}': {e}"
+
+
+def _tool_stop_service(name: str) -> str:
+    """Stop a background service previously started with start_service()."""
+    import time
+    with _services_lock:
+        proc = _services.pop(name, None)
+        _services_ports.pop(name, None)
+    if proc is None:
+        return f"[{name}] not found — either never started or already stopped"
+    if proc.poll() is not None:
+        return f"[{name}] already exited (rc={proc.returncode})"
+    try:
+        _kill_proc_tree(proc)
+        try:
+            rc = proc.wait(timeout=5)
+        except Exception:
+            rc = proc.returncode
+        return f"[{name}] stopped (rc={rc})"
+    except Exception as e:
+        return f"ERROR stopping service '{name}': {e}"
+
+
+def _atexit_stop_all_services() -> None:
+    """Ensure all tracked background services are killed when the interpreter exits."""
+    with _services_lock:
+        names = list(_services.keys())
+    for name in names:
+        try:
+            _tool_stop_service(name)
+        except Exception:
+            pass
+
+
+import atexit as _atexit
+_atexit.register(_atexit_stop_all_services)
 
 
 def _tool_http_request(method: str, url: str, body: str = "") -> str:
@@ -940,9 +1530,57 @@ def http_request(method: str, url: str, body: str = "") -> str:
     return _tool_http_request(method, url, body)
 
 @lc_tool
+def start_service(name: str, command: str) -> str:
+    """Start a long-running background process (server, worker, etc.) and return its startup output.
+    name: a label you pick (e.g. 'api', 'frontend') — used to stop it later.
+    command: the shell command to launch it (e.g. 'python server.py', 'node index.js').
+    Always call stop_service(name) when you're done testing."""
+    return _tool_start_service(name, command)
+
+@lc_tool
+def stop_service(name: str) -> str:
+    """Stop a background service started with start_service(name).
+    Always stop services when done — leaving them running blocks ports for teammates."""
+    return _tool_stop_service(name)
+
+@lc_tool
 def write_code_file(filename: str, content: str) -> str:
     """Write source code to company_output/code/<filename>. Content is the complete file text."""
     return _tool_write_code_file(filename, content)
+
+@lc_tool
+def write_file_section(filename: str, section: str, content: str) -> str:
+    """Write your code to a specific SECTION of a shared file (like main.py or models.py).
+    Use this instead of write_code_file when the file has section-based ownership.
+    filename: the shared file path (e.g. 'backend/app/main.py')
+    section: section name — use your assigned section or create one with your feature name
+    content: the code for JUST this section (not the whole file)"""
+    filename = _strip_subdir_prefix(filename, "code")
+    agent_id = _get_agent_id()
+    dashboard = get_dashboard()
+
+    if not dashboard.is_shared_file(filename):
+        return (
+            f"ERROR: '{filename}' is not a shared file. "
+            f"Use write_code_file('{filename}', content) instead."
+        )
+
+    err = dashboard.write_section(filename, section, agent_id, content)
+    if err:
+        logger.warning(f"[write_file_section] {agent_id} → {filename}:{section} — {err}")
+        return err
+
+    assembled = dashboard.assemble_shared_file(filename)
+    code_dir = _get_code_dir()
+    path = code_dir / filename
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(assembled, encoding="utf-8")
+    threading.Thread(target=_bg_index_file, args=(path,), daemon=True, name=f"rag-{filename}").start()
+    logger.info(f"[write_file_section] {agent_id} wrote section '{section}' in {filename} ({len(content)}c)")
+    return (
+        f"Written section '{section}' ({len(content)}c) to shared file code/{filename}. "
+        f"The assembled file is {len(assembled)}c total."
+    )
 
 @lc_tool
 def write_test_file(filename: str, content: str) -> str:
@@ -1090,8 +1728,9 @@ def check_owasp(feature: str) -> str:
 # ── Role → tool mapping (LangChain tool objects) ─────────────────────────────
 _LC_TOOLS_BY_NAME: Dict[str, object] = {
     t.name: t for t in [
-        write_code_file, write_test_file, write_design_file, write_config_file,
+        write_code_file, write_file_section, write_test_file, write_design_file, write_config_file,
         read_file, list_files, search_codebase,
+        run_shell, http_request, start_service, stop_service,
         check_dashboard, claim_domain, message_teammate, check_messages,
         open_app, browser_action, close_browser,
         validate_python, validate_json, validate_yaml,
@@ -1106,31 +1745,44 @@ _DASHBOARD_TOOLS    = ["check_dashboard", "claim_domain", "message_teammate", "c
 _DASHBOARD_RO_TOOLS = ["check_dashboard", "message_teammate", "check_messages"]  # read-only for QA/arch
 
 _ROLE_TOOL_NAMES: Dict[str, List[str]] = {
-    "system_designer":    ["create_ascii_diagram"] + _DASHBOARD_RO_TOOLS,
-    "api_designer":       ["generate_endpoint_table", "validate_yaml"] + _DASHBOARD_RO_TOOLS,
-    "db_designer":        ["generate_er_diagram"] + _DASHBOARD_RO_TOOLS,
-    "ux_researcher":      ["create_user_flow", "write_design_file"] + _DASHBOARD_RO_TOOLS,
-    "ui_designer":        ["create_wireframe", "write_design_file"] + _DASHBOARD_RO_TOOLS,
-    "visual_designer":    ["create_style_guide", "write_design_file"] + _DASHBOARD_RO_TOOLS,
+    "system_designer":    ["create_ascii_diagram", "write_design_file", "read_file",
+                           "list_files", "search_codebase"] + _DASHBOARD_RO_TOOLS,
+    "api_designer":       ["generate_endpoint_table", "validate_yaml", "write_design_file",
+                           "read_file", "list_files", "search_codebase"] + _DASHBOARD_RO_TOOLS,
+    "db_designer":        ["generate_er_diagram", "write_design_file", "read_file",
+                           "list_files", "search_codebase"] + _DASHBOARD_RO_TOOLS,
+    "ux_researcher":      ["create_user_flow", "write_design_file", "read_file",
+                           "list_files", "search_codebase"] + _DASHBOARD_RO_TOOLS,
+    "ui_designer":        ["create_wireframe", "write_design_file", "read_file",
+                           "list_files", "search_codebase"] + _DASHBOARD_RO_TOOLS,
+    "visual_designer":    ["create_style_guide", "write_design_file", "read_file",
+                           "list_files", "search_codebase"] + _DASHBOARD_RO_TOOLS,
     "unit_tester":        ["write_test_file", "validate_python", "scan_vulnerabilities",
-                           "run_shell", "read_file", "list_files", "search_codebase",
-                           "open_app", "browser_action", "close_browser"] + _DASHBOARD_RO_TOOLS,
-    "integration_tester": ["write_test_file", "validate_json", "run_shell", "http_request",
+                           "run_shell", "start_service", "stop_service", "http_request",
                            "read_file", "list_files", "search_codebase",
                            "open_app", "browser_action", "close_browser"] + _DASHBOARD_RO_TOOLS,
-    "security_auditor":   ["scan_vulnerabilities", "check_owasp", "run_shell", "http_request",
-                           "list_files", "search_codebase",
+    "integration_tester": ["write_test_file", "validate_python", "validate_json", "run_shell",
+                           "start_service", "stop_service", "http_request",
+                           "read_file", "list_files", "search_codebase",
+                           "open_app", "browser_action", "close_browser"] + _DASHBOARD_RO_TOOLS,
+    "security_auditor":   ["write_test_file", "scan_vulnerabilities", "check_owasp", "run_shell",
+                           "start_service", "stop_service", "http_request",
+                           "read_file", "list_files", "search_codebase",
                            "open_app", "browser_action", "close_browser"] + _DASHBOARD_RO_TOOLS,
 }
-_DEV_TOOL_NAMES = ["write_code_file", "validate_python", "validate_json",
+_DEV_TOOL_NAMES = ["write_code_file", "write_file_section", "write_test_file",
+                   "validate_python", "validate_json",
                    "validate_yaml", "write_config_file", "read_file", "run_shell",
-                   "list_files", "search_codebase",
-                   "open_app", "browser_action", "close_browser"] + _DASHBOARD_TOOLS
+                   "list_files", "search_codebase", "start_service", "stop_service",
+                   "http_request", "open_app", "browser_action", "close_browser"] + _DASHBOARD_TOOLS
 
 
 def get_role_lc_tools(role_key: str) -> List:
     """Return list of LangChain tool objects for this role."""
     names = _ROLE_TOOL_NAMES.get(role_key, [])
+    missing = [n for n in names if n not in _LC_TOOLS_BY_NAME]
+    if missing:
+        logger.warning(f"[{role_key}] tools not found in registry (skipped): {missing}")
     return [_LC_TOOLS_BY_NAME[n] for n in names if n in _LC_TOOLS_BY_NAME]
 
 
@@ -1146,6 +1798,7 @@ def _run_with_tools(
     Tool calls use native Gemini function calling — no regex, no 0-char files.
     """
     agent = _get_lc_agent(role_key)
+    logger.info(f"[{label}] ── ReAct agent invoked (role={role_key}, prompt={len(prompt)}c, recursion_limit=16)")
 
     try:
         result = agent.invoke(
@@ -1157,6 +1810,9 @@ def _run_with_tools(
         return f"[ERROR: {e}]\nSTANCE: PRAGMATIC", [], 10.0
 
     messages = result.get("messages", [])
+    ai_turns   = sum(1 for m in messages if isinstance(m, AIMessage))
+    tool_turns = sum(1 for m in messages if isinstance(m, ToolMessage))
+    logger.info(f"[{label}] agent finished — {len(messages)} messages ({ai_turns} AI turns, {tool_turns} tool calls)")
 
     # Collect tool results from ToolMessages
     tool_results: List[str] = []
@@ -1171,10 +1827,21 @@ def _run_with_tools(
          if isinstance(m, AIMessage) and not getattr(m, "tool_calls", [])),
         None,
     )
-    text = final_ai.content if final_ai and isinstance(final_ai.content, str) else ""
+    # Normalize: multimodal content may be a list of dicts; join string parts only
+    if final_ai is not None:
+        raw_content = final_ai.content
+        if isinstance(raw_content, str):
+            text = raw_content
+        elif isinstance(raw_content, list):
+            text = "".join(p if isinstance(p, str) else p.get("text", "") for p in raw_content)
+        else:
+            text = ""
+    else:
+        text = ""
 
     # Token accounting: LangChain's Gemini integration stores usage on the AIMessage
     # object itself as `usage_metadata` (not inside response_metadata).
+    global _tokens_in, _tokens_out, _call_count
     for msg in messages:
         if isinstance(msg, AIMessage):
             usage = getattr(msg, "usage_metadata", None) or {}
@@ -1186,6 +1853,7 @@ def _run_with_tools(
                 _tokens_out += t_out
 
     # Fallback: if the agent produced no meaningful summary, ask the LLM directly
+    used_fallback = False
     if len(text) < 150 and tool_results:
         tool_summary = "\n".join(tool_results[:6])
         fallback_prompt = (
@@ -1194,6 +1862,7 @@ def _run_with_tools(
             "and integration notes. End with: STANCE: [MINIMAL|ROBUST|SCALABLE|PRAGMATIC]"
         )
         text = llm_call(fallback_prompt, label=f"{label}_summary", get_logprobs=False, system=_SYSTEM_AGENT)
+        used_fallback = True
         logger.info(f"[{label}] fallback summary triggered ({len(text)}c)")
 
     logger.info(
@@ -1201,8 +1870,12 @@ def _run_with_tools(
         f"[total: {token_summary()}]: {text[:80]}{'...' if len(text) > 80 else ''}"
     )
 
-    # Perplexity estimate: try logprobs from metadata, else length-based heuristic
-    perplexity = _perplexity_from_lc(final_ai)
+    # Perplexity: when fallback was used the original AIMessage is stale — use length heuristic
+    if used_fallback:
+        perplexity = max(1.5, 10.0 - min(len(text) / 500, 1.0) * 7.0)
+    else:
+        perplexity = _perplexity_from_lc(final_ai)
+    logger.info(f"[{label}] perplexity={perplexity:.2f}  final_text={len(text)}c")
     return text, tool_results, perplexity
 
 
@@ -1258,9 +1931,12 @@ def _perplexity_from_lc(msg: Optional[AIMessage]) -> float:
         reply = llm_call(elicit_prompt, label="", get_logprobs=False, system="")
         letter = reply.strip().upper()[:1].lower()
         if letter in _CONFIDENCE_MAP:
-            return _CONFIDENCE_MAP[letter]
-    except Exception:
-        pass
+            score = _CONFIDENCE_MAP[letter]
+            logger.info(f"  confidence self-rating: {letter.upper()} → perplexity={score:.1f}")
+            return score
+        logger.info(f"  confidence self-rating: unrecognised reply '{reply.strip()[:10]}' — falling back to content heuristic")
+    except Exception as exc:
+        logger.debug(f"  confidence elicitation failed: {exc}")
     return _perplexity_from_content(content)
 
 
@@ -1555,12 +2231,15 @@ def get_client() -> genai.Client:
 
 
 def token_summary() -> str:
-    total = _tokens_in + _tokens_out
-    # Gemini 3.1 Flash-Lite pricing: $0.25/1M in, $1.50/1M out
-    cost = (_tokens_in * 0.25 + _tokens_out * 1.50) / 1_000_000
+    with _token_lock:
+        calls = _call_count
+        t_in  = _tokens_in
+        t_out = _tokens_out
+    total = t_in + t_out
+    cost = (t_in * 0.10 + t_out * 0.40) / 1_000_000
     return (
-        f"calls={_call_count}  "
-        f"in={_tokens_in:,}  out={_tokens_out:,}  total={total:,}  "
+        f"calls={calls}  "
+        f"in={t_in:,}  out={t_out:,}  total={total:,}  "
         f"~${cost:.4f}"
     )
 
@@ -1587,6 +2266,7 @@ def llm_call(
         u = getattr(r, "usage_metadata", None)
         t_in  = getattr(u, "prompt_token_count",     0) or 0
         t_out = getattr(u, "candidates_token_count", 0) or 0
+        global _tokens_in, _tokens_out, _call_count
         with _token_lock:
             _tokens_in  += t_in
             _tokens_out += t_out
@@ -1627,9 +2307,9 @@ def llm_call(
 def perplexity_to_similarities(perplexity: float) -> dict:
     confusion = min(math.log(max(perplexity, 1.0)) / math.log(30.0), 1.0)
     return {
-        "healthy":   1.0 - 2.0 * confusion,
-        "uncertain": 1.0 - 2.0 * abs(confusion - 0.5),
-        "confused":  2.0 * confusion - 1.0,
+        "healthy":   max(0.0, min(1.0, 1.0 - 2.0 * confusion)),
+        "uncertain": max(0.0, min(1.0, 1.0 - 2.0 * abs(confusion - 0.5))),
+        "confused":  max(0.0, min(1.0, 2.0 * confusion - 1.0)),
     }
 
 
@@ -1656,36 +2336,52 @@ class RollingContext:
         self.summary    = ""
         self.recent:    List[str] = []
         self.max_recent = max_recent
+        self._lock      = threading.Lock()
 
     def add(self, task: str, output: str) -> None:
         entry = f"Task: {task[:100]}. Output: {output[:250]}"
-        self.recent.append(entry)
-        if len(self.recent) > self.max_recent:
-            old = self.recent.pop(0)
+        with self._lock:
+            self.recent.append(entry)
+            should_summarise = len(self.recent) > self.max_recent
+            old = self.recent.pop(0) if should_summarise else None
+            current_summary = self.summary
+        if should_summarise and old is not None:
             prompt = (
                 "Maintain a concise running summary of a software engineer's work.\n\n"
-                f"Current summary:\n{self.summary or '(none)'}\n\n"
+                f"Current summary:\n{current_summary or '(none)'}\n\n"
                 f"New entry:\n{old}\n\n"
                 "Update summary. Max 80 words. Preserve decisions made, patterns used, issues found. "
                 "Reply with ONLY the updated summary."
             )
             result = llm_call(prompt, label="ctx", system=_SYSTEM_WORKER)
             if not result.startswith("[ERROR"):
-                self.summary = result
+                with self._lock:
+                    self.summary = result
 
     def get(self) -> str:
-        if not self.summary and not self.recent:
+        with self._lock:
+            summary = self.summary
+            recent  = list(self.recent)
+        if not summary and not recent:
             return ""
         parts = []
-        if self.summary:
-            parts.append(f"PROJECT HISTORY:\n{self.summary}")
-        if self.recent:
-            parts.append("RECENT WORK:\n" + "\n".join(f"- {e}" for e in self.recent))
+        if summary:
+            parts.append(f"PROJECT HISTORY:\n{summary}")
+        if recent:
+            parts.append("RECENT WORK:\n" + "\n".join(f"- {e}" for e in recent))
         return "\n".join(parts) + "\n\n"
 
 
 # ── Stance extraction + consistency weight ────────────────────────────────────
 def extract_stance_probs(output: str) -> np.ndarray:
+    # Prefer explicit STANCE: tag if present (e.g. "STANCE: ROBUST")
+    tag_match = re.search(r"\bSTANCE:\s*(MINIMAL|ROBUST|SCALABLE|PRAGMATIC)\b", output, re.IGNORECASE)
+    if tag_match:
+        tag = tag_match.group(1).upper()
+        idx = {"MINIMAL": 0, "ROBUST": 1, "SCALABLE": 2, "PRAGMATIC": 3}.get(tag, 3)
+        scores = np.full(4, 0.5)
+        scores[idx] = 4.0
+        return scores / scores.sum()
     text = output.lower()
     scores = np.array([
         sum(1 for w in ["simple", "minimal", "straightforward", "basic",
@@ -1774,14 +2470,41 @@ def run_worker(
         )
 
     dashboard_snippet = ""
+    messages_snippet = ""
     if has_tools:
         dashboard_snippet = (
             "\n\n─── WORK DASHBOARD (Sprint " + str(sprint_num) + ") ───\n"
             + get_dashboard().get_status()
             + "\n────────────────────────────────\n"
         )
+        try:
+            pending = get_dashboard().peek_messages(role_key)
+            if pending:
+                messages_snippet = f"\nMESSAGES FROM TEAMMATES (read carefully):\n{pending}\n"
+        except Exception:
+            pass
 
     dod_checklist = _get_dod(role_key)
+
+    # Coordination instructions — mirror engineering's mandatory tool-use steps
+    coord_instructions = ""
+    if has_tools:
+        if round_num == 1:
+            coord_instructions = (
+                "\nMANDATORY FIRST STEPS (do these before producing any work):\n"
+                "  1. call check_dashboard() — see what other teams and teammates own\n"
+                "  2. call check_messages() — read any messages from teammates or other teams\n"
+                "  3. If you need info from another role, call message_teammate(role, question)\n\n"
+            )
+        else:
+            coord_instructions = (
+                "\nMANDATORY FIRST STEPS (do these before revising any work):\n"
+                "  1. call check_messages() — read ALL messages before changing anything\n"
+                "  2. call check_dashboard() — verify current ownership and team status\n"
+                "  3. Address every teammate message in your revised output\n"
+                "  4. If you changed any interface, schema, or spec name, call message_teammate()\n"
+                "     to notify affected teammates\n\n"
+            )
 
     if round_num == 1:
         prompt = (
@@ -1792,6 +2515,8 @@ def run_worker(
             f"{ctx_text}"
             f"{manifest_snippet}"
             f"{dashboard_snippet}"
+            f"{messages_snippet}"
+            f"{coord_instructions}"
             f"PROJECT TASK:\n{task}\n\n"
             f"Produce your best work product. Be specific, technical, and complete.\n"
             f"Include actual code, schemas, diagrams, or specs where relevant.\n\n"
@@ -1818,6 +2543,8 @@ def run_worker(
             f"{ctx_text}"
             f"{manifest_snippet}"
             f"{dashboard_snippet}"
+            f"{messages_snippet}"
+            f"{coord_instructions}"
             f"PROJECT TASK:\n{task}\n\n"
             f"ROUND {round_num} — You have seen what your colleagues produced last round.\n"
             f"COLLEAGUE OUTPUTS:\n{peer_text}\n"
@@ -1892,20 +2619,53 @@ def run_team_planning(
         f"Post {n} work items to the team blackboard. Each item must be:\n"
         f"  - Independent (no blocking dependencies on other items)\n"
         f"  - Sized for one person in one sprint\n"
-        f"  - Clear enough that a specialist can self-assign without asking questions\n\n"
+        f"  - Clear enough that a specialist can self-assign without asking questions\n"
+        f"  - FILE-ISOLATED: each item works on its OWN files that no other item touches\n\n"
+        f"CRITICAL RULES FOR MINIMAL INTERFERENCE:\n"
+        f"  1. NO two items should write to the same file\n"
+        f"  2. The entry point file is SYSTEM-MANAGED — do NOT assign it\n"
+        f"  3. Shared model/type files are system-managed — devs import from them, not rewrite them\n"
+        f"  4. Each item must list its files in brackets, e.g. [routes.py, auth.py]\n"
+        f"  5. If two features need to share a file, split the file into two modules instead\n"
+        f"  6. Every module file must export exactly what its contract says in the 'exports' list\n"
+        f"  7. Mention what the developer must export in the task description\n\n"
         f"Format EXACTLY as (one line each):\n"
-        + "\n".join(f"ITEM_{i+1}: <concise task description>" for i in range(n))
+        + "\n".join(f"ITEM_{i+1}: <concise task description> [file1.ext, file2.ext]" for i in range(n))
     )
     board_output = llm_call(board_prompt, label=f"{manager_role}_board_post",
                              system=_manager_system(manager_role))
 
-    # Parse board items
+    # Parse board items — tolerant of ITEM_N:, ITEM N:, N. and N) formats
     items: Dict[str, str] = {}
+    item_files: Dict[str, List[str]] = {}  # item_id -> list of files
     for i in range(1, n + 1):
-        m = re.search(rf"ITEM_{i}:\s*(.+)", board_output)
-        items[f"item_{i}"] = m.group(1).strip() if m else f"Work item {i}"
+        m = re.search(
+            rf"(?:ITEM[_ ]{i}|{i}[.):])\s*[:–\-]?\s*(.+)",
+            board_output,
+            re.IGNORECASE,
+        )
+        text = m.group(1).strip() if m else f"Work item {i}"
+        items[f"item_{i}"] = text
+        # Extract file list from brackets: [file1.py, file2.js]
+        file_match = re.search(r"\[([^\]]+)\]", text)
+        if file_match:
+            item_files[f"item_{i}"] = [f.strip() for f in file_match.group(1).split(",") if f.strip()]
+
+    # Validate file-isolation: no two items should share files
+    file_to_item: Dict[str, str] = {}
+    overlaps: List[str] = []
+    for iid, files in item_files.items():
+        for f in files:
+            if f in file_to_item:
+                overlaps.append(f"  {f}: claimed by both {file_to_item[f]} and {iid}")
+            else:
+                file_to_item[f] = iid
+    if overlaps:
+        logger.warning(f"  {team_name}: file overlap detected in work items:\n" + "\n".join(overlaps))
+        logger.warning(f"  The integration enforcer will handle shared files automatically.")
+
     board_display = "\n".join(f"  [{k}] {v}" for k, v in items.items())
-    logger.info(f"  {team_name} blackboard posted {n} items")
+    logger.info(f"  {team_name} blackboard posted {n} items ({len(item_files)} with explicit file lists)")
 
     # ── Step 2: Workers self-claim in parallel ────────────────────────────────
     def worker_claim(role_key: str) -> Tuple[str, str]:
@@ -1927,6 +2687,10 @@ def run_team_planning(
     with ThreadPoolExecutor(max_workers=n) as ex:
         for role_key, output in ex.map(lambda r: worker_claim(r), worker_roles):
             claims[role_key] = output
+            m_claim = re.search(r"CLAIM:\s*(item_\d+)", output, re.IGNORECASE)
+            claimed_item = m_claim.group(1) if m_claim else "UNKNOWN"
+            reason_snippet = output.split("CLAIM:")[0].strip()[-80:] if "CLAIM:" in output else output[:80]
+            logger.info(f"  [claim] {role_key} → {claimed_item}  reason: …{reason_snippet}")
 
     # Health interference across team
     ActiveInferenceState.interfere_all(
@@ -1941,7 +2705,10 @@ def run_team_planning(
         m = re.search(r"CLAIM:\s*(item_\d+)", claims[role_key], re.IGNORECASE)
         if m:
             iid = m.group(1).lower()
-            if iid not in claimed:
+            # Validate: only accept item IDs that exist on the board
+            if iid not in items:
+                logger.warning(f"  [claim] {role_key} claimed non-existent {iid!r} — treated as failed claim")
+            elif iid not in claimed:
                 claimed[iid] = role_key
                 assignments[role_key] = iid
 
@@ -1965,7 +2732,7 @@ def run_team_planning(
         conflict_summary = "\n".join(
             f"  {ROLES[r]['title']}: {claims[r][-120:]}" for r in conflict_roles
         )
-        final_board = "\n".join(f"  ASSIGNED {ROLES[assignments[r]]['title']}: {items[assignments[r]]}"
+        final_board = "\n".join(f"  ASSIGNED {ROLES[r]['title']}: {items[assignments[r]]}"
                                  for r in worker_roles)
         rolling_ctxs[manager_role].add("blackboard arbitration",
                                         f"Resolved conflicts:\n{conflict_summary}\n\nFinal board:\n{final_board}")
@@ -1981,7 +2748,7 @@ def run_team_planning(
 
 
 # ── Team execution ────────────────────────────────────────────────────────────
-MAX_TEAM_ROUNDS = 4  # hard cap for non-engineering teams
+MAX_TEAM_ROUNDS = 2  # hard cap for non-engineering teams
 
 
 def run_team(
@@ -2034,7 +2801,18 @@ def run_team(
         with ThreadPoolExecutor(max_workers=len(worker_roles)) as ex:
             futures = {ex.submit(run_one, role): role for role in worker_roles}
             for fut in as_completed(futures):
-                current[futures[fut]] = fut.result()
+                role = futures[fut]
+                try:
+                    current[role] = fut.result()
+                except Exception as exc:
+                    logger.error(f"[{role}] worker crashed: {exc}", exc_info=True)
+                    current[role] = WorkerOutput(
+                        role=role, title=ROLES.get(role, {}).get("title", role),
+                        round=round_num, output=f"[worker crashed: {exc}]",
+                        tool_results=[], stance="pragmatic",
+                        stance_probs=[0.1, 0.1, 0.1, 0.7],
+                        F_health=9.9, anomaly=True,
+                    )
 
         # ── Health + stance interference ──────────────────────────────────
         ActiveInferenceState.interfere_all(
@@ -2047,12 +2825,15 @@ def run_team(
         for i, role in enumerate(worker_roles):
             current[role].stance_probs = updated[i].tolist()
 
-        H_swarm     = sum(current[r].F_health for r in worker_roles)
+        # Use post-interference free energy (not stale WorkerOutput values)
+        H_swarm     = sum(health_states[r].free_energy() for r in worker_roles)
+        n_workers   = len(worker_roles)
+        stable_thr  = 1.5 * n_workers
         mean_stance = np.mean([np.array(current[r].stance_probs) for r in worker_roles], axis=0)
         consensus   = STANCES[int(mean_stance.argmax())]
         logger.info(
             f"{team_name} R{round_num}: H_swarm={H_swarm:.3f}  consensus={consensus.upper()}  "
-            f"({'stable' if H_swarm < 1.5 else 'ELEVATED ⚠'})"
+            f"({'stable' if H_swarm < stable_thr else 'ELEVATED ⚠'})"
         )
 
         # ── Manager reviews round, decides CONTINUE or DONE ───────────────
@@ -2061,6 +2842,26 @@ def run_team(
             f"{current[r].output[:600]}"
             for r in worker_roles
         )
+        team_specific_review = ""
+        if team_name == "Architecture":
+            team_specific_review = (
+                "4. Does the spec include dependency waves (Wave 0 / Wave 1 / Wave 2)?\n"
+                "5. Does every file have an explicit depends_on list?\n"
+                "6. Are build_command, build_file, and dependencies specified?\n"
+                "   (Engineering CANNOT dispatch agents without waves and depends_on)\n"
+            )
+        elif team_name == "QA":
+            team_specific_review = (
+                "4. Did testers run the build_command first before testing?\n"
+                "5. Were tests executed in wave order (foundation → core → UI)?\n"
+                "6. Is the GO/NO-GO backed by actual test output, not claims?\n"
+            )
+        elif team_name == "Design":
+            team_specific_review = (
+                "4. Do component names match what Engineering uses in their file names?\n"
+                "5. Did designers check the dashboard for Engineering's claimed domains?\n"
+            )
+
         manager_review = llm_call(
             f"You are the {ROLES[manager_role]['title']}.\n\n"
             f"TASK: {task[:300]}\n\n"
@@ -2069,7 +2870,8 @@ def run_team(
             f"Review what the team produced this round:\n"
             f"1. Are there conflicts or overlaps between team members' work?\n"
             f"2. Are there gaps — things nobody addressed?\n"
-            f"3. Is the work coherent and integrated as a whole?\n\n"
+            f"3. Is the work coherent and integrated as a whole?\n"
+            f"{team_specific_review}\n"
             f"If the team's output is complete and coherent: respond with DECISION: DONE\n"
             f"Otherwise: respond with DECISION: CONTINUE\n"
             f"Then give specific, numbered feedback for each team member on what to fix or improve next round.",
@@ -2099,7 +2901,7 @@ def run_team(
         f"TEAM OUTPUTS (after {round_num} round(s)):\n{summaries}\n\n"
         f"Consensus stance: {consensus.upper()} — {STANCE_DESC[consensus]}\n"
         f"H_swarm={H_swarm:.3f} "
-        f"({'stable' if H_swarm < 1.5 else 'elevated — flag risky decisions'})\n\n"
+        f"({'stable' if H_swarm < stable_thr else 'elevated — flag risky decisions'})\n\n"
         f"Synthesize the best elements into a single coherent, complete deliverable. "
         f"Resolve any remaining conflicts. Be thorough and specific.",
         label=f"{manager_role}_synthesis",
@@ -2114,17 +2916,18 @@ def run_team(
     # QA appends (findings accumulate), others overwrite (latest spec wins)
     _write_canonical_file(team_name, synthesis, append=(team_name == "QA"))
 
-    H_swarm     = sum(current[r].F_health for r in worker_roles)
+    # Post-interference free energy for final H_swarm
+    H_swarm     = sum(health_states[r].free_energy() for r in worker_roles)
     mean_stance = np.mean([np.array(current[r].stance_probs) for r in worker_roles], axis=0)
     consensus   = STANCES[int(mean_stance.argmax())]
 
     return TeamResult(
         team=team_name,
         manager_synthesis=synthesis,
-        worker_outputs=list(current.values()),
+        worker_outputs=[current[r] for r in worker_roles],   # deterministic order
         H_swarm=H_swarm,
         consensus_stance=consensus,
-        confidence=max(0.0, 1.0 - H_swarm / (3.0 * len(worker_roles))),
+        confidence=max(0.0, 1.0 - H_swarm / (1.5 * n_workers)),  # mean-based, consistent with eng team
     )
 
 
@@ -2306,15 +3109,109 @@ def run_executive_meeting(
 
 # ── Sprint planning: engineering manager + devs discuss together ──────────────
 
+def _generate_contracts(
+    task: str,
+    dev_assignments: Dict[str, str],
+) -> None:
+    """
+    After sprint planning assigns work items, ask the manager to generate
+    typed interface contracts that all agents must follow.
+    This eliminates the integration gap where each agent invents its own signatures.
+    """
+    logger.info(f"\n{'─'*55}\nCONTRACT GENERATION: Engineering\n{'─'*55}")
+
+    assignment_list = "\n".join(
+        f"  {dev}: {desc}" for dev, desc in dev_assignments.items()
+    )
+
+    contract_prompt = (
+        f"You are the Engineering Manager.\n\n"
+        f"PROJECT:\n{task[:600]}\n\n"
+        f"DEV ASSIGNMENTS:\n{assignment_list}\n\n"
+        f"Generate typed interface contracts so all developers use identical "
+        f"signatures, import paths, and data models. This prevents integration failures.\n\n"
+        f"Output EXACTLY this JSON structure (no markdown fences, just raw JSON):\n"
+        f'{{\n'
+        f'  "build_command": "python server.py",\n'
+        f'  "build_file": "requirements.txt",\n'
+        f'  "dependencies": ["sqlite3"],\n'
+        f'  "init_order": ["database", "routes", "server"],\n'
+        f'  "models": [\n'
+        f'    {{"name": "ModelName", "fields": "field1: type, field2: type", "file": "models.py"}}\n'
+        f'  ],\n'
+        f'  "endpoints": [\n'
+        f'    {{"method": "POST", "path": "/items", "request_model": "ItemCreate", "response_model": "Item"}}\n'
+        f'  ],\n'
+        f'  "files": [\n'
+        f'    {{"file": "models.py", "owner": "dev_1", "imports_from": [], '
+        f'"exports": ["Item"], "depends_on": [], "description": "data models"}},\n'
+        f'    {{"file": "routes.py", "owner": "dev_2", "imports_from": ["models.py"], '
+        f'"exports": ["create_item"], "depends_on": ["models.py"], "description": "API routes"}}\n'
+        f'  ],\n'
+        f'  "entry_point": "server.py",\n'
+        f'  "entry_imports": ["routes", "database"]\n'
+        f'}}\n\n'
+        f"RULES:\n"
+        f"- Every dev must own at least one file\n"
+        f"- Shared models/types go in ONE file that everyone imports from\n"
+        f"- The entry point file is SYSTEM-MANAGED — set its owner to 'system'\n"
+        f"  (The entry point will be auto-generated to wire all modules together)\n"
+        f"- NO two devs should own the same file — split into separate modules instead\n"
+        f"- Include ALL files needed for a working application\n"
+        f"- 'depends_on' MUST list files that must be complete before this file can be written.\n"
+        f"  Files with no dependencies have 'depends_on': []. The entry point depends on ALL other files.\n"
+        f"  Test files depend on the files they test.\n"
+        f"- 'exports' MUST list the exact symbol names other files need to import from this file\n"
+        f"- 'build_command' is the shell command to run the app or run tests (e.g. 'python server.py',\n"
+        f"  'cargo build', 'npm run build', 'go build ./...')\n"
+        f"- 'build_file' is the config file that lists dependencies (e.g. 'requirements.txt', 'Cargo.toml',\n"
+        f"  'package.json', 'go.mod'). Leave empty if not applicable.\n"
+        f"- 'dependencies' lists external libraries needed (e.g. ['fastapi', 'sqlalchemy'])\n"
+        f"- 'init_order' lists modules in the order they should be initialized (if ordering matters)\n"
+    )
+
+    contract_output = llm_call(
+        contract_prompt,
+        label="eng_contracts",
+        system=_manager_system("eng_manager"),
+    )
+
+    # Parse JSON from the output — tolerant of markdown fences
+    json_text = contract_output.strip()
+    if "```" in json_text:
+        m = re.search(r"```(?:json)?\s*\n?(.*?)```", json_text, re.DOTALL)
+        if m:
+            json_text = m.group(1).strip()
+
+    try:
+        parsed = json.loads(json_text)
+        registry = get_contracts()
+        registry.set_from_parsed(parsed)
+        logger.info(
+            f"  Contracts generated: {len(registry.models)} models, "
+            f"{len(registry.endpoints)} endpoints, {len(registry.file_map)} files"
+        )
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        logger.warning(f"  Contract parsing failed ({e}) — continuing without typed contracts")
+
+
 def run_sprint_planning(
     task: str,
     health_states: Dict[str, ActiveInferenceState],
     rolling_ctxs: Dict[str, RollingContext],
 ) -> Dict[str, str]:
-    """Delegates to run_team_planning — Engineering uses the same flow as all other teams."""
-    return run_team_planning(
+    """
+    Engineering sprint planning: assign work items via blackboard,
+    then generate typed interface contracts for all agents.
+    """
+    dev_assignments = run_team_planning(
         "Engineering", "eng_manager", ENG_WORKERS, task, rolling_ctxs, health_states
     )
+
+    # Generate typed contracts so agents share exact signatures
+    _generate_contracts(task, dev_assignments)
+
+    return dev_assignments
 
 
 def run_ceo_summary(
@@ -2327,8 +3224,21 @@ def run_ceo_summary(
         f"{name} (confidence {t.confidence:.0%}, H={t.H_swarm:.3f}):\n{t.manager_synthesis[:500]}"
         for name, t in results.items() if t is not None
     )
-    return llm_call(
-        f"You are the CEO.\n\nPROJECT: {brief}\n\n{team_text}\n\n"
+    plan_text = ""
+    if plan:
+        phase_lines = "\n".join(
+            f"  Phase {i}: {' + '.join(teams)}"
+            for i, teams in enumerate(plan.phases, 1)
+        )
+        notes = plan.team_notes.get("all", "")
+        plan_text = (
+            f"Phases:\n{phase_lines}\n"
+            + (f"Notes: {notes[:300]}" if notes else "")
+        )
+    summary = llm_call(
+        f"You are the CEO.\n\nPROJECT: {brief}\n\n"
+        + (f"EXECUTION PLAN:\n{plan_text}\n\n" if plan_text else "")
+        + f"TEAM RESULTS:\n{team_text}\n\n"
         f"Write an executive summary:\n"
         f"1. Project Overview\n2. Key Architecture Decisions\n3. Design Highlights\n"
         f"4. Implementation Highlights\n5. Quality & Risk Assessment\n6. Next Steps\n\n"
@@ -2336,12 +3246,644 @@ def run_ceo_summary(
         label="ceo_summary",
         system=_SYSTEM_CEO,
     )
+    ctx.add(brief, summary)
+    return summary
 
 
 # ── Engineering team: sprint planning → parallel build → synthesize ──────────
 
-MAX_ENG_ROUNDS = 5   # hard cap per sprint to control cost
-MAX_SPRINTS    = 6   # safety cap — CEO should ship before this; prevents runaway cost
+MAX_ENG_ROUNDS = 4   # hard cap per sprint to control cost (legacy, kept for reference)
+MAX_SPRINTS    = 5   # safety cap — CEO should ship before this; prevents runaway cost
+
+# ── Async task-completion constants ───────────────────────────────────────────
+MAX_TASKS_PER_AGENT = 4
+MAX_WALL_CLOCK      = 300   # seconds — hard timeout for entire engineering phase
+MAX_RETRIES_PER_TASK = 2
+_AGENT_POLL_INTERVAL = 2    # seconds between task queue polls when blocked
+
+
+@dataclass
+class EngTask:
+    """A single unit of engineering work, mapped to one file from the contracts."""
+    id: str
+    file: str
+    description: str
+    depends_on: List[str]
+    assigned_to: Optional[str] = None
+    status: str = "pending"       # pending | blocked | in_progress | completed | failed
+    retries: int = 0
+    primary_owner: Optional[str] = None  # dev originally assigned to this file
+
+
+class EngTaskQueue:
+    """
+    Thread-safe shared task queue for async engineering dispatch.
+    Tasks with unmet dependencies stay blocked until prerequisites complete.
+    """
+
+    def __init__(
+        self,
+        registry: InterfaceContractRegistry,
+        dev_assignments: Dict[str, str],
+    ):
+        self._lock = threading.RLock()
+        self.tasks: Dict[str, EngTask] = {}
+        self._completed_tasks: set = set()
+
+        file_to_task_id = {}
+        for fname, fc in registry.file_map.items():
+            if fname == registry.entry_point:
+                continue
+            tid = f"task_{fname.replace('/', '_').replace('.', '_')}"
+            file_to_task_id[fname] = tid
+
+        for fname, fc in registry.file_map.items():
+            if fname == registry.entry_point:
+                continue
+            tid = file_to_task_id[fname]
+            dep_ids = [
+                file_to_task_id[d] for d in fc.depends_on
+                if d in file_to_task_id
+            ]
+            desc = fc.description or f"Implement {fname}"
+            for dk, assignment in dev_assignments.items():
+                if fname in assignment:
+                    desc = assignment
+                    break
+
+            status = "blocked" if dep_ids else "pending"
+            self.tasks[tid] = EngTask(
+                id=tid, file=fname, description=desc,
+                depends_on=dep_ids, status=status,
+                primary_owner=fc.owner if fc.owner != "system" else None,
+            )
+
+        integ_tid = "task_integration_test"
+        integ_deps = list(file_to_task_id.values())
+        self.tasks[integ_tid] = EngTask(
+            id=integ_tid, file="__integration__",
+            description="Final integration: run build command, fix broken imports, run tests",
+            depends_on=integ_deps,
+            status="blocked" if integ_deps else "pending",
+        )
+
+        n_pending = sum(1 for t in self.tasks.values() if t.status == "pending")
+        n_blocked = sum(1 for t in self.tasks.values() if t.status == "blocked")
+        logger.info(f"[TaskQueue] initialized {len(self.tasks)} tasks ({n_pending} pending, {n_blocked} blocked)")
+
+    def claim_next(self, dev_key: str) -> Optional[EngTask]:
+        """Claim the next available pending task. Prefers tasks assigned to this dev."""
+        with self._lock:
+            preferred = None
+            fallback = None
+            for t in self.tasks.values():
+                if t.status != "pending":
+                    continue
+                if t.primary_owner == dev_key and preferred is None:
+                    preferred = t
+                elif fallback is None:
+                    fallback = t
+            chosen = preferred or fallback
+            if chosen:
+                chosen.status = "in_progress"
+                chosen.assigned_to = dev_key
+                logger.info(f"[TaskQueue] {dev_key} claimed task '{chosen.id}' ({chosen.file})")
+            return chosen
+
+    def complete(self, task_id: str) -> None:
+        """Mark a task completed and unblock dependents."""
+        with self._lock:
+            task = self.tasks.get(task_id)
+            if task:
+                task.status = "completed"
+                self._completed_tasks.add(task_id)
+                logger.info(f"[TaskQueue] task '{task_id}' COMPLETED")
+                self._unblock_dependents()
+
+    def fail(self, task_id: str) -> None:
+        """Mark a task failed. It may be retried by another agent."""
+        with self._lock:
+            task = self.tasks.get(task_id)
+            if task:
+                task.retries += 1
+                if task.retries < MAX_RETRIES_PER_TASK:
+                    task.status = "pending"
+                    task.assigned_to = None
+                    logger.warning(f"[TaskQueue] task '{task_id}' failed — requeueing (retry {task.retries})")
+                else:
+                    task.status = "failed"
+                    self._completed_tasks.add(task_id)
+                    logger.error(f"[TaskQueue] task '{task_id}' FAILED permanently after {task.retries} retries")
+                    self._unblock_dependents()
+
+    def _unblock_dependents(self) -> None:
+        """Move blocked tasks to pending if all their dependencies are satisfied."""
+        for t in self.tasks.values():
+            if t.status == "blocked":
+                if all(d in self._completed_tasks for d in t.depends_on):
+                    t.status = "pending"
+                    logger.info(f"[TaskQueue] unblocked task '{t.id}' ({t.file})")
+
+    def all_done(self) -> bool:
+        with self._lock:
+            return all(t.status in ("completed", "failed") for t in self.tasks.values())
+
+    def has_work_available(self) -> bool:
+        """True if there are pending tasks or in-progress tasks that might unblock others."""
+        with self._lock:
+            return any(t.status in ("pending", "in_progress", "blocked") for t in self.tasks.values())
+
+    def get_status(self) -> str:
+        with self._lock:
+            counts = {"pending": 0, "blocked": 0, "in_progress": 0, "completed": 0, "failed": 0}
+            for t in self.tasks.values():
+                counts[t.status] = counts.get(t.status, 0) + 1
+            lines = [f"Tasks: {len(self.tasks)} total"]
+            for status, count in counts.items():
+                if count:
+                    lines.append(f"  {status}: {count}")
+            in_prog = [t for t in self.tasks.values() if t.status == "in_progress"]
+            if in_prog:
+                lines.append("  Active:")
+                for t in in_prog:
+                    lines.append(f"    {t.assigned_to} → {t.file}")
+            return "\n".join(lines)
+
+    def get_completed_files(self) -> List[str]:
+        """Return filenames of completed tasks (for peer context)."""
+        with self._lock:
+            return [t.file for t in self.tasks.values() if t.status == "completed" and t.file != "__integration__"]
+
+    def force_fail_remaining(self) -> None:
+        """Mark all non-terminal tasks as failed (used by wall-clock timeout)."""
+        with self._lock:
+            for t in self.tasks.values():
+                if t.status in ("pending", "blocked", "in_progress"):
+                    t.status = "failed"
+            self._completed_tasks.update(t.id for t in self.tasks.values() if t.status == "failed")
+
+
+def emit_skeleton(dev_assignments: Dict[str, str], sprint_num: int = 1) -> None:
+    """
+    Write skeleton/stub files based on interface contracts before Round 1.
+    Pre-populates dashboard domain claims so agents don't fight over files.
+    Entry point is registered as a SHARED file (system-managed).
+    Agents fill in the stubs rather than inventing their own file structure.
+    """
+    registry = get_contracts()
+    if not registry.file_map and not registry.models:
+        logger.info("[skeleton] No contracts available — skipping skeleton generation")
+        return
+
+    logger.info(f"\n{'─'*55}\nSKELETON GENERATION\n{'─'*55}")
+    code_dir = OUTPUT_DIR / "code"
+    code_dir.mkdir(parents=True, exist_ok=True)
+    dashboard = get_dashboard()
+    files_written = 0
+
+    # ── Register entry point as shared file (system-managed) ─────────────────
+    if registry.entry_point:
+        ep_sections = [
+            {"id": "header", "owner": "system", "order": 0,
+             "content": "# System-managed entry point — auto-generated by enforcer"},
+        ]
+        order = 1
+        for imp in registry.entry_imports:
+            ep_sections.append({
+                "id": f"import_{imp}", "owner": "system", "order": order,
+                "content": "",
+            })
+            order += 1
+        dashboard.register_shared_file(registry.entry_point, ep_sections)
+        logger.info(f"  [skeleton] registered entry point '{registry.entry_point}' as shared (system-managed)")
+
+    # ── Write shared model stubs ─────────────────────────────────────────────
+    model_files_seen: set = set()
+    for model in registry.models:
+        model_file = code_dir / model.file
+        if model_file.exists() and model.file in model_files_seen:
+            continue
+        model_files_seen.add(model.file)
+        model_file.parent.mkdir(parents=True, exist_ok=True)
+        fields_lines = []
+        for field_str in model.fields.split(","):
+            field_str = field_str.strip()
+            if field_str:
+                fields_lines.append(f"    {field_str}")
+        fields_block = "\n".join(fields_lines) if fields_lines else "    pass"
+        stub = (
+            f"# AUTO-GENERATED SKELETON — implement the bodies\n"
+            f"# Owner: system\n\n"
+            f"class {model.name}:\n"
+            f"{fields_block}\n"
+        )
+        if model_file.exists():
+            existing = model_file.read_text(encoding="utf-8")
+            model_file.write_text(existing + "\n\n" + stub, encoding="utf-8")
+        else:
+            model_file.write_text(stub, encoding="utf-8")
+        files_written += 1
+        logger.info(f"  [skeleton] wrote model stub: {model.file}")
+
+    # ── Write generic file stubs ─────────────────────────────────────────────
+    _EXT_COMMENTS = {
+        ".py": ("#", ""),    ".go": ("//", ""),    ".rs": ("//", ""),
+        ".js": ("//", ""),   ".ts": ("//", ""),    ".jsx": ("//", ""),
+        ".tsx": ("//", ""),  ".java": ("//", ""),  ".c": ("//", ""),
+        ".cpp": ("//", ""),  ".rb": ("#", ""),     ".lua": ("--", ""),
+    }
+
+    for fname, fc in registry.file_map.items():
+        if fname == registry.entry_point:
+            continue
+
+        file_path = code_dir / fname
+        if file_path.exists():
+            continue
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        ext = Path(fname).suffix
+        comment_prefix, _ = _EXT_COMMENTS.get(ext, ("#", ""))
+
+        stub = (
+            f"{comment_prefix} AUTO-GENERATED SKELETON — {fc.description}\n"
+            f"{comment_prefix} Owner: {fc.owner}\n"
+            f"{comment_prefix} Exports: {', '.join(fc.exports)}\n"
+            f"{comment_prefix} Imports from: {', '.join(fc.imports_from) if fc.imports_from else 'none'}\n"
+            f"{comment_prefix} TODO: implement this file\n"
+        )
+
+        file_path.write_text(stub, encoding="utf-8")
+        files_written += 1
+        logger.info(f"  [skeleton] wrote stub: {fname} (owner: {fc.owner})")
+
+        if fc.owner and fc.owner != "system":
+            dashboard.claim(
+                domain=f"skeleton_{fname.replace('.', '_').replace('/', '_')}",
+                owner=fc.owner,
+                description=fc.description[:100],
+                file_patterns=fname,
+                sprint=sprint_num,
+            )
+
+    logger.info(f"  [skeleton] {files_written} stub files written")
+
+
+
+
+
+
+def enforce_integration() -> str:
+    """
+    Lightweight integration enforcer:
+      1. Creates missing __init__.py files for Python packages
+      2. Assembles shared files from their sections
+      3. Uses LLM to generate the entry point that wires all modules
+      4. Uses LLM to generate build config files if needed
+      5. Runs the build command and returns errors for the agents to fix
+    """
+    code_dir = OUTPUT_DIR / "code"
+    if not code_dir.exists():
+        return ""
+
+    registry = get_contracts()
+    fixes: List[str] = []
+
+    # 1. Create missing __init__.py for any dir with .py files
+    for dirpath in code_dir.rglob("*"):
+        if dirpath.is_dir() and any(dirpath.glob("*.py")):
+            init = dirpath / "__init__.py"
+            if not init.exists():
+                init.write_text("", encoding="utf-8")
+                fixes.append(f"Created {init.relative_to(code_dir)}")
+
+    # 2. Assemble shared files from sections
+    dashboard = get_dashboard()
+    for filename in list(dashboard.sections.keys()):
+        assembled = dashboard.assemble_shared_file(filename)
+        if assembled.strip():
+            path = code_dir / filename
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(assembled, encoding="utf-8")
+            fixes.append(f"Assembled shared file '{filename}' from sections")
+
+    # 3. LLM-generate entry point
+    if registry.entry_point and registry.file_map:
+        ep_result = _generate_entry_point_via_llm(registry, code_dir)
+        if ep_result:
+            fixes.append(f"LLM-generated entry point '{registry.entry_point}'")
+
+    # 4. LLM-generate build config
+    if registry.build_file:
+        bf_result = _emit_build_scaffold_via_llm(registry, code_dir)
+        if bf_result:
+            fixes.append(f"LLM-generated build config '{registry.build_file}'")
+
+    if fixes:
+        report = "INTEGRATION ENFORCER — auto-fixes applied:\n" + "\n".join(f"  + {f}" for f in fixes)
+        logger.info(f"\n{report}")
+        return report
+    return ""
+
+
+def _run_build_command(registry: InterfaceContractRegistry) -> str:
+    """Run the build command and return its output (empty if success)."""
+    if not registry.build_command:
+        return ""
+    code_dir = OUTPUT_DIR / "code"
+    if not code_dir.exists():
+        return ""
+    try:
+        result = subprocess.run(
+            registry.build_command, shell=True, cwd=str(code_dir),
+            capture_output=True, text=True, timeout=60,
+        )
+        if result.returncode != 0:
+            out = (result.stdout[-2000:] + "\n" + result.stderr[-2000:]).strip()
+            return f"BUILD FAILED (exit {result.returncode}):\n{out}"
+    except subprocess.TimeoutExpired:
+        return "BUILD TIMEOUT: command took longer than 60s"
+    except Exception as e:
+        return f"BUILD ERROR: {e}"
+    return ""
+
+
+# ── Git Worktree isolation for engineering agents ─────────────────────────────
+
+import shutil as _shutil
+
+_wt_manager_ctx: _cv.ContextVar[Optional["GitWorktreeManager"]] = _cv.ContextVar(
+    "wt_manager", default=None,
+)
+
+def _get_worktree_manager() -> Optional["GitWorktreeManager"]:
+    return _wt_manager_ctx.get()
+
+def _set_worktree_manager(mgr: Optional["GitWorktreeManager"]) -> None:
+    _wt_manager_ctx.set(mgr)
+
+def _get_code_dir() -> Path:
+    """Return the active code directory — agent's worktree if active, else shared."""
+    agent_id = _get_agent_id()
+    wt = _get_worktree_manager()
+    if wt and agent_id:
+        agent_dir = wt.get_agent_code_dir(agent_id)
+        if agent_dir and agent_dir.exists():
+            return agent_dir
+    return OUTPUT_DIR / "code"
+
+
+class GitWorktreeManager:
+    """
+    Manages Git worktrees so each engineering agent writes to an isolated branch.
+    Lifecycle per round: create_worktrees() -> agents work -> commit_all() -> merge_all() -> cleanup()
+    """
+
+    def __init__(self, code_dir: Path, agent_ids: List[str]):
+        self.code_dir = code_dir.resolve()
+        self.agent_ids = agent_ids
+        self.worktree_root = self.code_dir.parent / ".worktrees"
+        self._initialized = False
+
+    def _git(self, *args: str, cwd: Optional[Path] = None) -> subprocess.CompletedProcess:
+        cmd = ["git"] + list(args)
+        return subprocess.run(
+            cmd, cwd=str(cwd or self.code_dir),
+            capture_output=True, text=True, timeout=30,
+        )
+
+    def init_repo(self) -> None:
+        """Initialize a git repo in code_dir if one doesn't exist, and create an initial commit."""
+        if self._initialized:
+            return
+        git_dir = self.code_dir / ".git"
+        if not git_dir.exists():
+            self.code_dir.mkdir(parents=True, exist_ok=True)
+            self._git("init")
+            self._git("checkout", "-b", "main")
+            gitignore = self.code_dir / ".gitignore"
+            if not gitignore.exists():
+                gitignore.write_text("__pycache__/\n*.pyc\n.worktrees/\n", encoding="utf-8")
+            self._git("add", ".")
+            self._git("commit", "-m", "initial skeleton", "--allow-empty")
+            logger.info("[worktree] initialized git repo in code/")
+        else:
+            self._git("add", ".")
+            result = self._git("diff", "--cached", "--quiet")
+            if result.returncode != 0:
+                self._git("commit", "-m", "pre-round snapshot")
+        self._initialized = True
+
+    def create_worktrees(self) -> None:
+        """Create an isolated worktree + branch for each agent."""
+        self.init_repo()
+        self.worktree_root.mkdir(parents=True, exist_ok=True)
+        for agent_id in self.agent_ids:
+            wt_path = self.worktree_root / agent_id
+            if wt_path.exists():
+                self._git("worktree", "remove", str(wt_path), "--force")
+                if wt_path.exists():
+                    _shutil.rmtree(str(wt_path), ignore_errors=True)
+            branch_check = self._git("rev-parse", "--verify", agent_id)
+            if branch_check.returncode == 0:
+                self._git("branch", "-D", agent_id)
+            result = self._git("worktree", "add", str(wt_path), "-b", agent_id)
+            if result.returncode != 0:
+                logger.error(f"[worktree] failed to create worktree for {agent_id}: {result.stderr}")
+            else:
+                logger.info(f"[worktree] created worktree for {agent_id}")
+
+    def get_agent_code_dir(self, agent_id: str) -> Optional[Path]:
+        """Return the worktree path for an agent, or None if worktrees aren't active."""
+        wt_path = self.worktree_root / agent_id
+        if wt_path.exists():
+            return wt_path
+        return None
+
+    def commit_agent(self, agent_id: str) -> bool:
+        """Commit all changes in an agent's worktree. Returns True if there was something to commit."""
+        wt_path = self.worktree_root / agent_id
+        if not wt_path.exists():
+            return False
+        self._git("add", ".", cwd=wt_path)
+        diff = self._git("diff", "--cached", "--quiet", cwd=wt_path)
+        if diff.returncode == 0:
+            logger.info(f"[worktree] {agent_id}: no changes to commit")
+            return False
+        result = self._git("commit", "-m", f"round work by {agent_id}", cwd=wt_path)
+        if result.returncode != 0:
+            logger.warning(f"[worktree] {agent_id} commit failed: {result.stderr.strip()}")
+            return False
+        logger.info(f"[worktree] {agent_id}: committed changes")
+        return True
+
+    def merge_all(self) -> List[str]:
+        """Merge all agent branches back into main. Returns list of conflict resolutions."""
+        resolutions: List[str] = []
+        for agent_id in self.agent_ids:
+            result = self._git("merge", agent_id, "--no-edit")
+            if result.returncode != 0:
+                conflict_files = self._get_conflict_files()
+                if conflict_files:
+                    for cf in conflict_files:
+                        resolved = self._resolve_conflict(cf, agent_id)
+                        resolutions.append(f"  Resolved conflict in {cf} (agent: {agent_id}): {resolved}")
+                    self._git("add", ".")
+                    self._git("commit", "-m", f"merged {agent_id} with conflict resolution")
+                else:
+                    self._git("merge", "--abort")
+                    logger.warning(f"[worktree] merge of {agent_id} failed (non-conflict): {result.stderr.strip()}")
+            else:
+                logger.info(f"[worktree] merged {agent_id} cleanly")
+        if resolutions:
+            report = "\n".join(resolutions)
+            logger.info(f"[worktree] merge conflict resolutions:\n{report}")
+        return resolutions
+
+    def _get_conflict_files(self) -> List[str]:
+        result = self._git("diff", "--name-only", "--diff-filter=U")
+        if result.returncode == 0 and result.stdout.strip():
+            return [f.strip() for f in result.stdout.strip().split("\n") if f.strip()]
+        return []
+
+    def _resolve_conflict(self, filepath: str, agent_id: str) -> str:
+        """Use LLM to resolve a merge conflict."""
+        full_path = self.code_dir / filepath
+        try:
+            content = full_path.read_text(encoding="utf-8")
+        except Exception as e:
+            self._git("checkout", "--theirs", filepath)
+            return f"read error, took theirs: {e}"
+
+        if "<<<<<<" not in content:
+            return "no conflict markers found"
+
+        registry = get_contracts()
+        fc = registry.file_map.get(filepath)
+        contract_ctx = ""
+        if fc:
+            contract_ctx = f"Contract: exports={fc.exports}, imports_from={fc.imports_from}, desc={fc.description}"
+
+        try:
+            resolved = llm_call(
+                f"This file has a Git merge conflict. Resolve it by combining both sides correctly.\n\n"
+                f"FILE: {filepath}\n"
+                f"{contract_ctx}\n\n"
+                f"CONFLICTED CONTENT:\n{content[:4000]}\n\n"
+                f"Output ONLY the resolved file content. No markdown fences. "
+                f"Keep all functionality from both sides. Remove all conflict markers.",
+                label=f"resolve_conflict_{filepath}",
+            )
+            if resolved and "<<<<<<" not in resolved:
+                full_path.write_text(resolved.strip() + "\n", encoding="utf-8")
+                return "LLM-resolved"
+        except Exception as e:
+            logger.warning(f"[worktree] LLM conflict resolution failed for {filepath}: {e}")
+
+        self._git("checkout", "--theirs", filepath)
+        return "LLM failed, took theirs"
+
+    def cleanup(self) -> None:
+        """Remove this manager's worktrees and branches only (not the shared root)."""
+        for agent_id in self.agent_ids:
+            wt_path = self.worktree_root / agent_id
+            if wt_path.exists():
+                self._git("worktree", "remove", str(wt_path), "--force")
+                if wt_path.exists():
+                    _shutil.rmtree(str(wt_path), ignore_errors=True)
+            self._git("branch", "-D", agent_id)
+        self._git("worktree", "prune")
+        # Only remove root if no other worktrees remain
+        if self.worktree_root.exists() and not any(self.worktree_root.iterdir()):
+            _shutil.rmtree(str(self.worktree_root), ignore_errors=True)
+        logger.info(f"[worktree] cleaned up worktrees for {self.agent_ids}")
+
+
+def _generate_entry_point_via_llm(
+    registry: InterfaceContractRegistry, code_dir: Path
+) -> bool:
+    """Use LLM to generate the entry point file that wires all modules together."""
+    file_summaries = []
+    for fname, fc in registry.file_map.items():
+        if fname == registry.entry_point:
+            continue
+        fpath = code_dir / fname
+        source_preview = ""
+        if fpath.exists():
+            try:
+                source_preview = fpath.read_text(encoding="utf-8")[:500]
+            except Exception:
+                pass
+        file_summaries.append(
+            f"  {fname} (exports: {fc.exports}, imports_from: {fc.imports_from}):\n"
+            f"    {fc.description}\n"
+            f"    Preview: {source_preview[:200]}..."
+        )
+
+    prompt = (
+        f"Generate the entry point file '{registry.entry_point}' that wires together all modules.\n\n"
+        f"MODULES:\n" + "\n".join(file_summaries) + "\n\n"
+        f"ENTRY IMPORTS NEEDED: {registry.entry_imports}\n"
+        f"DEPENDENCIES: {registry.dependencies}\n\n"
+        f"REQUIREMENTS:\n"
+        f"  - Import and wire ALL modules listed above\n"
+        f"  - The app must be runnable with: {registry.build_command or 'appropriate command'}\n"
+        f"  - Output ONLY the file content, no markdown fences\n"
+        f"  - Make it production-ready with error handling\n"
+    )
+    try:
+        source = llm_call(prompt, label="generate_entry_point")
+        if source and "```" in source:
+            m = re.search(r"```\w*\n(.*?)```", source, re.DOTALL)
+            if m:
+                source = m.group(1)
+        if source and source.strip():
+            ep_path = code_dir / registry.entry_point
+            ep_path.parent.mkdir(parents=True, exist_ok=True)
+            ep_path.write_text(source.strip() + "\n", encoding="utf-8")
+            return True
+    except Exception as e:
+        logger.warning(f"  LLM entry-point generation failed: {e}")
+    return False
+
+
+def _emit_build_scaffold_via_llm(
+    registry: InterfaceContractRegistry, code_dir: Path
+) -> bool:
+    """Use LLM to generate build configuration files (package.json, requirements.txt, etc.)."""
+    bf_path = code_dir / registry.build_file
+    if bf_path.exists():
+        return False
+
+    existing_files = []
+    for p in code_dir.rglob("*"):
+        if p.is_file() and not p.name.startswith("."):
+            existing_files.append(str(p.relative_to(code_dir)))
+
+    prompt = (
+        f"Generate the build configuration file '{registry.build_file}'.\n\n"
+        f"PROJECT FILES: {existing_files[:50]}\n"
+        f"DEPENDENCIES: {registry.dependencies}\n"
+        f"BUILD COMMAND: {registry.build_command}\n\n"
+        f"Output ONLY the file content, no markdown fences.\n"
+    )
+    try:
+        source = llm_call(prompt, label="generate_build_config")
+        if source and "```" in source:
+            m = re.search(r"```\w*\n(.*?)```", source, re.DOTALL)
+            if m:
+                source = m.group(1)
+        if source and source.strip():
+            bf_path.parent.mkdir(parents=True, exist_ok=True)
+            bf_path.write_text(source.strip() + "\n", encoding="utf-8")
+            return True
+    except Exception as e:
+        logger.warning(f"  LLM build-config generation failed: {e}")
+    return False
+
+
+
+
 
 
 def run_engineering_team(
@@ -2350,199 +3892,390 @@ def run_engineering_team(
     health_states: Dict[str, ActiveInferenceState],
     sprint_num: int = 1,
 ) -> TeamResult:
+    """
+    Async task-completion engineering team.
+    Agents self-claim tasks from a shared queue, work in isolated Git worktrees,
+    merge on completion, and pull the next task. No fixed rounds.
+    """
     n = len(ENG_WORKERS)
-    logger.info(f"\n{'─'*55}\nTEAM: ENGINEERING ({n} devs)\n{'─'*55}")
+    logger.info(f"\n{'─'*55}\nTEAM: ENGINEERING ({n} devs, async mode)\n{'─'*55}")
 
-    # ── Sprint planning: manager + devs discuss together ─────────────────
     dev_assignments = run_sprint_planning(task, health_states, rolling_ctxs)
+    emit_skeleton(dev_assignments, sprint_num)
 
-    # ── Iterative development rounds ──────────────────────────────────────
-    # Each round: all devs build in parallel, manager reviews, decides
-    # CONTINUE (with feedback) or DONE. Repeats up to MAX_ENG_ROUNDS.
-    manager_feedback: str = ""   # injected into each subsequent round
+    code_dir = OUTPUT_DIR / "code"
+    code_dir.mkdir(parents=True, exist_ok=True)
+    _skeleton_wt = GitWorktreeManager(code_dir, [])
+    _skeleton_wt.init_repo()
+    logger.info("[Engineering] git repo initialized with skeleton commit")
+
+    task_queue = EngTaskQueue(get_contracts(), dev_assignments)
     built: Dict[str, WorkerOutput] = {}
-    round_num = 1
+    _tasks_completed_by: Dict[str, int] = {d: 0 for d in ENG_WORKERS}
+    _merge_lock = threading.Lock()
 
-    while round_num <= MAX_ENG_ROUNDS:
-        logger.info(f"\n{'─'*55}\nEngineering Round {round_num}/{MAX_ENG_ROUNDS}\n{'─'*55}")
+    # ── build_feature: adapted for task-based work ────────────────────────
 
-        def build_feature(dev_key: str, rnd: int = round_num, feedback: str = manager_feedback) -> WorkerOutput:
-            _set_agent_ctx(dev_key, sprint_num)
-            feature_desc     = dev_assignments[dev_key]
-            dashboard_status = get_dashboard().get_status()
+    def build_feature(dev_key: str, eng_task: EngTask) -> WorkerOutput:
+        _set_agent_ctx(dev_key, sprint_num)
+        dashboard_status = get_dashboard().get_status()
+        task_num = _tasks_completed_by[dev_key] + 1
+        logger.info(f"[{dev_key}] ▶ Task START — {eng_task.file}: {eng_task.description[:60]}")
 
-            # What teammates built last round (empty on round 1)
-            peer_context = ""
-            if built:
-                peer_summaries = "\n\n".join(
-                    f"Dev {other.split('_')[1]} ({dev_assignments[other]}):\n{built[other].output[:400]}"
-                    for other in ENG_WORKERS if other != dev_key and other in built
-                )
-                peer_context = f"\nWHAT YOUR TEAMMATES BUILT LAST ROUND:\n{peer_summaries}\n"
+        completed_files = task_queue.get_completed_files()
+        peer_context = ""
+        if completed_files:
+            previews = []
+            for cf in completed_files[:6]:
+                fpath = code_dir / cf
+                if fpath.exists():
+                    try:
+                        src = fpath.read_text(encoding="utf-8")[:300]
+                        previews.append(f"  {cf}:\n    {src[:200]}...")
+                    except Exception:
+                        pass
+            if previews:
+                peer_context = "\nCOMPLETED FILES IN CODEBASE (already merged):\n" + "\n".join(previews) + "\n"
 
-            feedback_section = (
-                f"\nMANAGER FEEDBACK FROM ROUND {rnd - 1}:\n{feedback}\n"
-                f"Address every point above before marking your work done.\n"
-            ) if feedback else ""
+        messages_section = ""
+        try:
+            pending = get_dashboard().peek_messages(dev_key)
+            if pending:
+                messages_section = f"\nMESSAGES FROM TEAMMATES (read carefully):\n{pending}\n"
+        except Exception:
+            pass
 
-            round_instruction = (
-                "This is your first round. Implement your feature completely."
-                if rnd == 1 else
-                f"This is round {rnd}. Read the manager feedback and peer outputs above. "
-                f"Fix integration issues, resolve conflicts, and run the app to verify it boots."
+        shared_file_note = ""
+        shared_files = get_dashboard().sections
+        if shared_files:
+            sf_list = ", ".join(shared_files.keys())
+            shared_file_note = (
+                f"\nSHARED FILES (use write_file_section, NOT write_code_file): {sf_list}\n"
+                f"The entry point is system-managed — do NOT write to it directly.\n"
+            )
+        shared_file_note += (
+            "\nINTEGRATION RULES:\n"
+            "  - The entry point will be AUTO-GENERATED — do NOT create it yourself\n"
+            "  - Your file MUST export exactly the symbols listed in your contract's 'exports'\n"
+            "  - Import from files listed in your contract's 'imports_from'\n"
+            "  - Do NOT invent new file names — use the exact paths from the contract\n"
+        )
+
+        is_integration = (eng_task.file == "__integration__")
+        if is_integration:
+            build_cmd = get_contracts().build_command
+            build_errors = ""
+            if build_cmd:
+                try:
+                    result = subprocess.run(
+                        build_cmd, shell=True, cwd=str(code_dir),
+                        capture_output=True, text=True, timeout=30,
+                    )
+                    if result.returncode != 0:
+                        build_errors = f"\nBUILD ERRORS (from running '{build_cmd}'):\n{result.stdout[-2000:]}\n{result.stderr[-2000:]}\n"
+                except Exception as e:
+                    build_errors = f"\nBUILD FAILED: {e}\n"
+
+            task_instruction = (
+                f"INTEGRATION TASK — all implementation tasks are complete.\n"
+                f"{build_errors}"
+                f"\nMANDATORY FIRST STEPS:\n"
+                f"  1. call check_messages() — address any unresolved teammate concerns\n"
+                f"  2. call check_dashboard() — verify file ownership\n\n"
+                f"YOUR TASKS:\n"
+                f"  3. Fix every build error and broken import shown above\n"
+                f"  4. Make sure all files import from each other correctly per the contracts\n"
+                f"  5. Run the app with: {build_cmd or 'the appropriate command'} and confirm it works\n"
+                f"  6. Run any existing tests\n"
+                f"{shared_file_note}"
+            )
+        else:
+            task_instruction = (
+                f"YOUR TASK: Implement file '{eng_task.file}'\n"
+                f"Description: {eng_task.description}\n\n"
+                f"MANDATORY FIRST STEPS (do these before writing ANY code):\n"
+                f"  1. call check_dashboard() — see who owns what files\n"
+                f"  2. call claim_domain() — register your files BEFORE writing\n"
+                f"  3. call check_messages() — read any messages from teammates\n"
+                f"  4. If your file depends on another file, call read_file() on it first\n\n"
+                f"MANDATORY AFTER writing code:\n"
+                f"  5. If you changed any function signature, data model, or export that another dev\n"
+                f"     imports from you, call message_teammate() to notify them of the change\n"
+                f"{shared_file_note}"
             )
 
-            team_files = _read_team_files()
-            team_files_section = (
-                f"\n\n─── TEAM SPECIFICATIONS (read before writing any code) ───\n{team_files}\n"
-                f"────────────────────────────────────────────────────────\n"
-            ) if team_files else ""
+        team_files = _read_team_files()
+        team_files_section = (
+            f"\n\n─── TEAM SPECIFICATIONS (read before writing any code) ───\n{team_files}\n"
+            f"────────────────────────────────────────────────────────\n"
+        ) if team_files else ""
 
-            goal_anchor = ""
-            if _current_sprint_goal:
-                goal_anchor = (
-                    f"╔══════════════════════════════════════════════════════╗\n"
-                    f"║  SPRINT GOAL (your north star — never lose sight of this)\n"
-                    f"║  {_current_sprint_goal[:200]}\n"
-                    f"╚══════════════════════════════════════════════════════╝\n\n"
-                )
+        contract_section = ""
+        contract_text = get_contracts().get_contract_for_dev(dev_key)
+        if contract_text:
+            contract_section = f"\n{contract_text}\n"
 
-            dod_checklist = _get_dod(dev_key)
-
-            prompt = (
-                f"{goal_anchor}"
-                f"You are Software Developer #{dev_key.split('_')[1]}.\n"
-                f"Expertise: {ROLES[dev_key]['expertise']}\n\n"
-                f"{rolling_ctxs[dev_key].get()}"
-                f"PROJECT CONTEXT:\n{task[:400]}\n\n"
-                f"YOUR FEATURE: {feature_desc}\n\n"
-                f"Your teammates are working on:\n"
-                + "\n".join(
-                    f"  Dev {other.split('_')[1]}: {dev_assignments[other]}"
-                    for other in ENG_WORKERS if other != dev_key
-                )
-                + f"\n\nWORK DASHBOARD:\n{dashboard_status}\n"
-                + team_files_section
-                + peer_context
-                + feedback_section
-                + f"\n{round_instruction}\n"
-                f"Write actual, working code. Implement exactly what the architecture and design specs say. "
-                f"Fix any bugs listed in QA findings. Run your code with run_shell to verify it works.\n\n"
-                f"{dod_checklist}\n\n"
-                f"End with: STANCE: [MINIMAL|ROBUST|SCALABLE|PRAGMATIC]"
+        goal_anchor = ""
+        if _current_sprint_goal:
+            goal_anchor = (
+                f"╔══════════════════════════════════════════════════════╗\n"
+                f"║  SPRINT GOAL (your north star — never lose sight of this)\n"
+                f"║  {_current_sprint_goal[:200]}\n"
+                f"╚══════════════════════════════════════════════════════╝\n\n"
             )
-            output, tool_results, perplexity = _run_with_tools(prompt, dev_key, f"{dev_key}_r{rnd}")
-            sims    = perplexity_to_similarities(perplexity)
+
+        dod_checklist = _get_dod(dev_key)
+
+        queue_status = task_queue.get_status()
+
+        prompt = (
+            f"{goal_anchor}"
+            f"You are Software Developer #{dev_key.split('_')[1]}.\n"
+            f"Expertise: {ROLES[dev_key]['expertise']}\n\n"
+            f"{rolling_ctxs[dev_key].get()}"
+            f"PROJECT CONTEXT:\n{task[:400]}\n\n"
+            f"TASK QUEUE STATUS:\n{queue_status}\n\n"
+            f"Your teammates are working on:\n"
+            + "\n".join(
+                f"  Dev {other.split('_')[1]}: {dev_assignments[other]}"
+                for other in ENG_WORKERS if other != dev_key
+            )
+            + f"\n\nWORK DASHBOARD:\n{dashboard_status}\n"
+            + contract_section
+            + team_files_section
+            + peer_context
+            + messages_section
+            + f"\n{task_instruction}\n"
+            f"Write actual, working code. Implement exactly what the architecture and design specs say. "
+            f"Fix any bugs listed in QA findings. Run your code with run_shell to verify it works.\n\n"
+            f"{dod_checklist}\n\n"
+            f"End with: STANCE: [MINIMAL|ROBUST|SCALABLE|PRAGMATIC]"
+        )
+        logger.info(f"[{dev_key}] prompt built ({len(prompt)}c) — handing off to ReAct agent")
+        output, tool_results, perplexity = _run_with_tools(prompt, dev_key, f"{dev_key}_t{task_num}")
+        sims    = perplexity_to_similarities(perplexity)
+        F       = health_states[dev_key].update(sims)
+        anomaly = health_states[dev_key].is_anomaly()
+        logger.info(
+            f"[{dev_key}] health update — perplexity={perplexity:.2f}  F_health={F:.3f}  "
+            f"anomaly={'YES ⚠' if anomaly else 'no'}  tools_used={len(tool_results)}"
+        )
+        if anomaly and task_num == 1:
+            logger.warning(f"[{dev_key}] ANOMALY F={F:.3f} — invoking fixer agent")
+            health_states[dev_key].reset()
+            output  = _run_fixer(dev_key, eng_task.description, output, F)
+            sims    = perplexity_to_similarities(5.0)
             F       = health_states[dev_key].update(sims)
             anomaly = health_states[dev_key].is_anomaly()
-            if anomaly and rnd == 1:
-                logger.warning(f"[{dev_key}] ANOMALY F={F:.3f} — invoking fixer agent")
-                health_states[dev_key].reset()
-                output  = _run_fixer(dev_key, feature_desc, output, F)
-                sims    = perplexity_to_similarities(5.0)
-                F       = health_states[dev_key].update(sims)
-                anomaly = health_states[dev_key].is_anomaly()
-            elif anomaly:
-                logger.warning(f"[{dev_key}] ANOMALY F={F:.3f} — resetting")
-                health_states[dev_key].reset()
-            m      = re.search(r"STANCE:\s*(MINIMAL|ROBUST|SCALABLE|PRAGMATIC)", output, re.IGNORECASE)
-            stance = m.group(1).lower() if m else "pragmatic"
-            rolling_ctxs[dev_key].add(feature_desc, output)
-            return WorkerOutput(
-                role=dev_key, title=f"Software Developer — {feature_desc[:40]}",
-                round=rnd, output=output, tool_results=tool_results,
-                stance=stance, stance_probs=extract_stance_probs(output).tolist(),
-                F_health=F, anomaly=anomaly,
+        elif anomaly:
+            logger.warning(f"[{dev_key}] ANOMALY F={F:.3f} — resetting health state")
+            health_states[dev_key].reset()
+        m      = re.search(r"STANCE:\s*(MINIMAL|ROBUST|SCALABLE|PRAGMATIC)", output, re.IGNORECASE)
+        stance = m.group(1).lower() if m else "pragmatic"
+        logger.info(
+            f"[{dev_key}] ✔ Task DONE — {eng_task.file}  stance={stance.upper()}  "
+            f"output={len(output)}c  F={F:.3f}"
+        )
+        rolling_ctxs[dev_key].add(eng_task.description, output)
+        return WorkerOutput(
+            role=dev_key, title=f"Software Developer — {eng_task.description[:40]}",
+            round=task_num, output=output, tool_results=tool_results,
+            stance=stance, stance_probs=extract_stance_probs(output).tolist(),
+            F_health=F, anomaly=anomaly,
+        )
+
+    # ── Agent worker loop ─────────────────────────────────────────────────
+
+    def _agent_worker_loop(dev_key: str) -> None:
+        """Long-running worker: pull task → worktree → build → merge → repeat."""
+        while task_queue.has_work_available():
+            if _tasks_completed_by[dev_key] >= MAX_TASKS_PER_AGENT:
+                logger.info(f"[{dev_key}] hit MAX_TASKS_PER_AGENT={MAX_TASKS_PER_AGENT} — stopping")
+                break
+
+            eng_task = task_queue.claim_next(dev_key)
+            if eng_task is None:
+                if task_queue.all_done():
+                    break
+                import time as _time
+                _time.sleep(_AGENT_POLL_INTERVAL)
+                continue
+
+            wt = GitWorktreeManager(code_dir, [dev_key])
+            try:
+                wt.create_worktrees()
+                _set_worktree_manager(wt)
+
+                result = build_feature(dev_key, eng_task)
+                built[dev_key] = result
+
+                wt.commit_agent(dev_key)
+                with _merge_lock:
+                    resolutions = wt.merge_all()
+                    if resolutions:
+                        logger.info(f"[{dev_key}] merge resolutions:\n" + "\n".join(resolutions))
+
+                task_queue.complete(eng_task.id)
+                _tasks_completed_by[dev_key] += 1
+
+            except Exception as exc:
+                logger.error(f"[{dev_key}] task {eng_task.id} crashed: {exc}", exc_info=True)
+                task_queue.fail(eng_task.id)
+                built[dev_key] = WorkerOutput(
+                    role=dev_key, title=f"Software Developer (error)",
+                    round=_tasks_completed_by[dev_key] + 1,
+                    output=f"[task crashed: {exc}]",
+                    tool_results=[], stance="pragmatic",
+                    stance_probs=[0.1, 0.1, 0.1, 0.7],
+                    F_health=9.9, anomaly=True,
+                )
+            finally:
+                wt.cleanup()
+                _set_worktree_manager(None)
+
+            ActiveInferenceState.interfere_all(
+                [health_states[d] for d in ENG_WORKERS], alpha=INTERFERENCE_ALPHA
             )
 
-        with ThreadPoolExecutor(max_workers=n) as ex:
-            futures = {ex.submit(build_feature, dev): dev for dev in ENG_WORKERS}
-            for fut in as_completed(futures):
-                built[futures[fut]] = fut.result()
+    # ── Manager monitor ───────────────────────────────────────────────────
 
-        # ── Health interference ───────────────────────────────────────────
-        ActiveInferenceState.interfere_all(
-            [health_states[d] for d in ENG_WORKERS], alpha=INTERFERENCE_ALPHA
-        )
+    def _manager_monitor() -> None:
+        """Periodic progress check — logs status and intervenes if swarm health is elevated."""
+        import time as _time
+        check_interval = 15
+        while task_queue.has_work_available():
+            _time.sleep(check_interval)
+            if task_queue.all_done():
+                break
 
-        H_swarm     = sum(built[d].F_health for d in ENG_WORKERS)
-        mean_stance = np.mean([np.array(built[d].stance_probs) for d in ENG_WORKERS], axis=0)
-        consensus   = STANCES[int(mean_stance.argmax())]
-        logger.info(
-            f"Engineering R{round_num}: H_swarm={H_swarm:.3f}  consensus={consensus.upper()}  "
-            f"({'stable' if H_swarm < 1.5 else 'ELEVATED ⚠'})"
-        )
+            H_swarm = sum(health_states[d].free_energy() for d in ENG_WORKERS)
+            stable_threshold = 1.5 * n
+            status = task_queue.get_status()
+            logger.info(
+                f"\n[Manager Monitor] H_swarm={H_swarm:.3f}  "
+                f"({'stable' if H_swarm < stable_threshold else 'ELEVATED ⚠'})\n{status}"
+            )
 
-        # ── Manager reviews round, decides CONTINUE or DONE ───────────────
-        feature_summaries = "\n\n".join(
-            f"=== Dev {dev.split('_')[1]} — {dev_assignments[dev]} ===\n{built[dev].output[:600]}"
-            for dev in ENG_WORKERS
-        )
-        team_files = _read_team_files()
-        team_files_section = f"\n\nTEAM SPECIFICATIONS:\n{team_files}\n" if team_files else ""
-        manager_review = llm_call(
-            f"You are the {ROLES['eng_manager']['title']}.\n\n"
-            f"SPRINT TASK:\n{task[:300]}\n"
-            + team_files_section +
-            f"\nROUND {round_num} DEV OUTPUTS:\n{feature_summaries}\n\n"
-            f"H_swarm={H_swarm:.3f} ({'stable' if H_swarm < 1.5 else 'elevated'})\n\n"
-            f"Review what the team built against the architecture spec, design spec, and QA findings above.\n"
-            f"Ask yourself:\n"
-            f"1. Is there a working entry point (main.py / docker-compose.yml)?\n"
-            f"2. Are all features integrated and consistent with the architecture spec?\n"
-            f"3. Does the implementation match the design spec?\n"
-            f"4. Are the bugs and gaps listed in QA findings addressed?\n"
-            f"5. Did any dev actually run the app and confirm it boots?\n\n"
-            f"If everything is integrated and the app is runnable: respond with DECISION: DONE\n"
-            f"Otherwise: respond with DECISION: CONTINUE\n"
-            f"Then list specific, numbered actions each dev must take next round. "
-            f"Reference the spec files — tell devs exactly what to implement or fix.",
-            label=f"eng_manager_r{round_num}_review",
-            system=_manager_system("eng_manager"),
-        )
-        rolling_ctxs["eng_manager"].add(task, manager_review)
-        logger.info(f"[eng_manager] Round {round_num} review: {manager_review[:120]}...")
+            if H_swarm > stable_threshold * 1.5:
+                failed_tasks = [t for t in task_queue.tasks.values() if t.status == "failed"]
+                if failed_tasks:
+                    logger.warning(
+                        f"[Manager Monitor] swarm health critical — "
+                        f"{len(failed_tasks)} failed tasks, sending guidance"
+                    )
+                    for ft in failed_tasks:
+                        if ft.assigned_to:
+                            get_dashboard().send_message(
+                                "eng_manager", ft.assigned_to,
+                                f"Task '{ft.file}' failed. Check imports and dependencies. "
+                                f"Read the architecture spec before retrying.",
+                                sprint_num,
+                            )
 
-        if "DECISION: DONE" in manager_review or round_num >= MAX_ENG_ROUNDS:
-            if round_num >= MAX_ENG_ROUNDS:
-                logger.warning(f"[Engineering] hit MAX_ENG_ROUNDS={MAX_ENG_ROUNDS} — stopping")
-            break
+    # ── Launch all agents + monitor ───────────────────────────────────────
 
-        manager_feedback = manager_review
-        round_num += 1
+    import time as _eng_time
+    start_time = _eng_time.time()
+
+    with ThreadPoolExecutor(max_workers=n + 1) as ex:
+        agent_futures = {
+            ex.submit(_agent_worker_loop, dev): dev for dev in ENG_WORKERS
+        }
+        monitor_future = ex.submit(_manager_monitor)
+
+        while not task_queue.all_done():
+            elapsed = _eng_time.time() - start_time
+            if elapsed > MAX_WALL_CLOCK:
+                logger.warning(
+                    f"[Engineering] hit MAX_WALL_CLOCK={MAX_WALL_CLOCK}s — "
+                    f"forcing completion after {elapsed:.0f}s"
+                )
+                task_queue.force_fail_remaining()
+                break
+            all_agents_exited = all(f.done() for f in agent_futures)
+            if all_agents_exited and not task_queue.all_done():
+                logger.warning("[Engineering] all agents exited but tasks remain — forcing completion")
+                task_queue.force_fail_remaining()
+                break
+            _eng_time.sleep(3)
+
+        try:
+            for fut in as_completed(list(agent_futures.keys()), timeout=60):
+                dev = agent_futures.get(fut, "unknown")
+                try:
+                    fut.result()
+                except Exception as exc:
+                    logger.error(f"[{dev}] worker loop error: {exc}", exc_info=True)
+        except TimeoutError:
+            logger.warning("[Engineering] timeout waiting for agent threads to finish")
+
+    elapsed = _eng_time.time() - start_time
+    logger.info(f"\n[Engineering] async phase completed in {elapsed:.1f}s")
+    logger.info(f"[Engineering] final queue status:\n{task_queue.get_status()}")
+
+    # ── Final enforcement + build ─────────────────────────────────────────
+    final_enforce = enforce_integration()
+    if final_enforce:
+        logger.info(f"\n[FINAL ENFORCEMENT]\n{final_enforce}")
+    final_build = _run_build_command(get_contracts())
+    if final_build:
+        logger.info(f"\n[POST-ENFORCEMENT BUILD]\n{final_build}")
+    else:
+        logger.info("  Post-enforcement build: SUCCESS ✓")
+
+    # ── Health + consensus ────────────────────────────────────────────────
+    ActiveInferenceState.interfere_all(
+        [health_states[d] for d in ENG_WORKERS], alpha=INTERFERENCE_ALPHA
+    )
+    H_swarm     = sum(health_states[d].free_energy() for d in ENG_WORKERS)
+    mean_stance = np.mean([
+        np.array(built[d].stance_probs) for d in ENG_WORKERS if d in built
+    ] or [np.array([0.25, 0.25, 0.25, 0.25])], axis=0)
+    consensus   = STANCES[int(mean_stance.argmax())]
+
+    # ── Dev summary table ─────────────────────────────────────────────────
+    logger.info(f"\n  ── Final dev summary ──────────────────────────")
+    logger.info(f"  {'Dev':<10} {'Tasks':>6} {'F_health':>10}  {'Anomaly':>8}  {'Stance':<12}")
+    logger.info(f"  {'─'*56}")
+    for _dev in ENG_WORKERS:
+        if _dev in built:
+            _w = built[_dev]
+            logger.info(
+                f"  {_dev:<10} {_tasks_completed_by[_dev]:>6} {_w.F_health:>10.3f}  "
+                f"{'⚠ YES' if _w.anomaly else 'no':>8}  {_w.stance.upper():<12}"
+            )
+        else:
+            logger.info(f"  {_dev:<10} {_tasks_completed_by[_dev]:>6}      —         —  —")
 
     # ── Final manager synthesis ───────────────────────────────────────────
     feature_summaries = "\n\n".join(
-        f"=== Dev {dev.split('_')[1]} — {dev_assignments[dev]} ===\n{built[dev].output[:700]}"
-        for dev in ENG_WORKERS
+        f"=== Dev {dev.split('_')[1]} — {dev_assignments[dev]} "
+        f"(tasks: {_tasks_completed_by[dev]}) ===\n{built[dev].output[:700]}"
+        for dev in ENG_WORKERS if dev in built
     )
     synthesis = llm_call(
         f"You are the {ROLES['eng_manager']['title']}.\n\n"
-        f"Your team completed {round_num} round(s) of development.\n\n"
+        f"Your team completed tasks asynchronously ({elapsed:.0f}s elapsed).\n\n"
+        f"TASK QUEUE FINAL STATUS:\n{task_queue.get_status()}\n\n"
         f"FINAL OUTPUTS:\n{feature_summaries}\n\n"
         f"H_swarm={H_swarm:.3f}\n\n"
         f"Synthesize into a single coherent implementation guide:\n"
         f"1. How the features connect and integrate\n"
         f"2. Shared dependencies and interfaces\n"
-        f"3. Integration order\n"
-        f"4. Any remaining gaps\n"
-        f"5. Final runnable project structure and start command",
+        f"3. Any remaining gaps or failed tasks\n"
+        f"4. Final runnable project structure and start command",
         label="eng_manager_synthesis",
         system=_manager_system("eng_manager"),
     )
     rolling_ctxs["eng_manager"].add(task, synthesis)
 
-    H_swarm     = sum(built[d].F_health for d in ENG_WORKERS)
-    mean_stance = np.mean([np.array(built[d].stance_probs) for d in ENG_WORKERS], axis=0)
-    consensus   = STANCES[int(mean_stance.argmax())]
-
     return TeamResult(
         team="Engineering",
         manager_synthesis=synthesis,
-        worker_outputs=list(built.values()),
+        worker_outputs=[built[d] for d in ENG_WORKERS if d in built],
         H_swarm=H_swarm,
         consensus_stance=consensus,
-        confidence=max(0.0, 1.0 - H_swarm / (3.0 * n)),
+        confidence=max(0.0, 1.0 - H_swarm / (1.5 * n)),
     )
 
 
@@ -2975,7 +4708,14 @@ def run_company(brief: str) -> List[ProjectResult]:
 
 
 # ── Save outputs ──────────────────────────────────────────────────────────────
+def _h_swarm_status(h_swarm: float, n_workers: int) -> str:
+    """Return '⚠ elevated' or 'stable' using the same scaled threshold as the run logic."""
+    return "⚠ elevated" if h_swarm > 1.5 * n_workers else "stable"
+
+
 def _team_md(result: TeamResult, brief: str, title: str) -> str:
+    n_workers = max(len(result.worker_outputs), 1)
+    status    = _h_swarm_status(result.H_swarm, n_workers)
     header = (
         f"# {title}\n\n"
         f"**Project:** {brief}\n\n"
@@ -2983,7 +4723,7 @@ def _team_md(result: TeamResult, brief: str, title: str) -> str:
         f"{STANCE_DESC[result.consensus_stance]}\n\n"
         f"**Team Confidence:** {result.confidence:.0%} "
         f"(H_swarm={result.H_swarm:.3f}"
-        f"{' ⚠ elevated' if result.H_swarm > 1.5 else ''})\n\n"
+        f"{' ' + status if status == '⚠ elevated' else ''})\n\n"
         f"---\n\n"
     )
     worker_md = "\n\n".join(
@@ -3036,7 +4776,7 @@ def save_outputs(result: ProjectResult, sprint_num: Optional[int] = None) -> Non
     ]
     dashboard_rows = "\n".join(
         f"| {t.team:<13} | {t.H_swarm:.3f} | {t.confidence:.0%} | "
-        f"{t.consensus_stance} | {'⚠ elevated' if t.H_swarm > 1.5 else 'stable'} |"
+        f"{t.consensus_stance} | {_h_swarm_status(t.H_swarm, max(len(t.worker_outputs), 1))} |"
         for t in completed_teams
     )
     sprint_header = f"Sprint {sprint_num} — " if sprint_num is not None else ""
@@ -3063,11 +4803,16 @@ def save_outputs(result: ProjectResult, sprint_num: Optional[int] = None) -> Non
         raise TypeError(f"Not serializable: {type(obj)}")
 
     data = asdict(result)
+    # Read token counters under lock to avoid torn reads
+    with _token_lock:
+        _snap_calls = _call_count
+        _snap_in    = _tokens_in
+        _snap_out   = _tokens_out
     data["token_usage"] = {
-        "calls":      _call_count,
-        "tokens_in":  _tokens_in,
-        "tokens_out": _tokens_out,
-        "total":      _tokens_in + _tokens_out,
+        "calls":      _snap_calls,
+        "tokens_in":  _snap_in,
+        "tokens_out": _snap_out,
+        "total":      _snap_in + _snap_out,
         "summary":    token_summary(),
     }
     with open(OUTPUT_DIR / "results.json", "w", encoding="utf-8") as f:
@@ -3093,7 +4838,7 @@ def print_dashboard(result: ProjectResult) -> None:
     print(f"  {'Team':<15} {'H_swarm':>8}  {'Confidence':>10}  {'Stance':<12}  Status")
     print(f"  {'─'*15} {'─'*8}  {'─'*10}  {'─'*12}  {'─'*10}")
     for t in teams:
-        status = "⚠ elevated" if t.H_swarm > 1.5 else "stable"
+        status = _h_swarm_status(t.H_swarm, max(len(t.worker_outputs), 1))
         print(f"  {t.team:<15} {t.H_swarm:>8.3f}  {t.confidence:>10.0%}  {t.consensus_stance:<12}  {status}")
     print(f"{'─'*62}")
     print(f"  Outputs in {OUTPUT_DIR}/")

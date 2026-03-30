@@ -1,40 +1,11 @@
-version: '3.8'
-
+version: "3.8"
 services:
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  app:
+    image: your-app-image  # Replace with your actual image name
     ports:
-      - "3000:3000"
+      - "3000:3000"  # Or the port your app uses
     environment:
-      - DATABASE_URL=postgresql://user:password@db:5432/tasks
-      - REDIS_URL=redis://cache:6379/0
-    depends_on:
-      - db
-      - cache
-
-  db:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: tasks
-    ports:
-      - "5432:5432"
-
-  cache:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile.web
-    ports:
-      - "5173:5173"
-    environment:
-      - VITE_API_URL=http://localhost:3000
-    depends_on:
-      - api
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}  # Configure encryption key via environment variable. Generate a strong key.
+    volumes:
+      - .:/app  # Mount the current directory into the container (for development)
+    # Add any other necessary configurations here

@@ -1,434 +1,456 @@
 {
   "domains": {
-    "infra_and_schema": {
-      "owner": "security_auditor",
-      "description": "Infrastructure and Database Schema Layer (SQLAlchemy models and Docker Compose setup for Postgres)",
-      "file_patterns": "models.py, database.py, docker-compose.yml, Dockerfile, requirements.txt",
+    "frontend_entrypoint": {
+      "owner": "",
+      "description": "Deliver a minimal, runnable application with core UI and localStorage interaction.",
+      "file_patterns": "index.html, app.js, style.css",
       "sprint": 1,
+      "status": "complete"
+    },
+    "running_balance": {
+      "owner": "",
+      "description": "Implement running balance calculation and display, updating on data entry",
+      "file_patterns": "app.js",
+      "sprint": 1,
+      "status": "complete"
+    },
+    "style_entry_form": {
+      "owner": "",
+      "description": "Refactor the style.css code for the Entry Form based on the finalized design/design_tokens.md. Confirm that all design elements are implemented according to the spec.",
+      "file_patterns": "style.css",
+      "sprint": 1,
+      "status": "complete"
+    },
+    "entry_list": {
+      "owner": "",
+      "description": "Implement display of transactions in the Entry List component, pulling data from `localStorage`",
+      "file_patterns": "app.js",
+      "sprint": 1,
+      "status": "complete"
+    },
+    "frontend_data_entry": {
+      "owner": "",
+      "description": "Implement data entry form functionality with validation and error handling in `app.js`",
+      "file_patterns": "app.js",
+      "sprint": 1,
+      "status": "complete"
+    },
+    "local_storage_persistence": {
+      "owner": "",
+      "description": "Implement localStorage data persistence with encryption",
+      "file_patterns": "local_storage.js",
+      "sprint": 1,
+      "status": "complete"
+    },
+    "style_entry_list_balance": {
+      "owner": "",
+      "description": "Styling the Entry List and Balance Display components",
+      "file_patterns": "style.css",
+      "sprint": 1,
+      "status": "complete"
+    },
+    "local_storage_handler": {
+      "owner": "",
+      "description": "Handles localStorage interactions with error handling",
+      "file_patterns": "local_storage_handler.js",
+      "sprint": 1,
+      "status": "complete"
+    },
+    "data_migration": {
+      "owner": "",
+      "description": "Implements data migration script",
+      "file_patterns": "migration.js",
+      "sprint": 1,
+      "status": "complete"
+    },
+    "app_error_handling": {
+      "owner": "",
+      "description": "Implement basic error handling and display error alerts using the standardized component.",
+      "file_patterns": "app.js",
+      "sprint": 1,
+      "status": "complete"
+    },
+    "docker_infra": {
+      "owner": "",
+      "description": "Update docker-compose.yml to include necessary environment variables (encryption key).",
+      "file_patterns": "docker-compose.yml",
+      "sprint": 1,
+      "status": "complete"
+    },
+    "frontend_validation": {
+      "owner": "",
+      "description": "Implement and integrate validation functions for the finance tracker app",
+      "file_patterns": "app.js, tests/test_input_validation.py",
+      "sprint": 1,
+      "status": "complete"
+    },
+    "test_local_storage": {
+      "owner": "",
+      "description": "Completing unit tests for local storage",
+      "file_patterns": "tests/test_local_storage.py",
+      "sprint": 1,
+      "status": "complete"
+    },
+    "test_input_validation": {
+      "owner": "",
+      "description": "Finalize unit tests for input validation functions",
+      "file_patterns": "tests/test_input_validation.py",
+      "sprint": 1,
+      "status": "complete"
+    },
+    "local_storage_encryption": {
+      "owner": "",
+      "description": "Verifying and correcting AES-256 encryption and Transaction object compliance in localStorage",
+      "file_patterns": "app.js, local_storage_handler.js",
+      "sprint": 1,
+      "status": "complete"
+    },
+    "test_local_storage_encryption": {
+      "owner": "",
+      "description": "Adding unit tests for local storage encryption",
+      "file_patterns": "tests/test_local_storage.py",
+      "sprint": 1,
+      "status": "complete"
+    },
+    "backend_auth": {
+      "owner": "dev_2",
+      "description": "Also auth",
+      "file_patterns": "models.py",
+      "sprint": 1,
+      "status": "complete"
+    },
+    "domain_a": {
+      "owner": "dev_1",
+      "description": "A",
+      "file_patterns": "auth.py",
+      "sprint": 1,
+      "status": "complete"
+    },
+    "domain_b": {
+      "owner": "dev_2",
+      "description": "B",
+      "file_patterns": "auth.py",
+      "sprint": 2,
       "status": "active"
     },
-    "frontend_atomic_design": {
-      "owner": "security_auditor",
-      "description": "Frontend React scaffold using atomic design principles, including base components, layout structure, and build configuration.",
-      "file_patterns": "package.json,vite.config.ts,src/main.tsx,src/components/atoms/Button.tsx,src/components/molecules/TaskItem.tsx,src/components/organisms/TaskList.tsx,src/components/templates/Layout.tsx",
-      "sprint": 1,
+    "my_domain": {
+      "owner": "dev_3",
+      "description": "Description",
+      "file_patterns": "file.py",
+      "sprint": 2,
       "status": "active"
     },
-    "system_orchestration": {
-      "owner": "security_auditor",
-      "description": "System Entry Point and Orchestration, including Docker infrastructure and application main entry point.",
-      "file_patterns": "docker-compose.yml,Dockerfile,main.py,requirements.txt,README.md",
+    "a": {
+      "owner": "dev_1",
+      "description": "A",
+      "file_patterns": "file1.py, file2.py",
       "sprint": 1,
-      "status": "active"
+      "status": "complete"
     },
-    "frontend_optimistic_ui": {
-      "owner": "security_auditor",
-      "description": "Implement Optimistic UI logic, local request queue, and state reconciliation for the Task MVP frontend.",
-      "file_patterns": "src/hooks/useTaskMutation.ts, src/services/requestQueue.ts, src/store/taskStore.ts",
+    "domain_0": {
+      "owner": "dev_0",
+      "description": "Work 0",
+      "file_patterns": "module_0.py",
       "sprint": 1,
-      "status": "active"
+      "status": "complete"
     },
-    "observability_resilience": {
-      "owner": "security_auditor",
-      "description": "Implement centralized logging, metrics (Prometheus-style), and health checks for the Task MVP.",
-      "file_patterns": "logging_config.py, metrics.py, health_check.py",
+    "domain_1": {
+      "owner": "dev_1",
+      "description": "Work 1",
+      "file_patterns": "module_1.py",
       "sprint": 1,
-      "status": "active"
+      "status": "complete"
     },
-    "ci_cd_testing_infra": {
-      "owner": "security_auditor",
-      "description": "CI/CD and Testing Infrastructure. Includes GitHub Actions pipeline for testing, linting, and building, as well as test framework setup (pytest, playwright).",
-      "file_patterns": ".github/workflows/ci.yml, tests/conftest.py, tests/test_smoke.py, requirements-dev.txt",
+    "domain_2": {
+      "owner": "dev_2",
+      "description": "Work 2",
+      "file_patterns": "module_2.py",
       "sprint": 1,
-      "status": "active"
+      "status": "complete"
     },
-    "backend_api": {
-      "owner": "security_auditor",
-      "description": "Backend API for Task CRUD operations, including FastAPI routes, request validation, and service layer logic.",
-      "file_patterns": "main.py, schemas.py, crud.py",
+    "domain_3": {
+      "owner": "dev_3",
+      "description": "Work 3",
+      "file_patterns": "module_3.py",
       "sprint": 1,
-      "status": "active"
+      "status": "complete"
     },
-    "api_integration": {
-      "owner": "security_auditor",
-      "description": "Backend service for API integration and reliable data fetching, providing a resilient interface for the task management system.",
-      "file_patterns": "api_client.py, data_fetcher.py, __init__.py",
+    "domain_4": {
+      "owner": "dev_4",
+      "description": "Work 4",
+      "file_patterns": "module_4.py",
       "sprint": 1,
-      "status": "active"
+      "status": "complete"
     },
-    "api_integration_refactor": {
-      "owner": "dev_8",
-      "description": "Refactor API Integration layer for frontend integration, routing logs to stdout.",
-      "file_patterns": "code/api_client.py, code/data_fetcher.py",
+    "domain_s1": {
+      "owner": "dev_1",
+      "description": "S1",
+      "file_patterns": "a.py",
       "sprint": 1,
-      "status": "active"
+      "status": "complete"
     },
-    "backend_api_integration": {
-      "owner": "dev_8",
-      "description": "Refactoring and integrating backend API into the unified entry point and infrastructure. Ensuring all routes are /api/v1 prefix and integrated with logging middleware.",
-      "file_patterns": "code/main.py,code/schemas.py,code/crud.py",
-      "sprint": 1,
-      "status": "active"
-    },
-    "ci_cd_integration_tests": {
-      "owner": "dev_8",
-      "description": "Integration testing for CI/CD infrastructure, verifying frontend-backend connectivity via container network.",
-      "file_patterns": "tests/test_integration.py",
-      "sprint": 1,
-      "status": "active"
-    },
-    "system_orchestration_final_integration": {
-      "owner": "dev_8",
-      "description": "I am managing the final system orchestration to ensure all services (Fastify API, React Frontend, Postgres DB) are correctly wired and bootable. I will update docker-compose.yml to include all services and create a working run script.",
-      "file_patterns": "docker-compose.yml,run.sh",
-      "sprint": 1,
-      "status": "active"
-    },
-    "backend_api_crud_integration": {
-      "owner": "dev_8",
-      "description": "Backend API Core CRUD Implementation and Integration according to Architecture Spec.",
-      "file_patterns": "code/main.py, code/crud.py, code/schemas.py",
-      "sprint": 1,
-      "status": "active"
-    },
-    "api_integration_finalization": {
-      "owner": "dev_8",
-      "description": "API Integration, Data Fetching, and Frontend-Backend Sync. Implementing robust, type-safe API communication.",
-      "file_patterns": "code/api_client.py, code/src/services/api_mapping.ts, code/src/hooks/useTaskMutation.ts",
-      "sprint": 1,
-      "status": "active"
-    },
-    "frontend_optimistic_ui_final": {
-      "owner": "dev_8",
-      "description": "Optimistic UI Request Queue hardening, adding event emitter for status updates and retry mechanism. Replacing existing requestQueue.ts with robust implementation.",
-      "file_patterns": "src/services/requestQueue.ts, src/hooks/useTaskMutation.ts",
-      "sprint": 1,
-      "status": "active"
-    },
-    "ci_cd_smoke_pipeline": {
-      "owner": "dev_8",
-      "description": "Finalizing CI/CD infrastructure with smoke test pipeline for MVP delivery.",
-      "file_patterns": ".github/workflows/ci.yml, tests/test_smoke.py",
-      "sprint": 1,
-      "status": "active"
-    },
-    "backend_api_integration_finalization": {
-      "owner": "dev_8",
-      "description": "Integration of backend API, database, and observability to meet contractual obligations.",
-      "file_patterns": "code/main.py, code/observability_middleware.py, code/crud.py",
-      "sprint": 1,
-      "status": "active"
-    },
-    "api_integration_mapping": {
-      "owner": "dev_8",
-      "description": "Map frontend task actions to API routes and ensure schema compatibility.",
-      "file_patterns": "code/src/services/api_mapping.ts, code/src/services/requestQueue.ts",
-      "sprint": 1,
-      "status": "active"
-    },
-    "system_orchestration_integration": {
-      "owner": "dev_8",
-      "description": "Integrate observability into the main FastAPI entry point and ensure service health.",
-      "file_patterns": "code/main.py, code/observability_middleware.py",
-      "sprint": 1,
-      "status": "active"
-    },
-    "infra_and_schema_fixup": {
-      "owner": "dev_8",
-      "description": "Fixing database connection string to use environment variables and ensuring proper initialization.",
-      "file_patterns": "code/database.py,code/models.py",
-      "sprint": 1,
-      "status": "active"
-    },
-    "frontend_atomic_design_implementation": {
-      "owner": "dev_8",
-      "description": "Implementing frontend atomic design tokens and components (TaskInput, TaskCard) as per Design Spec.",
-      "file_patterns": "code/src/tokens.json,code/src/styles/theme.css,code/src/components/atoms/TaskInput.tsx,code/src/components/organisms/TaskCard.tsx",
-      "sprint": 1,
-      "status": "active"
-    },
-    "ci_cd_integration_tests_and_smoke": {
-      "owner": "dev_8",
-      "description": "Implement core CI/CD integration and smoke tests to verify the full stack including DB connectivity.",
-      "file_patterns": "tests/test_integration.py, tests/test_smoke.py, .github/workflows/ci.yml",
-      "sprint": 1,
-      "status": "active"
-    },
-    "frontend_optimistic_ui_fixup": {
-      "owner": "dev_8",
-      "description": "Fixing Optimistic UI logic and Request Queue consistency, ensuring proper API headers and error handling.",
-      "file_patterns": "code/src/services/requestQueue.ts, code/src/hooks/useTaskMutation.ts",
-      "sprint": 1,
-      "status": "active"
-    },
-    "backend_api_core_crud": {
-      "owner": "dev_8",
-      "description": "Implementing the backend CRUD API using FastAPI, ensuring robust schema validation and error handling as per ADR-001.",
-      "file_patterns": "code/main.py, code/schemas.py, code/crud.py",
-      "sprint": 1,
-      "status": "active"
-    },
-    "frontend_ui_components": {
-      "owner": "dev_8",
-      "description": "Implement TaskInput and TaskCard components for the Task MVP using React, TypeScript, and the defined design system tokens.",
-      "file_patterns": "TaskInput.tsx, TaskCard.tsx",
-      "sprint": 1,
-      "status": "active"
-    },
-    "frontend_optimistic_ui_hardening": {
-      "owner": "dev_8",
-      "description": "Hardening the request queue for production-grade fault tolerance, state persistence, and reconciliation to prevent INT-01 race conditions.",
-      "file_patterns": "src/services/requestQueue.ts, src/hooks/useTaskMutation.ts",
-      "sprint": 1,
-      "status": "active"
-    },
-    "frontend_infrastructure_and_config": {
-      "owner": "dev_8",
-      "description": "Frontend Infrastructure and Configuration for Task MVP, specifically ensuring token compliance and environment setup.",
-      "file_patterns": "code/src/tokens.json, code/src/styles/theme.css, code/package.json, code/vite.config.ts",
-      "sprint": 1,
-      "status": "active"
-    },
-    "frontend_atomic_design_tokens": {
-      "owner": "dev_8",
-      "description": "Frontend Scaffold & Atomic Tokens - Establishing foundation tokens for styling and ensuring adherence to design specs.",
-      "file_patterns": "code/src/tokens.json,code/src/styles/theme.css",
-      "sprint": 1,
-      "status": "active"
-    },
-    "infra_and_schema_fixup_extension": {
-      "owner": "dev_8",
-      "description": "Updating DB schema and ORM layer to use modern, robust patterns. Ensuring PostgreSQL connectivity and replacing in-memory crud.",
-      "file_patterns": "code/models.py,code/database.py,code/schema.prisma",
-      "sprint": 1,
-      "status": "active"
-    },
-    "frontend_atomic_tokens_finalization": {
-      "owner": "dev_8",
-      "description": "Frontend Atomic Tokens Implementation (Tokens.json and CSS theme)",
-      "file_patterns": "code/src/tokens.json, code/src/styles/theme.css",
-      "sprint": 1,
-      "status": "active"
-    },
-    "frontend_ui_components_refactor": {
-      "owner": "dev_8",
-      "description": "Refactoring frontend components to use centralized tokens.json and finalizing task input/card components.",
-      "file_patterns": "code/src/components/TaskInput.tsx,code/src/components/TaskCard.tsx,code/src/tokens.json",
-      "sprint": 1,
-      "status": "active"
-    },
-    "backend_api_core_crud_refinement": {
-      "owner": "dev_8",
-      "description": "Backend API Refinement: Fixing validation, headers, and ensuring compliance with ADR-001.",
-      "file_patterns": "code/main.py, code/schemas.py, code/crud.py",
-      "sprint": 1,
-      "status": "active"
-    },
-    "infra_config_standardization": {
-      "owner": "dev_8",
-      "description": "Consolidate environment configuration, standardizing Docker and env files for final system orchestration.",
-      "file_patterns": "docker-compose.yml, .env.example",
-      "sprint": 1,
-      "status": "active"
-    },
-    "db_prisma_schema": {
-      "owner": "dev_8",
-      "description": "Database schema definition using Prisma ORM.",
-      "file_patterns": "prisma/schema.prisma",
-      "sprint": 1,
-      "status": "active"
-    },
-    "backend_fastify_api": {
-      "owner": "dev_8",
-      "description": "Implementing Backend API using Fastify and Prisma for Task MVP. Replacing previous FastAPI implementation.",
-      "file_patterns": "apps/api/src/server.ts, apps/api/src/routes.ts, apps/api/package.json, apps/api/prisma/schema.prisma",
-      "sprint": 1,
-      "status": "active"
-    },
-    "frontend_task_logic": {
-      "owner": "dev_8",
-      "description": "Frontend Task Logic (Optimistic UI & Queue) implementation, including taskStore.ts and requestQueue.ts with concurrency locking as per manager feedback.",
-      "file_patterns": "src/store/taskStore.ts, src/services/requestQueue.ts",
-      "sprint": 1,
-      "status": "active"
-    },
-    "frontend_theme_integration": {
-      "owner": "dev_8",
-      "description": "Standardize frontend theme and tokens usage.",
-      "file_patterns": "code/src/tokens.json, code/src/styles/theme.css, code/src/ThemeProvider.tsx",
-      "sprint": 1,
-      "status": "active"
-    },
-    "backend_api_fastify_migration": {
-      "owner": "dev_8",
-      "description": "Refactoring backend to Fastify/TypeScript as per manager requirements.",
-      "file_patterns": "apps/api/src/main.ts, apps/api/src/routes.ts, apps/api/package.json, apps/api/prisma/schema.prisma",
-      "sprint": 1,
-      "status": "active"
-    },
-    "system_orchestration_finalization": {
-      "owner": "dev_8",
-      "description": "Orchestration and System Infrastructure: standardizing the docker stack to use Fastify/Node.js instead of the deprecated Python FastAPI implementation. Ensuring consistent environment variable mapping.",
-      "file_patterns": "docker-compose.yml,Dockerfile,run.sh,package.json,.env.example",
-      "sprint": 1,
-      "status": "active"
-    },
-    "system_orchestration_consolidation": {
-      "owner": "dev_8",
-      "description": "Consolidate system orchestration and cleanup redundant files to achieve a bootable state.",
-      "file_patterns": "docker-compose.yml,Dockerfile,main.py,run.sh",
-      "sprint": 1,
-      "status": "active"
-    },
-    "frontend_ui_components_finalization": {
-      "owner": "dev_8",
-      "description": "Refactoring and finalizing TaskInput and TaskCard components to strictly adhere to design system tokens and ensure functional reliability for the Task MVP.",
-      "file_patterns": "code/src/components/TaskInput.tsx,code/src/components/TaskCard.tsx",
-      "sprint": 1,
-      "status": "active"
-    },
-    "db_prisma_schema_finalization": {
-      "owner": "dev_8",
-      "description": "Finalizing DB schema and Prisma integration. Synchronizing with Dev 8's API structure.",
-      "file_patterns": "prisma/schema.prisma",
-      "sprint": 1,
-      "status": "active"
-    },
-    "frontend_task_logic_finalization": {
-      "owner": "dev_8",
-      "description": "Implementing robust frontend state management with request deduplication and sequence numbering to resolve race conditions (INT-01) and error handling for task state.",
-      "file_patterns": "code/src/store/taskStore.ts,code/src/services/requestQueue.ts,code/src/types/task.ts",
-      "sprint": 1,
-      "status": "active"
-    },
-    "frontend_theme_integration_finalization": {
-      "owner": "dev_8",
-      "description": "Finalize frontend component theme integration using tokens.json constants instead of hardcoded values, ensuring SCALABLE architecture.",
-      "file_patterns": "code/src/components/TaskInput.tsx,code/src/components/TaskCard.tsx,code/src/tokens.json",
-      "sprint": 1,
-      "status": "active"
-    },
-    "backend_api_hardening": {
-      "owner": "dev_8",
-      "description": "Security validation and hardening of existing API endpoints to resolve SEC-01 (input validation).",
-      "file_patterns": "code/apps/api/src/server.ts",
-      "sprint": 1,
+    "domain_s2": {
+      "owner": "dev_2",
+      "description": "S2",
+      "file_patterns": "b.py",
+      "sprint": 2,
       "status": "active"
     }
   },
   "messages": {
     "system_designer": [
       {
-        "from": "security_auditor",
-        "text": "I am defining the API contracts in `packages/contracts` and `openapi.yaml`. Please ensure your infrastructure and test code reference these shared definitions. I am using a standard FastAPI/OpenAPI style for compatibility.",
+        "from": "",
+        "text": "Can you please provide the Transaction and APIResponse interfaces in types.ts? I need them to implement the createTransaction function and persist data to local storage.",
         "sprint": 1
       },
       {
-        "from": "security_auditor",
-        "text": "I'm handling the database schema, migration, and persistence layer for the Task MVP. I'm using PostgreSQL with a standard task table as defined in the project brief. Please ensure infrastructure setup in docker-compose aligns with the PG instance requirements.",
+        "from": "",
+        "text": "Please confirm that the Transaction interface is complete and that you have included all necessary fields. Also, clarify the technology stack being used for the UI and state management, if any. Finally, can you create a types.ts file to store the Transaction and APIResponse interfaces?",
         "sprint": 1
       },
       {
-        "from": "dev_8",
-        "text": "I have finalized the API contract (OpenAPI-ready). Please ensure the infrastructure/docker-compose.yml defines the health-check routes for these endpoints, as the API must be ready for incoming requests at the defined paths. We are using Fastify. Let's ensure the network configuration supports these routes.",
+        "from": "",
+        "text": "Please clarify the technology stack being proposed for the UI and state management. Also, can you specify how the integration order is documented in design/architecture_spec.md? Finally, can you add a section about error handling, versioning, and security to the architecture spec?",
         "sprint": 1
       },
       {
-        "from": "db_designer",
-        "text": "I have finalized the API endpoints and request/response requirements. Please align your persistence layer with the Task object structure: {id: UUID, title: string, status: 'PENDING' | 'COMPLETED', created_at: ISO8601, updated_at: ISO8601}. Ensure PATCH /tasks/:id updates updated_at.",
+        "from": "",
+        "text": "Please define the types.ts file including the Transaction and APIResponse interfaces.",
+        "sprint": 1
+      },
+      {
+        "from": "",
+        "text": "I am defining the TransactionService API and data model. Please ensure your data migration strategy is compatible with AES-256 encrypted localStorage.",
         "sprint": 1
       }
     ],
     "api_designer": [
       {
-        "from": "security_auditor",
-        "text": "I am defining the database schema and migration strategy based on the Task MVP requirements. I've set the table structure for 'tasks' with UUID and status constraints. I'll be outputting the SQL migration and Prisma schema shortly. Please align your API and system designs to this table structure.",
+        "from": "",
+        "text": "I have defined the Transaction and APIResponse interfaces in types.ts. Please ensure your createTransaction function uses these interfaces.",
         "sprint": 1
       },
       {
-        "from": "db_designer",
-        "text": "I have defined the Database Schema for tasks and users. Please integrate this into the Prisma schema (if using Prisma as requested) or the database setup scripts. I have indexed owner_id and status for performance. The database uses PostgreSQL.",
+        "from": "",
+        "text": "I noticed that your description seems to be for a different project (climate data dashboard instead of a personal finance tracker). Please focus on the personal finance tracker requirements. Also, can you provide the API endpoints required for the Personal Finance Tracker? Include the method, path, request/response schemas, and authentication mechanisms for each endpoint (e.g., createTransaction, getTransaction, updateTransaction, deleteTransaction, listTransactions). How will real-time updates be achieved?",
         "sprint": 1
       },
       {
-        "from": "db_designer",
-        "text": "I have standardized the system architecture to use Fastify (Node.js) and PostgreSQL. I need you to confirm that your API and DB definitions align with the Task interface: id (UUID), title (1-100), status (PENDING|COMPLETED), created_at/updated_at (ISO8601). Please ensure PATCH or PUT updates these fields.",
-        "sprint": 1
-      }
-    ],
-    "unit_tester": [
-      {
-        "from": "security_auditor",
-        "text": "I am the Security Auditor. I am currently setting up my audit plan for the Todo application. Have we decided on the location for the OpenAPI specification file yet? It should be in the shared directory so my security tools can consume it.",
+        "from": "",
+        "text": "Please define the createTransaction, deleteTransaction, and updateTransaction functions in detail, including request and response schemas and error handling. Refer to section 4 of the architecture_spec.md file for context.",
         "sprint": 1
       },
       {
-        "from": "security_auditor",
-        "text": "unit_tester: I'm ready to coordinate on the Contract/Backend testing suite. Since I am focusing on Optimistic UI and State Reconciliation (race conditions), I need to ensure our test suites are complementary. Do you have a draft of the OpenAPI schema or the contract types in `packages/contracts` yet? I'd like to align my race condition tests with the structure you are validating.",
+        "from": "",
+        "text": "Please implement the localStorage API functions as defined in the architecture_spec.md file. Specifically, createTransaction, readTransactions, updateTransaction, deleteTransaction, and filterTransactions. Ensure proper error handling and adherence to the APIResponse interface.",
         "sprint": 1
       },
       {
-        "from": "dev_8",
-        "text": "unit_tester: I've created an E2E lifecycle suite in `tests/test_e2e_lifecycle.py`. Can you confirm your unit tests cover the task state transitions specifically? Also, please share your code coverage results as requested by the manager.",
-        "sprint": 1
-      }
-    ],
-    "backend_api": [
-      {
-        "from": "dev_8",
-        "text": "I have defined the Database Schema for tasks and users. Please ensure the backend uses these for entity mapping in Prisma. Constraints are enforced at DB level. Indexing on owner_id and status is included.",
+        "from": "",
+        "text": "I am defining the data migration strategy. Please ensure that the new TransactionService API takes into account the existing data format from Sprint 1 to facilitate migration.",
         "sprint": 1
       },
       {
-        "from": "db_designer",
-        "text": "I have finalized the database schema. Users table linked to Tasks (user_id). Tasks table uses ID, title, status, created_at, updated_at. I've included indexes on tasks(user_id) for performance. Please ensure your CRUD logic matches these field names exactly.",
+        "from": "",
+        "text": "Please provide precise signatures for each TransactionService method (parameters and return types), request and response schemas, error handling details, and example payloads in the architecture_spec.md file. Also, the manager suggested removing AES-256 encryption.",
         "sprint": 1
       },
       {
-        "from": "db_designer",
-        "text": "I have finalized the API endpoints. POST /tasks, GET /tasks, PUT /tasks/:id, DELETE /tasks/:id. Please ensure backend implementation and DB schema align with these. Schema: id: UUID, title: string(1-100), status: 'PENDING'|'COMPLETED', created_at: ISO8601, updated_at: ISO8601. Authorization: Header Bearer JWT (placeholder for now). Respond with errors 400, 401, 404, 500.",
+        "from": "",
+        "text": "Please ensure the LocalStorageService implementation in app.js uses the local_storage_handler.js for localStorage interactions. Also, ensure the encryption logic is encapsulated in a separate module (e.g., encryption.js) as mentioned in data_migration_strategy.md. The dataVersion key check should occur before attempting decryption.",
+        "sprint": 1
+      },
+      {
+        "from": "",
+        "text": "I have defined the data model and data migration strategy in architecture_spec.md and data_migration_strategy.md. Please use these documents to define the TransactionService API and input validation logic.",
         "sprint": 1
       }
     ],
     "db_designer": [
       {
-        "from": "db_designer",
-        "text": "I have standardized the system architecture to use Fastify (Node.js) and PostgreSQL. I am setting the schema to: Task { id: UUID (PK), title: VARCHAR(100) (NOT NULL), status: VARCHAR(20) (CHECK, NOT NULL), created_at: TIMESTAMP (NOT NULL), updated_at: TIMESTAMP (NOT NULL) }. Please confirm alignment for the integration.",
-        "sprint": 1
-      }
-    ],
-    "infra_and_schema": [
-      {
-        "from": "db_designer",
-        "text": "API design is finalized: POST /tasks, GET /tasks, PUT /tasks/:id, DELETE /tasks/:id. Request/Response: Task { id: UUID, title: string(1-100), status: 'PENDING'|'COMPLETED', created_at: string, updated_at: string }. Ensure database schema models match this. Primary key: id(UUID). Indexing should support status lookups.",
-        "sprint": 1
-      }
-    ],
-    "ci_cd_integration_tests": [
-      {
-        "from": "security_auditor",
-        "text": "API endpoint contract for Task MVP:\nPOST /tasks (201)\nGET /tasks (200)\nPUT /tasks/:id (200)\nDELETE /tasks/:id (204)\nError codes: 400 (Bad Request), 401 (Unauthorized), 404 (Not Found), 500 (Server Error).\nPlease ensure tests validate this exact contract.",
-        "sprint": 1
-      }
-    ],
-    "frontend_atomic_design": [
-      {
-        "from": "security_auditor",
-        "text": "Optimistic UI requires Task object returned on all mutations. \nPOST /tasks -> 201 + Task\nPUT /tasks/:id -> 200 + Task\nError responses for UI handling: \n- 400: Validation error\n- 401: Auth error\n- 404: Not found\n- 500: Server error\nPlease ensure these are handled.",
-        "sprint": 1
-      }
-    ],
-    "security_auditor": [
-      {
-        "from": "dev_8",
-        "text": "Hi, I'm Dev 5. I see you own `src/services/requestQueue.ts`. As per manager feedback for the Task MVP, I need to implement a sequential lock in the queue to resolve the INT-01 race condition. Can I update this file, or would you prefer I implement a wrapper/decorator around your existing logic? I want to ensure we align with the production requirements for EOD.",
+        "from": "",
+        "text": "Can you please include the types.ts file in the design/ directory and link it in the architecture_spec.md? Also, can you address what happens when we want to move from local storage to a database? How is the design accounting for that?",
         "sprint": 1
       },
       {
-        "from": "dev_8",
-        "text": "I need to update `src/services/requestQueue.ts` to implement the INT-01 race condition fix and add the required 'Authorization' header to API calls. Since I own `frontend_optimistic_ui_hardening`, may I proceed with this change?",
+        "from": "",
+        "text": "I am defining the TransactionService API and data model. Please ensure your input validation logic aligns with the types and constraints I define.",
+        "sprint": 1
+      },
+      {
+        "from": "",
+        "text": "I have updated the architecture_spec.md and data_migration_strategy.md files. Please coordinate with local_storage_handler.js to avoid duplicating effort.",
+        "sprint": 1
+      },
+      {
+        "from": "",
+        "text": "Please review the Transaction model in design/architecture_spec.md. Also, note that data encryption is NOT being implemented in this sprint.",
+        "sprint": 1
+      }
+    ],
+    "design_team": [
+      {
+        "from": "",
+        "text": "Please ensure that the UI components (Entry Form, Entry List, Balance Display) are designed using the Transaction interface defined in architecture_spec.md. Pay specific attention to the constraints on each field (e.g., amount must be non-negative, description has a maximum length of 255 characters).",
+        "sprint": 1
+      }
+    ],
+    "ux_researcher": [
+      {
+        "from": "",
+        "text": "Hi! Could you please share the Design Token Set (colors, typography, spacing, radii, shadows, motion)? I need it to create the Entry List and Balance Display Component Specs and the screen layout wireframe.",
+        "sprint": 1
+      },
+      {
+        "from": "",
+        "text": "Please review the `design/design_tokens.md` file to ensure that the design tokens are complete and accurate. Also, ensure that the Entry Form specification in `design/design_spec.md` includes error states and input types for each field.",
+        "sprint": 1
+      },
+      {
+        "from": "",
+        "text": "Hey, can you make sure the error alert component is designed to work well with the input validation feedback spec? Specifically, the error alert should be visually distinct from the input field error messages but consistent in tone and severity (error-500).",
+        "sprint": 1
+      },
+      {
+        "from": "",
+        "text": "Please review the user flows and information architecture and provide feedback.",
+        "sprint": 1
+      }
+    ],
+    "visual_designer": [
+      {
+        "from": "",
+        "text": "Hi Visual Designer, I'm updating the Entry Form component spec in design/design_spec.md to use design tokens and add accessibility details. Could you please review it when I'm done to ensure consistency with the Entry List and Balance Display specs? Also, could you please provide the visual specifications for the loading and empty states of the Entry List?",
+        "sprint": 1
+      },
+      {
+        "from": "",
+        "text": "Please ensure Entry List and Balance Display components adhere to the Design Token Set (design/design_tokens.md) and the specifications in design/design_spec.md. Focus on visual language using CSS or CSS-in-JS.",
+        "sprint": 1
+      },
+      {
+        "from": "",
+        "text": "Please integrate the input validation feedback spec and the error alert component into the design system specification document, ensuring consistency with existing design tokens and principles. Pay attention to spacing, color, and typography to maintain a cohesive look and feel.",
+        "sprint": 1
+      },
+      {
+        "from": "",
+        "text": "Please review the finalized design tokens (typography, spacing, radius, shadow) in design_tokens.md and provide feedback on their consistency and usability. Also, prepare to define the motion design tokens once the core visual tokens and components are in place. Consider basic transitions/animations for adding/removing entries or displaying alerts.",
+        "sprint": 1
+      }
+    ],
+    "ui_designer": [
+      {
+        "from": "",
+        "text": "Let's consolidate the design_spec.md file. You focus on the Entry Form component specification, and I'll focus on user flows and information architecture. We'll then combine our work into a single design_spec.md file.",
+        "sprint": 1
+      },
+      {
+        "from": "",
+        "text": "Let's consolidate design_spec.md. I'll focus on the Entry List and Balance Display components, and you can own the Entry Form. We'll make sure everything references the design tokens in design_tokens.md.",
+        "sprint": 1
+      },
+      {
+        "from": "",
+        "text": "Please ensure that the EntryForm component uses the visual tokens defined in `design/design_tokens.md`. Also, ensure that the input fields have labels and that the component is accessible. Review the error states and the input types to be used for each field.",
+        "sprint": 1
+      },
+      {
+        "from": "",
+        "text": "Please ensure the EntryForm component uses the Input Types, Error Handling, and Success/Failure flows defined in design/design_spec.md. Also, make sure the component uses the design tokens defined in design/design_tokens.md",
+        "sprint": 1
+      },
+      {
+        "from": "",
+        "text": "Please integrate the user flow from design/user_flow.md into the design spec. Also, ensure that the input validation feedback spec includes a specific example with a screenshot, as requested by the manager.",
+        "sprint": 1
+      }
+    ],
+    "frontend_developer": [
+      {
+        "from": "",
+        "text": "Please use the updated design spec and tokens.",
+        "sprint": 1
+      }
+    ],
+    "qa_engineer": [
+      {
+        "from": "",
+        "text": "Please use the updated design spec and tokens to validate the implementation.",
+        "sprint": 1
+      }
+    ],
+    "Engineering Team": [
+      {
+        "from": "",
+        "text": "How will the application be packaged and deployed for testing? What is the entry point?",
+        "sprint": 1
+      }
+    ],
+    "engineering_team": [
+      {
+        "from": "",
+        "text": "What is the build process for the application? How will `app.js` be transpiled and made available for testing? What is the entry point for the application?",
+        "sprint": 1
+      }
+    ],
+    "qa": [
+      {
+        "from": "",
+        "text": "I have added a data encryption justification. Please review this and verify this is the correct approach.",
+        "sprint": 1
+      },
+      {
+        "from": "",
+        "text": "Please review the TransactionService API in design/architecture_spec.md. Also, note that data encryption is NOT being implemented in this sprint.",
+        "sprint": 1
+      },
+      {
+        "from": "",
+        "text": "Please create unit tests for the data migration logic in LocalStorageService. Consider edge cases such as corrupted data in localStorage and failed decryption attempts.",
+        "sprint": 1
+      }
+    ],
+    "Software Developer #3": [
+      {
+        "from": "",
+        "text": "I'm implementing input validation in app.js. Can you provide the standardized component for displaying error alerts so I can integrate with it?",
+        "sprint": 1
+      }
+    ],
+    "Dev 1": [
+      {
+        "from": "",
+        "text": "Hi Dev 1, I'm writing unit tests for local storage and need to test the encryption. Could you please share the encryption and decryption functions you are using in `local_storage.js` or `app.js`? Also, what encryption library are you using? Thanks!",
+        "sprint": 1
+      }
+    ],
+    "dev_2": [
+      {
+        "from": "dev_1",
+        "text": "for dev_2",
         "sprint": 1
       }
     ]
+  },
+  "sections": {
+    "main.py": {
+      "header": {
+        "owner": "system",
+        "content": "from fastapi import FastAPI",
+        "order": 0
+      },
+      "routes": {
+        "owner": "system",
+        "content": "",
+        "order": 1
+      },
+      "websocket_setup": {
+        "owner": "dev_7",
+        "content": "from websocket import ws_router",
+        "order": 2
+      }
+    }
   }
 }

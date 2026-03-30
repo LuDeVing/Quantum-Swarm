@@ -26,7 +26,8 @@
       "Bash(for f:*)",
       "Bash(do echo:*)",
       "Bash(done)",
-      "Bash(python -m playwright install chromium)"
+      "Bash(python -m playwright install chromium)",
+      "Bash(python -m pytest tests/ -v --tb=short --no-header)"
     ],
     "additionalDirectories": [
       "c:\\Users\\User\\Desktop\\Quantum Swarm\\hamiltonian_swarm"

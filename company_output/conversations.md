@@ -3,412 +3,811 @@
 ---
 ### CEO — Kickoff Opening
 
-Team, listen up. We are building a todo application. The trap with a "simple" app is that we over-engineer it until it becomes a bloated, unmaintainable mess. We are not doing that. 
+Alright team, let's kick off Sprint 1 for the personal finance tracker.
 
-Our goal is a lean, robust, and performant core utility. If it isn't essential to creating, reading, updating, or deleting a task, it doesn't make the cut. We are shipping a runnable, production-grade foundation by end of Sprint 1.
+The goal here is simple: a single-page personal finance tracker that lives entirely in the browser, using `localStorage` for data persistence. This is pure frontend; no backend, no database, no authentication. Users need to be able to add income and expense entries, see a running balance, and filter by category. MVP is king here - we want to ship *something* functional as quickly as possible.
 
-I want us to move fast, but "fast" at Quantum Swarm does not mean "dirty." It means focused. We will be running in parallel to minimize idle time, and I expect total transparency on where your risks lie.
+Given the single-sprint constraint, speed of delivery is paramount. The choice between plain HTML/CSS/JS and React is entirely based on whichever lets us ship a working MVP faster.
 
-Here is how we are structuring the teams:
-*   **Architecture:** You are the guardrails. Define the data schema and the API contract immediately. If the backend and frontend can’t talk via a clear, documented interface by the end of day two, we’ve already failed.
-*   **Design:** I need a clean, high-utility interface. Focus on the user flow for task lifecycle. If it takes more than two clicks to create or complete a task, the design is failing the user.
-*   **Engineering:** Your focus is the "Running MVP." I want to be able to run `docker-compose up` and interact with a live state by the end of this sprint. No mock data that gets thrown away—the persistence layer must be real.
-*   **QA:** You are setting the bar for quality. You are not waiting for "finished" features to test; you are building the integration test suite while the features are being written.
+This project carries my name, so let's make sure it's something we can all be proud of. This means clean code, a usable interface, and a product that actually works.
 
-We have a 5-sprint window. Sprints 2-3 are for feature completeness, and Sprints 4-5 are for hardening and polish. If we don’t have a working MVP by the end of this week, we are already behind.
+Now, let's talk about how we're going to get there.
 
-**I’m turning the floor over to you.** 
+*   **Architecture:** You're responsible for the overall structure of the application. Given the frontend-only constraint, this is less about microservices and more about component design, data flow, and how we interact with `localStorage`. You need to define the data structure for our entries.
 
-Architect, Designer, Lead Engineer, QA Lead—I want to hear from you. **What is the single most critical thing your team can deliver by the end of Sprint 1 that will anchor our MVP?** 
+*   **Design:** You're responsible for the look and feel. Keep it clean, intuitive, and responsive. Focus on usability for this first sprint. Don't get bogged down in pixel-perfect aesthetics; prioritize function over form *for now*.
 
-Speak up. What are your dependencies? Where are you blocked? Let's get to work.
+*   **Engineering:** You're responsible for bringing the architecture and design to life. Implement the data entry, balance calculation, and filtering logic. Focus on correctness and efficiency. Make sure you can read from and write to `localStorage`.
+
+*   **QA:** You're responsible for ensuring the application works as expected. Write test plans, execute tests, and report any bugs. Given the scope, manual testing will likely be the primary focus for this sprint.
+
+Okay, with that said, I want to hear from each of you. What is the single most critical thing *your* team can deliver in Sprint 1 that would give us a working, demonstrable foundation – a true MVP? What functionality, if any, must be there to prove that the project is viable? I want to get a sense of how we can build this incrementally. Let's start with Architecture.
 
 ---
 ### Architecture Manager (R1)
 
-Team, Architecture is online. 
+Okay, team, let's nail this. Given the time constraints and the "no backend" requirement, our focus for Architecture in Sprint 1 is to define the *minimum viable data layer* and component structure to allow Engineering and Design to start building. We'll aim to deliver these concrete items:
 
-To prevent the "bloat" the CEO warns about, we are standardizing the communication protocol immediately. My team’s focus for Sprint 1 is the **"Core Contract Foundation."** If Engineering and QA are not coding/testing against a rigid schema by Wednesday, we have failed.
+**Deliverables:**
 
-Here is the plan for Sprint 1.
+1.  **Data Model Definition:** A clear and concise definition of the `Transaction` object and how it's stored in `localStorage`.
+2.  **Component Architecture Diagram:** A visual representation of the major UI components and how they interact, including data flow.
+3.  **`localStorage` API Specification:** Functions for reading, writing, and filtering data from `localStorage`.
+4.  **Technology Stack Decision:** Concrete decision and justification for either vanilla JS or React.
 
-### 1. The Deliverables (The "Architecture Payload")
-I am committing to the following three documents to be finalized and pushed to the team repository by the end of Day 2:
+**Acceptance Criteria:**
 
-*   **ADR-001: System Topology & Tech Stack:** A strictly minimal stack. Node.js/TypeScript backend, PostgreSQL (Relational persistence is non-negotiable for task integrity), and a RESTful interface. 
-*   **ADR-002: Core Data Schema:** A unified definition of the `Task` entity. We will lock this. Any field not defined in this document does not exist in the database.
-*   **ADR-003: API Interface Contract:** The full OpenAPI 3.0 specification. This is the contract Engineering builds against and QA uses to generate their integration test suite.
+*   **Data Model:** The data model must be complete enough to represent income and expense entries with amounts, categories, and descriptions. It should be easily serializable/deserializable to/from JSON for `localStorage` storage.
+*   **Component Architecture:** The diagram should clearly illustrate the major components (e.g., EntryForm, TransactionList, BalanceDisplay, Filter) and their relationships, including where data lives and how it flows between them.
+*   **`localStorage` API:** The API functions must allow Engineering to create, read, update, and delete transaction data in `localStorage` in a consistent way. Filtering by category must also be supported.
+*   **Technology Stack:** Justify the selection of either React or Vanilla JS based on the team's familiarity and the perceived speed of development to reach MVP.
 
-### 2. The Contractual Foundation (The "Source of Truth")
-We are defining the `Task` object now. Engineering and QA must map all work to this schema:
+**Specifics:**
 
-```json
-{
-  "id": "UUID",
-  "title": "string (min 1, max 100)",
-  "status": "enum [PENDING, COMPLETED]",
-  "created_at": "ISO8601",
-  "updated_at": "ISO8601"
-}
-```
+*   **Data Model:**
 
-### 3. Acceptance Criteria for Sprint 1
-Architecture will consider the Sprint 1 goal achieved only when:
-1.  **Contractual Parity:** The API contract matches the data model exactly.
-2.  **No Nulls:** All fields are defined as required; defaults handled at the database level.
-3.  **Validation:** Every API endpoint includes a schema validation layer (request body must match the contract or return `400 Bad Request` immediately).
-4.  **Testability:** QA has confirmed they can write a functional test against these endpoints using the provided OpenAPI spec.
+    ```typescript
+    interface Transaction {
+        id: string; // UUID generated client-side
+        date: string; // ISO 8601 date string
+        amount: number;
+        category: string;
+        description: string;
+        type: "income" | "expense"; // Enum to differentiate income vs expense
+    }
+    ```
 
-### 4. Dependencies & Risks
-*   **Dependency on Design:** I need the Design lead to confirm by EOD that the `status` transition (`PENDING` -> `COMPLETED`) is the only state transition required for the MVP. If they introduce "Priorities" or "Categories" now, they break my schema and trigger the bloat we are trying to avoid.
-*   **Dependency on Engineering:** I need the Lead Engineer to sign off on the database migration strategy (using a tool like `Prisma` or `TypeORM`) by tomorrow. I will not have Architecture defining schemas that Engineering cannot implement in a migration.
-*   **Risk:** The primary risk is "Scope Creep via Feature Request." Architecture will act as the gatekeeper. If a feature isn't in the `Task` entity, it will be rejected from the backlog.
+    *   `id`:  A unique identifier for each transaction, generated on the client side (e.g., using `uuidv4`). This is crucial for updates and deletes.
+    *   `date`: ISO 8601 format allows easy sorting and filtering.
+    *   `amount`:  A number representing the transaction amount (positive for income, negative for expense).
+    *   `category`:  A string representing the transaction category (e.g., "Food," "Salary," "Rent").
+    *   `description`:  A string providing a brief description of the transaction.
+    *   `type`: A type discriminator to distinguish between income and expense.
 
-**Engineering and QA:** Stop writing code until I publish the OpenAPI spec. Once that doc is in the repo, the contract is locked. If you find a conflict, come to me before you write a single line of implementation code.
+    We'll store an array of these `Transaction` objects in `localStorage` under the key `"transactions"`.
 
-**Design:** Confirm the `Task` object properties above. If you need more fields, justify them against the "essential to CRUD" rule right now.
+*   **Component Architecture:** (Simplified for MVP)
 
-Architecture is ready. Let's build.
+    ```
+    [EntryForm] <---> [TransactionList] <---> [BalanceDisplay]
+          ^
+          |
+    [CategoryFilter]
+    ```
+
+    *   `EntryForm`:  Handles user input for creating new transactions.
+    *   `TransactionList`:  Displays the list of transactions.
+    *   `BalanceDisplay`: Calculates and displays the running balance.
+    *   `CategoryFilter`: Filters the `TransactionList` by category.
+    *   Data flow is unidirectional. `EntryForm` and `CategoryFilter` will trigger updates to a shared state (probably via custom events), which will then be re-rendered by the other components.
+
+*   **`localStorage` API:**
+
+    ```typescript
+    const getTransactions = (): Transaction[] => { /* ... */ };
+    const addTransaction = (transaction: Transaction): void => { /* ... */ };
+    const updateTransaction = (transaction: Transaction): void => { /* ... */ };
+    const deleteTransaction = (id: string): void => { /* ... */ };
+    const filterTransactionsByCategory = (category: string): Transaction[] => { /* ... */ };
+    ```
+
+    These functions will handle the JSON serialization and deserialization when interacting with `localStorage`. Error handling (e.g., `localStorage` full) should be considered.
+
+*   **Technology Stack:**
+    Given the CEO’s emphasis on speed, and the simplicity of the project, we recommend starting with Vanilla JS. React introduces overhead, and while familiar, we believe Vanilla JS will allow us to iterate faster for this sprint. We can re-evaluate for Sprint 2. We will leverage a library like `uuid` for generating unique IDs.
+
+**Dependencies:**
+
+*   **None** – we don't need anything from Design or Engineering to define the data model and initial component structure.
+
+**Risks:**
+
+*   `localStorage` limitations:  `localStorage` has limited storage capacity. We need to inform the CEO that the app might not be suitable for users with a high volume of transactions. We'll need to implement a warning message if we detect that `localStorage` is nearing capacity.
+*   Lack of Authentication: Data is not secure and can be accessed by anyone with access to the browser. This is a known limitation and acceptable for MVP.
+
+**Integration Guide (for Engineering):**
+
+1.  Begin by implementing the `localStorage` API functions.  These are the foundation of the data layer.
+2.  Implement the `Transaction` interface in TypeScript/JavaScript, and use it consistently across all components.
+3.  Start with the `EntryForm` and `TransactionList` components.  Focus on creating new entries and displaying them in a list.
+4.  Connect the `EntryForm` to the `addTransaction` function.
+5.  Connect the `TransactionList` to the `getTransactions` function, and ensure that it re-renders when new transactions are added.
+
+**Critical MVP Functionality:**
+
+For the MVP, the single most critical functionality is the ability to **add and display income and expense entries, and see a running balance**. If we can't demonstrate this core functionality, the project is not viable. Category filtering would be a nice-to-have, but it's secondary to the basic add/display/balance functionality.
+
+This approach defines clear contracts, empowers Engineering to start coding, and gives Design a structure to work with. Let's get this done!
 
 ---
 ### Design Manager (R1)
 
-Team, understood. We are prioritizing utility over novelty. My objective is to provide Engineering with a design language so rigorous that they spend zero time debating visual hierarchy and 100% of their time building the CRUD lifecycle.
+Okay, here's the design breakdown for Sprint 1, focusing on a functional and demonstrable MVP of the personal finance tracker.
 
-### The Sprint 1 Deliverable: The "Atomic Core" System
-To hit the MVP target, my team will deliver the **Atomic Core UI Kit** and the **CRUD Task Flow Specification**. We are not designing for "delight" yet; we are designing for friction-free task execution.
+**Overall Goal:** To deliver a usable and intuitive single-page personal finance tracker that allows users to add entries, view their balance, and filter by category, persisting data in `localStorage`.
 
-#### 1. Concrete Deliverables
-*   **The Design Token Schema:** A centralized JSON-formatted file containing our primitive values (color palette, spacing scale, typography scale, radii, and transition timings). No hex codes or pixel values will exist in our Figma files that aren’t mapped to these tokens.
-*   **The Component Inventory (MVP Subset):**
-    *   **InputField:** Default, Focus, Error, and Loading states.
-    *   **TaskItem:** Checkbox (state: unchecked/checked), text-body, delete-button (hover/active), and animation trigger (strikethrough duration: 150ms ease-out).
-    *   **Button:** Primary/Secondary/Destructive (all states).
-*   **The "Task Lifecycle" Flow:** A documented state machine showing the interaction sequence: 
-    *   Create (Empty input -> Enter -> Task appended).
-    *   Read (List view architecture).
-    *   Update (Toggle completion).
-    *   Delete (Removal).
+**Guiding Principle:** Prioritize functionality, usability, and clear communication of financial data. "Function over form, *for now*."
 
-#### 2. Acceptance Criteria (The "No-Guessing" Policy)
-*   **Interaction:** Every interactive element must have defined states (Rest, Hover, Focus, Active, Disabled).
-*   **Responsiveness:** Fluid grid specs (Container/Gutter/Margin) provided for Desktop and Mobile breakpoints (Desktop 1440px / Mobile 375px).
-*   **Accessibility:** All components must meet WCAG 2.1 AA (contrast ratios, keyboard focus indicators, and touch target sizes of minimum 44px for mobile).
-*   **Zero-Ambiguity:** If an engineer asks "how wide should this input be?" or "what color is the text on hover?", the spec is incomplete.
+**I. DESIGN TOKEN DEFINITION (Shared foundation for all design work):**
 
-#### 3. Dependencies
-*   **From Architecture:** I need the **Data Schema** immediately. Specifically, the field constraints (e.g., max character count for a task title). If a task title is limited to 100 characters, I need to design the UI to handle the overflow state (truncate or wrap) *before* we build it.
-*   **From Engineering:** I need a sanity check on the **Animation Engine** they intend to use. If they are using standard CSS transitions, I need to know now so I can spec the exact `cubic-bezier` values.
+Before any design work begins, we need to establish a basic set of design tokens. These tokens will ensure consistency across all components and prevent stylistic drift.
 
-#### 4. Critical Risk: The "Two-Click" Constraint
-The CEO mandated that task creation/completion take no more than two clicks. 
-*   **My interpretation:** The input field must be permanently mounted and focused on load. 
-*   **The blocker:** If the backend latency for a POST request is high, the UI will feel broken. I need Engineering to confirm if they can support **Optimistic UI updates**. If the UI waits for a network roundtrip to show the task as created, the user experience fails our speed mandate.
+*   **Colors:**
+    *   `neutral-0`: #FFFFFF (White)
+    *   `neutral-100`: #F2F4F6 (Light Gray - for backgrounds, dividers)
+    *   `neutral-200`: #D1D5DB (Medium Gray - for muted text, borders)
+    *   `neutral-700`: #374151 (Dark Gray - for primary text)
+    *   `primary-500`: #2563EB (Blue - Primary action color)
+    *   `success-500`: #16A34A (Green - for income entries)
+    *   `error-500`: #DC2626 (Red - for expense entries)
+*   **Typography:**
+    *   `font-family`: sans-serif (system default)
+    *   `font-size-sm`: 12px
+    *   `font-size-md`: 16px
+    *   `font-size-lg`: 20px
+    *   `font-weight-normal`: 400
+    *   `font-weight-bold`: 700
+*   **Spacing:**
+    *   `spacing-2`: 2px
+    *   `spacing-4`: 4px
+    *   `spacing-8`: 8px
+    *   `spacing-16`: 16px
+    *   `spacing-24`: 24px
+*   **Border Radius:**
+    *   `radius-sm`: 4px
+    *   `radius-md`: 8px
+*   **Motion:** (initial definition, can be expanded in later sprints)
+    *   `duration-short`: 150ms
+    *   `duration-medium`: 300ms
 
-**My team is ready.** Architecture: drop that schema into our shared workspace, and we will begin mapping the components to your data fields within the hour. Engineering: once those tokens are pushed to the repo, you’ll have a single source of truth for the CSS/Tailwind configuration. 
+**II. UX RESEARCH & FLOWS**
 
-Let's ship.
+*   **User Persona (Simplified for Sprint 1):**  "Sarah," a young professional who wants a simple way to track her spending and income without the complexity of a full-featured budgeting app. She values ease of use and quick insights.
+*   **User Flows:**
+    *   **Add Entry Flow (Income/Expense):**  User clicks "Add Entry" -> Chooses Income or Expense -> Enters Amount, Category, Description -> Saves Entry -> Entry appears in list, balance updates.  *Crucially: include error states for invalid input (e.g., non-numeric amount).*
+    *   **View Entries Flow:** User lands on page -> Sees list of entries (initially empty, then populated) -> Sees running balance.
+    *   **Filter Entries Flow:** User selects a category from a dropdown -> Only entries matching that category are displayed. "All Categories" should be an option to clear the filter.
+    *   **Empty State Flow:** User lands on the page for the first time -> Sees a clear message indicating no entries exist and a prominent "Add Entry" button.
+
+**III. UI DESIGN (Component-Based):**
+
+*   **Component Inventory (Prioritized for MVP):**
+    *   **Entry Form:**  Input fields for Amount (number input), Category (select dropdown), Description (text input), Income/Expense toggle (radio buttons or segmented control), Submit Button.  *Requires clear validation and error handling.*
+    *   **Entry List:** Displays entries as a list. Each entry shows: Category, Description, Amount (formatted with currency symbol, green for income, red for expense).
+    *   **Balance Display:**  Shows the current running balance, clearly labeled.
+    *   **Category Filter:**  Dropdown/Select component for filtering entries by category. Includes "All Categories" option.
+    *   **Button:** A basic button component used throughout the application. Define styling for default, hover, and active states.
+    *   **Input Field:** A basic text input field. Define styling for default, focus, and error states.
+    *   **Select Dropdown:** A basic dropdown component for category selection.
+*   **Component Specs (Examples - detail all components):**
+    *   **Button Component:**
+        *   **States:** Default, Hover, Active, Disabled
+        *   **Props:** `label` (string), `onClick` (function), `disabled` (boolean), `variant` (primary, secondary)
+        *   **Styling:**
+            *   Default: `background-color: primary-500`, `color: neutral-0`, `border-radius: radius-sm`, `padding: spacing-8 spacing-16`, `font-weight: bold`
+            *   Hover:  `background-color: darken(primary-500, 10%)` , `cursor: pointer`
+            *   Active: `background-color: darken(primary-500, 20%)`
+            *   Disabled: `background-color: neutral-200`, `color: neutral-700`, `cursor: not-allowed`
+        *   **Accessibility:**  `role="button"`, appropriate `aria-label` if needed.
+*   **Screen Layout:** A single-page layout with the following sections:
+    *   **Header:** "Personal Finance Tracker" title.
+    *   **Balance Section:** Displays the running balance prominently.
+    *   **Entry Form Section:** Contains the Entry Form component.
+    *   **Filter Section:** Contains the Category Filter component.
+    *   **Entry List Section:** Contains the Entry List component.
+
+**IV. VISUAL DESIGN (Style Guide):**
+
+*   **Application of Design Tokens:** Consistent application of defined design tokens for colors, typography, spacing, and radius across all components.
+*   **Iconography:**  Simple icons (if time allows) for categories in the Entry List.  Prioritize a basic, legible font for this sprint, so let's defer the icons to the next sprint if it becomes a bottleneck.
+*   **Accessibility:** Ensure all components are accessible.  Use semantic HTML, provide sufficient color contrast (WCAG 2.1 AA compliance), and ensure keyboard navigation is functional.  `aria-labels` where necessary.
+
+**V. DELIVERABLES:**
+
+1.  **Complete Design Token Set:** Defined as above, in a shareable format (e.g., a Google Doc or a section in Figma).
+2.  **User Flows (PDF or diagram):** Documented Add Entry, View Entries, Filter Entries, and Empty State flows.
+3.  **Component Specs (Document):** Detailed specifications for each component, including states, props, styling, and accessibility considerations.
+4.  **Screen Layout Mockup (Figma or similar):**  A visual representation of the single-page layout, showcasing the placement of components.  This *does not* need to be pixel-perfect; focus on layout and information hierarchy.
+5.  **Style Guide (Document):**  Application of design tokens and general visual guidelines.
+6.  **Interactive Prototype (Optional, if time allows):**  A simple interactive prototype in Figma or a similar tool to demonstrate the user flows. *Low priority, only if the above are complete.*
+
+**VI. ACCEPTANCE CRITERIA:**
+
+*   All components are specified with clear states, props, and styling, referencing the design tokens.
+*   The screen layout provides a clear and intuitive user experience for adding entries, viewing the balance, and filtering by category.
+*   All components are designed with accessibility in mind, meeting WCAG 2.1 AA compliance.
+*   The design is consistent and adheres to the defined design tokens.
+
+**VII. DEPENDENCIES:**
+
+*   **From Architecture:**  Confirmation of the data structure for entries stored in `localStorage`.  Specifically, we need to know the names of the properties (e.g., `amount`, `category`, `description`, `type` (income/expense)). Knowing this early will allow us to accurately design the entry form and list. This is *critical* and the first thing we need.
+*   **From Engineering:**  Confirmation of component library to be used, if any (e.g., Material UI, Bootstrap). This influences the styling and customization options. However, given the time constraint, assuming no component library is also acceptable and we will design everything from scratch.
+
+**VIII. PRIORITIZATION:**
+
+The most critical deliverables for Sprint 1 are:
+
+1.  **Complete Design Token Set (Shared):** This is fundamental for consistent design.
+2.  **Confirmation of Data Structure (From Architecture):** *Blocking dependency*
+3.  **Entry Form Component Spec:**  Essential for adding data.
+4.  **Entry List Component Spec:** Essential for viewing data.
+5.  **Balance Display:** Essential for understanding financial status.
+6.  **Screen Layout Mockup:**  Provides overall context.
+7.  **Style Guide:** Ensures consistent visual language.
+8.  **Category Filter:** Important, but can be simplified initially (e.g., basic dropdown with minimal styling).
+9.  **User Flows:** Important for understanding the user journey.
+10. **Interactive Prototype:**  *Lowest priority*, only if time allows.
+
+**IX. Critical Success Factor (CSF):**
+
+The single most critical thing *my* team can deliver in Sprint 1 is a clear, well-documented **Entry Form component spec** and **Entry List component spec** alongside the data structure from Architecture, which allows users to successfully add and view income and expense entries, demonstrating a working MVP. This must include all error handling cases.
+
+By focusing on these deliverables, we can provide Engineering with a solid foundation to build a functional and user-friendly personal finance tracker within the sprint timeframe.
 
 ---
 ### Engineering Manager (R1)
 
-CEO, the Engineering team is ready. We aren't building prototypes; we are building the foundation. To hit the "Running MVP" goal by the end of Sprint 1, my team is laser-focused on the orchestration layer and the persistence contract.
+Okay, thanks for the kickoff, [CEO's Name].  For Engineering, the single most critical thing we can deliver in Sprint 1 is a functional, runnable application that allows a user to add entries (income or expense), see those entries displayed on the page, and have the running balance update correctly.  If we can't do that, we don't *have* a personal finance tracker.  It's table stakes.
 
-### Sprint 1: Engineering Execution Plan
+Here's the breakdown of what we'll deliver:
 
-I am assigning my most experienced integrator, **Sarah**, to the **Entry Point** piece. This is the absolute priority. If this isn't done, we don't have an application—we have a folder of loose scripts.
+**Deliverables:**
 
-#### 1. Deliverables
-*   **The Entry Point (Owner: Sarah):**
-    *   `docker-compose.yml` defining the full stack: PostgreSQL (Persistence), FastAPI (Backend), and React (Frontend).
-    *   `main.py` entry point that initializes the DB connection and mounts the service routes.
-    *   **Acceptance Criteria:** `docker-compose up` must trigger a clean build and spin up a responsive interface that connects to the real database.
-*   **Backend CRUD Service (Owner: Marcus):**
-    *   Implementation of the Task schema (ID, title, status, created_at).
-    *   Endpoints: `GET /tasks`, `POST /tasks`, `PUT /tasks/{id}`, `DELETE /tasks/{id}`.
-    *   **Acceptance Criteria:** Successful integration tests against a live Postgres instance (no mocks).
-*   **Frontend Shell (Owner: Chen):**
-    *   Base React application container.
-    *   HTTP client (Axios/Fetch) configured to communicate with the Backend API.
-    *   **Acceptance Criteria:** The UI must render a task list populated by the `GET /tasks` endpoint.
+1.  **Entry Point (Highest Priority):**
+    *   `index.html`:  The main HTML file, containing the basic structure of the page.
+    *   `app.js`: JavaScript file containing the core application logic.
+    *   `style.css`: CSS file for basic styling (just enough to be usable).
+    *   `README.md`:  A README file with a single command to run the app: "Open `index.html` in your browser."
+    *   **Acceptance Criteria:**  Opening `index.html` in a browser displays the basic UI (input fields, entry list, balance display). There's no server involved.  It just *works*.
+    *   **Assigned to:**  [Name of most experienced integrator]. This person is responsible for making sure all the other pieces actually fit together.
 
-#### 2. Dependencies & Constraints
-*   **From Architecture:** I need the finalized JSON schema for the Task object and the confirmed API base paths by EOD today. If the schema changes mid-sprint, the backend/frontend synchronization will break.
-*   **From Design:** I need the component hierarchy for the task list view by tomorrow morning. I’m not waiting for final CSS, just the structural layout so Chen can wire the hooks.
+2.  **Data Entry and Storage:**
+    *   Implement the form for adding income/expense entries: amount (number), category (dropdown select), description (text field), and type (income/expense radio).
+    *   Implement the logic to store entries in `localStorage`.  We'll use a simple JSON array.
+    *   **Acceptance Criteria:**
+        *   User can fill out the form and submit it.
+        *   Data is correctly stored in `localStorage` as a JSON array of entry objects.
+        *   The `localStorage` key will be "finance_entries".
+    *   **Assigned to:** [Name of Developer 1]
 
-#### 3. Risk Escalation
-*   **Database Migration:** If we don't have a solid migration strategy (Alembic or similar) in place from Day 1, we risk data loss during early iterations. I am mandating that all schema changes be version-controlled migrations, not manual DB updates.
-*   **Integration Bottleneck:** If Architecture is delayed on the API contract, my team will default to the most logical RESTful standard, and we will expect Architecture to map to our implementation, not the other way around. We cannot afford to sit idle.
+3.  **Display and Balance Calculation:**
+    *   Implement the logic to retrieve entries from `localStorage` and display them in a list on the page. Each entry should show its amount, category, description, and type.
+    *   Implement the running balance calculation logic.
+    *   Update the displayed balance whenever entries are added or removed.
+    *   **Acceptance Criteria:**
+        *   Entries stored in `localStorage` are displayed in the entry list.
+        *   The running balance is calculated correctly based on the entries.  Income adds to the balance, expenses subtract.
+        *   The balance is updated in real-time when entries are added.
+    *   **Assigned to:** [Name of Developer 2]
 
-### Implementation Report Protocol
-I will provide the **Implementation Report** at the end of this sprint. It will confirm:
-1.  **Run Command:** Explicitly stating `docker-compose up`.
-2.  **Integration Integrity:** Verification that the API contracts are aligned across all modules.
-3.  **Technical Debt:** Transparency on any shortcuts (e.g., lack of authentication or input validation) taken to meet the MVP timeline.
+**Dependencies:**
 
-**CEO, we are locked and loaded.** If Architecture delivers the schemas as requested, the Engineering team will have this stack running by Friday afternoon. 
+*   **From Architecture:** We *need* the data structure for the entries defined *immediately*. We need to know the exact field names and data types we'll be working with (e.g., `amount`: number, `category`: string, `description`: string, `type`: 'income' | 'expense'). If we don't have this, we're just guessing.
+*   **From Design:** We need a basic layout of the page, including the placement of the input form, entry list, and balance display. We don't need pixel-perfect designs, but we need a basic wireframe to work from.
 
-**What is the status of the API schemas? I need those to authorize the first commit.**
+**Technical Debt and Risks:**
+
+*   **Minimal Styling:**  We'll focus on functionality first, so the styling will be very basic. We'll need to revisit this in a later sprint to improve the user experience.
+*   **Error Handling:** We'll implement minimal error handling for this sprint. We need to add more robust error handling in a later sprint to prevent data corruption.
+*   **Security:**  Since it's all client-side, there aren't major security risks beyond XSS, but we'll need to be mindful of that as we add features.
+
+**Run Command:**
+
+The application will be launched by simply opening `index.html` in a browser. This will be documented in the `README.md` file.
+
+This is a solid foundation. With this, we'll have a working MVP that demonstrates the core functionality of the personal finance tracker.
 
 ---
 ### QA Manager (R1)
 
-CEO, received. I am setting the bar now: we are not building a prototype, we are building the foundation of a production-grade system. If the foundation is cracked, the next 4 sprints are wasted effort.
+Okay, here's my QA plan for Sprint 1 of the personal finance tracker project. Given the aggressive timeline and MVP focus, we need to prioritize ruthlessly.
 
-For Sprint 1, QA will not be a bottleneck; we are the **integration glue**.
+**Overall QA Goal:** Ensure the core functionality of adding transactions, viewing a running balance, and persisting data is demonstrably working and stable.
 
-### The QA Deliverable: "The Contract-First Validation Suite"
-My team’s anchor for Sprint 1 is the **Automated Integration & Contract Test Suite**. We are not waiting for a UI. We are building a suite that targets the API contract directly against the database. 
+**Concrete Deliverables:**
 
-If it’s not in the contract, it doesn't exist. If it breaks the contract, the build fails.
+1.  **Test Plan Document:** A concise document outlining our testing strategy, scope, test cases, and risk areas.  This will be living and iterative.
+2.  **Defect Log:** A record of all bugs found, categorized by severity and with clear steps to reproduce.
+3.  **Security Review Report:** A focused analysis of potential client-side security risks related to data storage in `localStorage` and input validation.
+4.  **Performance Assessment:** Basic load testing to check data retrieval speed as the transaction list grows.
+5.  **Quality Report and GO/NO-GO Recommendation:** A summary of findings, risk assessment, and a clear recommendation on whether to proceed based on the defined MVP criteria.
 
-### Sprint 1 Concrete Deliverables:
-1.  **Contract-Verification Suite:** A postman-collection-turned-CI-script that validates every endpoint against the Architecture team’s OpenAPI specification. 
-2.  **State Persistence Audit:** We will execute "Chaos Load" tests on the CRUD operations—specifically testing partial writes, connection drops, and race conditions on the task database. If we can’t handle a crash during a write, it isn't "production-grade."
-3.  **Security Baseline:** A static security scan of all dependencies and an automated check to ensure no raw SQL injection vectors exist in our initial repository.
+**Test Focus and Acceptance Criteria:**
 
-### Acceptance Criteria (The "Quality Gate"):
-*   **Zero Contract Deviations:** If the API returns a structure not defined in the Architecture schema, it is a **CRITICAL** bug.
-*   **Persistence Integrity:** Any `POST`, `PUT`, or `DELETE` request must return a deterministic state. If I query the database and the state doesn't match the API response, it is a **CRITICAL** bug.
-*   **Atomic Deployability:** `docker-compose up` must bring up the DB, the API, and the Test Runner, and execute the full test suite in under 60 seconds.
+*   **Data Entry & Storage (CRITICAL):**
+    *   **Test Cases:**
+        *   Verify that income and expense entries can be added with amount, category, and description.
+        *   Verify that amounts are stored as numbers and handle decimal values correctly.
+        *   Verify that entries are correctly saved to `localStorage`.
+        *   Verify that data persists across browser refresh/restart.
+        *   Test edge cases: zero amounts, very large amounts, special characters in descriptions.
+    *   **Acceptance Criteria:** Data entry fields function as expected. Entries are saved to `localStorage` and persist.  Error handling for invalid inputs is present.
+*   **Balance Calculation (CRITICAL):**
+    *   **Test Cases:**
+        *   Verify that the running balance is calculated correctly based on income and expense entries.
+        *   Verify that the balance updates dynamically when new entries are added or existing entries are modified.
+        *   Verify that a zero initial balance is handled correctly.
+    *   **Acceptance Criteria:** Running balance accurately reflects the sum of all income and expense entries.
+*   **Filtering (HIGH):**
+    *   **Test Cases:**
+        *   Verify that the entries can be filtered by category.
+        *   Verify that the balance updates correctly when filtering.
+        *   Verify that when no filter is selected, all entries are displayed.
+    *   **Acceptance Criteria:** User can filter transactions by category and the balance reflects filtered transactions accurately.
+*   **Security (HIGH):**
+    *   **Test Cases:**
+        *   Inspect `localStorage` to verify data is not easily tampered with (note: we know it's not secure, but we need to understand the attack surface).
+        *   Attempt XSS attacks via description fields.
+        *   Review for sensitive information being stored.
+    *   **Acceptance Criteria:**  Identify potential vulnerabilities related to storing unencrypted data in `localStorage`. Implement basic input validation to prevent XSS.
+*   **Performance (MEDIUM):**
+    *   **Test Cases:**
+        *   Add hundreds of transactions and measure the time it takes to load the data from `localStorage` and update the balance.
+    *   **Acceptance Criteria:** UI remains responsive with a reasonable number of transactions.
 
-### Dependencies & Requirements:
-*   **To Architecture:** I need the **OpenAPI Spec (JSON/YAML)** by EOD Tuesday. This is my source of truth. If the schema changes, the build breaks.
-*   **To Engineering:** I need a **documented DB schema** and an API with "no-op" endpoints by Wednesday. I need to know how to authenticate (or that it is currently unsecured) so I can verify our auth-middleware logic.
-*   **To Design:** I need the **Task lifecycle state transitions** (e.g., what constitutes "Completed"? Is it a boolean? A timestamp?). If the state machine isn't defined, I cannot test for logic errors.
+**Severity Definitions:**
 
-### My Risk Assessment:
-My primary fear is "Scope Creep disguised as convenience." If Engineering adds a "Tagging" or "User Management" feature before the base CRUD operations are rock solid, I will flag it as a **SYSTEMIC RISK** and suggest a **NO-GO** for the sprint. 
+*   **CRITICAL:** System unusable or data at risk.  Example: Transactions not saving, balance calculation is incorrect.
+*   **HIGH:** Major feature broken or significant security risk. Example: Filtering completely broken, XSS vulnerability.
+*   **MEDIUM:** Degraded experience. Example: UI glitches, performance issues with large datasets.
+*   **LOW:** Minor issue. Example: Typographical errors.
 
-**I am ready. Architect, send me the schema. Engineering, send me the build logs.** 
+**Dependencies from Other Teams:**
 
-We move to the next step once these dependencies are met.
+*   **Architecture:**
+    *   **Data Structure Definition:**  We need the agreed-upon data structure for transactions *before* we can effectively test data storage and retrieval. This includes the accepted format for dates, amounts, and categories. *This is the highest priority dependency.*
+*   **Engineering:**
+    *   **Working application:**  Obviously, we can't test anything if there isn't a functional application to test. A deployable build, even with just the core features implemented, is essential.
+*   **Design:**
+    *   **UI Specification (Even Basic):** We need to know the expected input fields, how the balance is displayed, and the filtering mechanism. This doesn't need to be pixel-perfect, but we need to know the *intended* user flow.
+
+**Sprint 1 NO-GO Criteria:**
+
+*   Inability to save transactions to `localStorage`.
+*   Incorrect balance calculation.
+*   Critical security vulnerabilities (e.g., easily exploitable XSS).
+*   Lack of basic error handling leading to application crashes.
+
+**Un-tested areas:**
+
+*   Responsiveness across different screen sizes (defer to later sprint)
+*   Comprehensive UI testing, focusing on edge cases and visual consistency (defer to later sprint)
+
+This plan ensures we focus on the core functionality required for a working MVP, allows us to identify critical issues early, and provides a clear basis for our GO/NO-GO recommendation at the end of the sprint.
 
 ---
 ### Architecture Manager (R2)
 
-Team, Architecture is listening. I have reconciled the proposals. There are critical alignment issues regarding the **Stack** and the **State Machine** that must be resolved before a single byte is written.
+Okay, having reviewed everyone's proposals, here's my refined Architecture Manager plan for Sprint 1, specifically addressing conflicts and integration points:
 
-### 1. Conflict Resolution & Alignment
-*   **The Stack Conflict:** Engineering proposed `FastAPI` (Python), but my directive was `Node.js/TypeScript`. **Engineering will pivot to Node.js/TypeScript.** We need a unified language for shared Type definitions between the frontend and backend. Using a shared `types.ts` package in a monorepo is the only way to guarantee contractual parity.
-*   **The "Optimistic UI" Risk:** Design requested Optimistic UI. Engineering needs this to be performant. **Architecture mandates this:** The API *must* return the created/updated object in the response. The Frontend will use this object to update the UI state immediately, rolling back only if the API returns a 4xx/5xx.
-*   **The State Definition:** Design’s "Task Lifecycle" vs. my schema. I am finalizing the `Task` entity to support the Design requirement.
+**Refined Deliverables (incorporating feedback):**
 
-### 2. Refined Architecture Specification (Sprint 1)
+1.  **Data Model Definition (Revised):** A clear and concise definition of the `Transaction` object, incorporating specific feedback from Design and Engineering. This will be THE single source of truth.
+2.  **`localStorage` API Specification (Revised):**  Functions for reading, writing, updating, deleting, and filtering data from `localStorage`, with error handling considerations.
+3.  **Technology Stack Decision (Confirmed):** Vanilla JS with `uuid` for ID generation.
+4.  **Data Storage Key:** Define the key for `localStorage`.
 
-#### ADR-001 (Refined): System Topology
-*   **Stack:** Monorepo (Turborepo). Backend: Node.js/TypeScript (Fastify). Frontend: React (Vite/Tailwind). Persistence: PostgreSQL (Prisma ORM).
-*   **Integration Point:** The `packages/contracts` directory. This is where the TypeScript interfaces and OpenAPI YAML will live. Both Engineering and QA import from here.
+**Changes Based on Other Team's Proposals:**
 
-#### ADR-002 (Refined): Unified Task Entity
+*   **Data Model Alignment (CRITICAL):**
+    *   **Engineering Dependency Met:** The single biggest dependency is the data model. Design and Engineering both need this immediately. The following **DEFINITIVE** `Transaction` interface will be used:
+
+    ```typescript
+    interface Transaction {
+        id: string; // UUID generated client-side
+        date: string; // ISO 8601 date string
+        amount: number;
+        category: string;
+        description: string;
+        type: "income" | "expense"; // Enum to differentiate income vs expense
+    }
+    ```
+
+    *   **Engineering Field Names:** The `localStorage` key will be `"finance_entries"` (per Engineering's spec).
+    *   **Design Properties:** Confirmed that `amount`, `category`, `description`, and `type` are the properties to be used when designing the entry form and list. This is non-negotiable.
+    *   **QA Validation:** QA will be able to validate against a single data model for storage and retrieval. Specifically, all transactions in `localStorage` MUST conform to the `Transaction` interface, and the key for `localStorage` MUST be `finance_entries`.
+    *   **Amount Handling** The `amount` will be stored as a number.
+
+*   **Component Architecture (Removed for Sprint 1):** To avoid dependencies and accelerate the first sprint, I am removing the detailed component architecture diagram. Design and Engineering should coordinate directly on the UI and data flow. My team will focus on the underlying data access layer.
+
+*   **Error Handling (Expanded):** Given QA's emphasis on error handling, the `localStorage` API specification will explicitly include stubs for error handling. We won't *implement* full error handling in the API but define *where* the error handling should occur. For instance, each of the functions will return an object that includes a `success` boolean and an `error` message if the boolean is false. Example:
+
+    ```typescript
+    interface APIResponse {
+        success: boolean;
+        data?: any; // The data returned by the function
+        error?: string; // An error message, if success is false
+    }
+
+    const getTransactions = (): APIResponse => { /* ... */ };
+    const addTransaction = (transaction: Transaction): APIResponse => { /* ... */ };
+    const updateTransaction = (transaction: Transaction): APIResponse => { /* ... */ };
+    const deleteTransaction = (id: string): APIResponse => { /* ... */ };
+    const filterTransactionsByCategory = (category: string): APIResponse => { /* ... */ };
+    ```
+
+**Revised Deliverables List:**
+
+1.  **DEFINITIVE Data Model Definition:** The `Transaction` interface (above).
+2.  **`localStorage` API Specification (Revised):**
+
 ```typescript
-// Shared in packages/contracts/src/task.ts
-export interface Task {
-  id: string; // UUID
-  title: string; // 1-100 chars
-  status: 'PENDING' | 'COMPLETED';
-  created_at: string; // ISO8601
-  updated_at: string; // ISO8601
-}
+    interface APIResponse {
+        success: boolean;
+        data?: any; // The data returned by the function
+        error?: string; // An error message, if success is false
+    }
+
+    const getTransactions = (): APIResponse => { /* ... */ };
+    const addTransaction = (transaction: Transaction): APIResponse => { /* ... */ };
+    const updateTransaction = (transaction: Transaction): APIResponse => { /* ... */ };
+    const deleteTransaction = (id: string): APIResponse => { /* ... */ };
+    const filterTransactionsByCategory = (category: string): APIResponse => { /* ... */ };
 ```
-*   **Database Constraints:** `status` is a `CHECK` constraint in Postgres. `title` has a `NOT NULL` and `CHECK(length(title) >= 1)`.
 
-#### ADR-003 (Refined): API Interface Contract
-*   `POST /tasks` | Body: `{title: string}` | Returns: `201 Created` + `Task` object.
-*   `GET /tasks` | Returns: `200 OK` + `Task[]`.
-*   `PUT /tasks/:id` | Body: `{status: 'PENDING' | 'COMPLETED'}` | Returns: `200 OK` + `Task` object.
-*   `DELETE /tasks/:id` | Returns: `204 No Content`.
+3.  **Technology Stack Decision:** Vanilla JS with `uuid` for ID generation.
+4.  **Data Storage Key:** `finance_entries`
 
-### 3. Integrated Delivery Schedule
+**Updated Acceptance Criteria:**
 
-| Milestone | Ownership | Deadline |
-| :--- | :--- | :--- |
-| **Monorepo Init + Shared Types** | Architecture | EOD Day 1 |
-| **Prisma Migration (Task Table)** | Engineering | Day 2 AM |
-| **OpenAPI Spec (YAML finalized)** | Architecture | Day 2 PM |
-| **Full CRUD Implementation** | Engineering | Day 3 |
-| **Contract Integration Tests** | QA | Day 3 |
+*   **Data Model:** The data model MUST match the specified `Transaction` interface EXACTLY. QA will validate against this.
+*   **`localStorage` API:** The API functions must allow Engineering to create, read, update, delete, and filter transaction data in `localStorage` in a consistent way. The API must return a `success` boolean, `data`, and `error` for each call.
+*   **Technology Stack:** Vanilla JS confirmed.
+*   **`localStorage` Key:** The key used for storing transactions in localStorage will be `finance_entries`.
 
-### 4. Directives to Managers
-*   **To Engineering (Sarah/Marcus/Chen):** Do not start implementation until the `packages/contracts` folder is initialized in the repo. You are building against these types. If the type isn't in `shared/contracts`, it doesn't exist.
-*   **To Design (Lead):** Your request for "Optimistic UI" is approved. You must provide the "Loading" state for the `TaskItem` component by EOD tomorrow, as this is the trigger Engineering will use while the fetch request is in flight.
-*   **To QA:** Your "Contract-First" suite will point to the `packages/contracts` OpenAPI spec. Do not write your own definitions. If your suite detects a deviation from the YAML, it is a build-breaking event.
+**Updated Dependencies:**
 
-**This is the contract.** No features outside this scope will be accepted. We are moving from planning to execution. **Architecture will push the repo structure with the contracts in 2 hours.** 
+*   **None** - I'm providing the definitive data model and API. This unlocks Design and Engineering.
 
-Move out.
+**Updated Risks:**
+
+*   `localStorage` limitations:  (Same as before).
+*   Lack of Authentication: (Same as before).
+
+**Updated Integration Guide (for Engineering):**
+
+1.  **Implement the DEFINITIVE `Transaction` interface.**
+2.  **Implement the `localStorage` API functions, including the stubs for error handling.**
+3.  Use the `finance_entries` key for `localStorage`.
+
+**Impact of Changes:**
+
+*   This plan is now laser-focused on providing the foundational data layer.
+*   It eliminates dependencies on a visual component diagram, allowing Design and Engineering to iterate more quickly.
+*   It incorporates error handling stubs based on QA's needs.
+*   It provides the definitive data model, which is the single most important dependency.
+
+This revised approach prioritizes clarity, collaboration, and speed, ensuring that everyone is working from the same source of truth. I will immediately publish the `Transaction` interface and `localStorage` API spec as a shared document.
 
 ---
 ### Design Manager (R2)
 
-This is the Design Manager at Quantum Swarm. I have reviewed the Architecture, Engineering, and QA proposals. We are aligned on the "Atomic Core" constraint, but there are three specific points of friction that must be resolved to ensure we hit the MVP without scope creep or integration failures.
+Okay, having reviewed everyone's proposals, here's my refined plan for the Design team for Sprint 1. I've addressed the conflicts and gaps, focusing on providing Engineering with what they need to build the core MVP functionality and ensuring that the user experience is functional and consistent.
 
-### 1. Integration & Conflict Resolution
+**Key Changes & Integration Points:**
 
-*   **The "Two-Click" UX vs. Optimistic UI:** Engineering and Architecture have not yet explicitly confirmed support for **Optimistic UI**. If we don't have this, the "two-click" mandate is physically impossible to meet without the user feeling "lag" on every toggle. 
-    *   **Resolution:** I am mandating that Engineering implement state-updating on the client side *before* receiving the 200 OK from the server. If the server call fails, we will handle the error via a toast/alert component. I am adding "Error Notification" to my UI Kit requirements to cover this.
-*   **The State Transition Gap:** QA needs to know if "Completed" is a boolean or a timestamp. Architecture defined it as an `enum [PENDING, COMPLETED]`. 
-    *   **Resolution:** Design accepts the `enum` status. This simplifies the UI logic to a single toggle state. Architecture: ensure the API returns the `updated_at` field upon completion so we can display that timestamp to the user to satisfy the "delight" factor without over-engineering.
-*   **Task Title Constraint:** Architecture requested a string limit (1-100 characters). 
-    *   **Resolution:** Design will implement an input mask that enforces the 100-character cap on the client side. We will not use a "submit" button for the empty state; the `Enter` key will trigger the submission, and the input will clear instantly.
+*   **Alignment on Data Structure (CRITICAL):** Architecture's data structure is a *blocking* dependency. I will ensure my team uses the exact data structure defined by Architecture (`Transaction` interface) in *all* component specifications and screen mockups. This is non-negotiable. This includes the property names (`id`, `date`, `amount`, `category`, `description`, `type`) and their data types.
+*   **Prioritized Components for Engineering:** I've explicitly prioritized the components Engineering needs *first* to build the core functionality. My team will deliver detailed specs for the Entry Form, Entry List, and Balance Display components *before* focusing on the Category Filter.
+*   **Error Handling Focus:** QA highlighted the importance of error handling. I will add specific error state designs to the Entry Form component spec, outlining how errors should be displayed to the user (e.g., invalid amount, missing category). This will include visual cues (e.g., red text, highlighting the invalid field) and clear error messages.
+*   **Basic Layout Wireframe (For Engineering):** Engineering needs a basic layout to work from. I will provide a simple wireframe mockup (using Figma) showing the placement of the Entry Form, Entry List, Balance Display, and Category Filter. This is *not* a pixel-perfect design, but a functional guide for component placement and hierarchy.
+*   **Accessibility Compliance:** Given the emphasis on accessibility, I will ensure that all component specs include detailed accessibility considerations, including semantic HTML, sufficient color contrast (WCAG 2.1 AA compliance), and keyboard navigation.
+*   **Shared Design Tokens:** The design tokens outlined in my initial proposal are the single source of truth for all visual styling. All components *must* adhere to these tokens. This will ensure a consistent visual language across the application.
+*   **Iterative Feedback Loop:** I'll establish a daily stand-up with a designated member of the Engineering team to address design-related questions and ensure a smooth handoff.
 
-### 2. Updated Sprint 1 Design Specification (The "Atomic Core")
+**Revised Deliverables (Prioritized):**
 
-To bridge the gap between Architecture’s schema and Engineering’s build, my team is producing these artifacts:
+1.  **Complete Design Token Set (Shared):**  Defined as before, in a shareable format (Google Doc or Figma). *No change*
+2.  **Confirmation of Data Structure (From Architecture):**  *Blocking dependency* - crucial for all other design work.
+3.  **Entry Form Component Spec (Detailed):**  Input fields for Amount (number input), Category (select dropdown), Description (text input), Income/Expense toggle (radio buttons or segmented control), Submit Button. *Includes clear validation and error handling states.*
+4.  **Entry List Component Spec (Detailed):**  Displays entries as a list. Each entry shows: Category, Description, Amount (formatted with currency symbol, green for income, red for expense).
+5.  **Balance Display Spec:** Shows the current running balance, clearly labeled.
+6.  **Basic Screen Layout Wireframe (Figma):**  A functional guide for component placement and hierarchy. *Simplified version focused on core MVP components*.
+7.  **Style Guide (Document):** Application of design tokens and general visual guidelines. *Minimal for Sprint 1, focusing on core components.*
+8.  **Category Filter (Simplified):** Basic dropdown with minimal styling. *Lower priority than core components.*
+9.  **User Flows (Simplified):** Documented Add Entry, View Entries, Filter Entries, and Empty State flows. *Simplified to reflect the core MVP functionality.*
+10. **Interactive Prototype:** *Lowest priority*, only if time allows.
 
-| Asset | Purpose | Delivery |
-| :--- | :--- | :--- |
-| **Design Token File** | JSON schema for colors, spacing (base 8px grid), and typography. | End of Day 1 |
-| **Component Kit** | Input, TaskItem, Button. | End of Day 2 |
-| **Task Flow Map** | Documented state machine (Idle, Inputting, Syncing, Error, Success). | End of Day 2 |
+**Component Spec Examples (with Error States):**
 
-**Updated Token Schema (Baseline):**
-*   **Spacing:** `space-xs`: 4px, `space-sm`: 8px, `space-md`: 16px, `space-lg`: 24px.
-*   **Color Palette:** `primary`: #000000 (Action), `surface`: #FFFFFF (Background), `error`: #FF3B30 (Alert), `text-muted`: #8E8E93.
-*   **Radii:** `border-radius-md`: 6px (Standard for inputs and buttons).
+Here's an example of how I'll incorporate error states into the Button and Input Field component specs:
 
-### 3. Dependencies & Hard Requirements
+*   **Button Component:** (unchanged from original proposal)
+    *   **States:** Default, Hover, Active, Disabled
+    *   **Props:** `label` (string), `onClick` (function), `disabled` (boolean), `variant` (primary, secondary)
+    *   **Styling:** (referencing design tokens)
+        *   Default: `background-color: primary-500`, `color: neutral-0`, `border-radius: radius-sm`, `padding: spacing-8 spacing-16`, `font-weight: bold`
+        *   Hover: `background-color: darken(primary-500, 10%)`, `cursor: pointer`
+        *   Active: `background-color: darken(primary-500, 20%)`
+        *   Disabled: `background-color: neutral-200`, `color: neutral-700`, `cursor: not-allowed`
+    *   **Accessibility:** `role="button"`, appropriate `aria-label` if needed.
+*   **Input Field Component:**
+    *   **States:** Default, Focus, Error
+    *   **Props:** `label` (string), `value` (string), `onChange` (function), `type` (text, number), `placeholder` (string), `errorMessage` (string - for error state)
+    *   **Styling:** (referencing design tokens)
+        *   Default: `border: 1px solid neutral-200`, `border-radius: radius-sm`, `padding: spacing-8`, `font-size: font-size-md`, `color: neutral-700`
+        *   Focus: `border: 2px solid primary-500`, `outline: none`
+        *   Error: `border: 2px solid error-500`
+        *   Error Message: `color: error-500`, `font-size: font-size-sm`, `margin-top: spacing-2`
+    *   **Accessibility:** `aria-label` (from label prop), `aria-invalid="true"` (when in error state), associate label with input using `id` and `for` attributes.
 
-*   **To Architecture:** I have the `Task` object schema. I am locking my UI input field to accept exactly that structure. **No hidden fields.** If a design field cannot map to the `Task` entity (e.g., "Category"), I am dropping it.
-*   **To Engineering:** I need the `POST` endpoint to return the full `Task` object (including the server-generated `id` and `created_at` timestamp) immediately upon creation. This is vital for our React state reconciliation.
-*   **To QA:** I am providing the **State Machine** in the Task Flow map. If the UI state shows `COMPLETED` but the database shows `PENDING` due to an async lag, this is a race condition we must catch during testing.
+**Revised Dependencies:**
 
-### 4. Summary of Strategy
-We are not designing for "what if." We are designing for "what is." 
+*   **From Architecture:** **Data Structure Definition (BLOCKING).** *This is the highest priority and MUST be delivered first.*
+*   **From Engineering:** Confirmation that Engineering will be using the standard HTML5 input types and select element or a specific UI Library.
 
-1.  **Architecture** owns the data structure.
-2.  **Engineering** owns the persistence and async state.
-3.  **Design** owns the visual mapping of that state. 
-4.  **QA** owns the verification that the visual state and the database state are identical.
+**Critical Success Factor (Revised):**
 
-**Architecture, Engineering, QA:** My team is ready. We will have the Token JSON and the Component Specs in the shared repo by EOD. If there are any objections to the `border-radius` or the `Optimistic UI` requirement, speak now. Otherwise, we start building against these values immediately.
+The single most critical thing my team can deliver in Sprint 1 is a clear, well-documented **Entry Form component spec (with error states), Entry List component spec, and Balance Display spec,** alongside the agreed-upon data structure from Architecture, *and* a basic layout wireframe, which allows users to successfully add and view income and expense entries, demonstrating a working MVP with basic error handling.
 
-**No drifting. No subjective changes. Let’s ship.**
+By aligning with the needs of Architecture, Engineering, and QA, and prioritizing the core functionality, my team will deliver a design that enables a functional and user-friendly MVP within the sprint timeframe.
 
 ---
 ### Engineering Manager (R2)
 
-As Engineering Manager, I have reviewed the proposals. We are aligned, but there is a clear **integration friction point** that must be resolved immediately to avoid a "merge hell" scenario by Friday.
+Okay, I've reviewed everyone's proposals. Here's my refined plan for Engineering's Sprint 1, taking into account the other teams' deliverables and dependencies:
 
-### 1. Conflict Resolution & Integration Refinement
-*   **The Technology Stack:** Architecture specified Node.js/TypeScript. My initial plan mentioned FastAPI (Python). **I am overriding my initial plan to align with Architecture:** We will use **Node.js/TypeScript/Express** for the backend to ensure full language consistency with the frontend (React), simplifying type sharing for the `Task` entity.
-*   **The Optimistic UI/Latency Conflict:** Design (Design Manager) requested Optimistic UI updates. I am accepting this requirement. Engineering will implement a **Request Queue** in the React state. If the server fails to persist, the UI will roll back the state and flag the error to the user. This is a technical debt risk I am willing to take to meet the CEO’s two-click mandate.
-*   **The "Run Command" Synchronization:** QA’s requirement of a test suite running within `docker-compose up` is ambitious but necessary. I am adding a `test` service to our `docker-compose.yml`. 
-    *   `docker-compose up`: Boots the stack (DB, API, Frontend).
-    *   `docker-compose run --rm test`: Triggers the QA integration suite.
+**Key Changes and Integration Points:**
 
-### 2. Finalized Sprint 1 Engineering Breakdown
-I have assigned the roles to ensure the entry point is the "North Star" of the sprint:
+*   **Architecture Dependency (Resolved):** We are *absolutely* blocked on Architecture delivering the data structure definition for the `Transaction` object. We will build to that spec. I've already flagged this as critical to [Name of Architecture Manager] and will keep a close eye on their progress. We will use the data structure provided:
 
-*   **Sarah (Integrator/Lead):** Owns `docker-compose.yml`, `main.ts` (Entry Point), and the base `Dockerfile` configurations. **Must have the stack booting by EOD Wednesday.**
-*   **Marcus (Backend):** Implements the Express API using the finalized OpenAPI schema. Must include a database migration system (Prisma). **Must deliver the `POST /tasks` endpoint for immediate UI wiring.**
-*   **Chen (Frontend):** Builds the React Shell using the Design Token JSON. **Must implement the Task Lifecycle (Render/Toggle/Delete) with Optimistic UI logic.**
+```typescript
+    interface Transaction {
+        id: string; // UUID generated client-side
+        date: string; // ISO 8601 date string
+        amount: number;
+        category: string;
+        description: string;
+        type: "income" | "expense"; // Enum to differentiate income vs expense
+    }
+```
 
-### 3. Confirmed Implementation Report Template (for Friday)
-This is what I will present to the CEO at the end of the sprint:
-1.  **Status:** [SUCCESS/FAIL]
-2.  **Run Command:** `docker-compose up` (verified).
-3.  **Core Task State:** Can the user add, view, and toggle a task? (Yes/No).
-4.  **Integration Health:** Are we passing the QA Contract-Verification suite? (Yes/No).
-5.  **Technical Debt:** List of non-critical hacks (e.g., lack of user auth, absence of logging).
-6.  **Risks:** Escalations on performance or architectural deviations.
+*   **Design Dependency (Addressed):** We need the basic layout from Design. While we *can* build without pixel-perfect designs, we need to know where the form, list, and balance display should be placed. I'll coordinate with [Name of Design Manager] to get a basic wireframe ASAP.
+*   **QA Integration:** We need to deliver a running application to QA *early* in the sprint so they have time to test. We will aim to have a deployable version with the core functionality (add/display/balance) by the middle of the sprint.
+*   **Entry Point Responsibility:** [Experienced Integrator's Name] *must* prioritize the `index.html`, `app.js`, `style.css`, and `README.md` setup. The goal is to have a runnable application shell *within the first day* of the sprint. This allows the other developers to plug in their code. The README must include the command "Open `index.html` in your browser."
+*   **Error Handling Prioritization:** Based on QA's input, we will prioritize *basic* error handling in the data entry form. Specifically, we need to prevent users from entering non-numeric values in the "amount" field and provide feedback if they do.
 
-### 4. Immediate Managerial Requests
-*   **To Architecture:** I have the schema, but I need the **`updated_at` / `created_at`** field handling logic. Are these generated by the DB or the API? (I am instructing Marcus to handle them in the API layer for consistency unless Architecture objects).
-*   **To Design:** I am treating the provided "Atomic Core" tokens as immutable. Chen will import the JSON directly into our Tailwind config. Any changes requested after Wednesday will be deferred to Sprint 2.
-*   **To QA:** I need the `test-runner` container definition by Tuesday morning so Sarah can bake it into the `docker-compose` file.
+**Revised Engineering Deliverables:**
 
-**We are no longer discussing the plan. We are executing.** Architecture: provide the final JSON definition of the schema. Engineering starts the initial repository commit as soon as that is verified.
+1.  **Entry Point (Highest Priority - [Experienced Integrator's Name]):**
+    *   `index.html`:  The main HTML file, containing the basic structure of the page (informed by Design's layout).
+    *   `app.js`: JavaScript file containing the core application logic.
+    *   `style.css`: CSS file for basic styling (just enough to be usable).
+    *   `README.md`:  A README file with a single command to run the app: "Open `index.html` in your browser."
+    *   **Acceptance Criteria:**  Opening `index.html` in a browser displays the basic UI (input fields, entry list, balance display). There's no server involved.  It just *works*.
+    *   **Integration Point:** Must integrate with Design's basic layout.
+2.  **Data Entry and Storage ([Developer 1's Name]):**
+    *   Implement the form for adding income/expense entries: amount (number input with validation), category (dropdown select populated based on a hardcoded list for now), description (text field), and type (income/expense radio).
+    *   Implement the logic to store entries in `localStorage` using the `Transaction` interface defined by Architecture, and the "finance_entries" key.
+    *   **Acceptance Criteria:**
+        *   User can fill out the form and submit it.
+        *   Data is correctly stored in `localStorage` as a JSON array of `Transaction` objects.
+        *   Basic error handling prevents non-numeric input in the "amount" field.
+        *   Data conforms to the `Transaction` interface.
+    *   **Integration Point:** Uses the `Transaction` interface from Architecture. Integrates with Entry Point's `app.js`.
+3.  **Display and Balance Calculation ([Developer 2's Name]):**
+    *   Implement the logic to retrieve entries from `localStorage` and display them in a list on the page. Each entry should show its amount, category, description, and type, styled minimally for readability.
+    *   Implement the running balance calculation logic, correctly handling income (positive) and expenses (negative).
+    *   Update the displayed balance whenever entries are added or removed.
+    *   **Acceptance Criteria:**
+        *   Entries stored in `localStorage` are displayed in the entry list, formatted for basic readability.
+        *   The running balance is calculated correctly based on the entries.
+        *   The balance is updated in real-time when entries are added.
+    *   **Integration Point:** Reads data from `localStorage` based on Architecture's data structure. Integrates with Entry Point's `app.js`.
+
+**Updated Dependencies:**
+
+*   **From Architecture:**  Data structure for the `Transaction` object (CRITICAL).
+*   **From Design:** Basic wireframe/layout of the page (HIGH).
+
+**Updated Technical Debt and Risks:**
+
+*   **Minimal Styling:**  We'll focus on functionality first, so the styling will be very basic. We'll need to revisit this in a later sprint to improve the user experience.
+*   **Limited Error Handling:** We'll implement minimal error handling for this sprint. We need to add more robust error handling in a later sprint to prevent data corruption.
+*   **Security:**  Since it's all client-side, there aren't major security risks beyond XSS, but we'll need to be mindful of that as we add features. We will address basic XSS risks with input validation.
+*   **`localStorage` Limitations:** We acknowledge `localStorage`'s limitations. We will monitor usage and, if necessary, add a warning message if storage is nearing capacity. This may slip to Sprint 2.
+
+**Updated Run Command:**
+
+The application will be launched by simply opening `index.html` in a browser. This will be documented in the `README.md` file.
+
+**Risk Escalation:**
+
+*   If we do not receive the data structure definition from Architecture by the end of day 1, we will be at risk of not completing the sprint. I will escalate this to the CEO if necessary.
+
+This plan is more concrete and addresses the dependencies and risks identified in the other teams' proposals. I'm confident that we can deliver a functional MVP by the end of the sprint with this approach.
 
 ---
 ### QA Manager (R2)
 
-This is the QA Manager. I have reviewed the proposals from Architecture, Design, and Engineering. The foundation is theoretically sound, but I have identified **three major integration gaps** that currently pose a **HIGH risk** to our Sprint 1 goal.
+Okay, after reviewing everyone's proposals, here's my refined QA plan for Sprint 1, addressing potential conflicts and integrating with other teams' deliverables:
 
-We are currently heading toward a fragmented delivery if we do not lock these points immediately.
+**Key Conflicts/Gaps Identified:**
 
-### 1. Identified Risks & Required Refinements
+1.  **Data Structure Dependency (CRITICAL):** Everyone agrees on this, but the Architecture team MUST deliver the data structure definition *immediately*. This is blocking for Engineering and Design and therefore blocking for QA.
+2.  **Error Handling Scope:** Engineering mentions "minimal error handling," while Design emphasizes "clear validation and error handling" in the Entry Form. QA needs to define *exactly* what minimal error handling means in this context.
+3.  **UI Specification Level:** Design mentions a "Screen Layout Mockup (Figma or similar)" but emphasizes it "does not need to be pixel-perfect." QA needs to clarify with Design what level of fidelity is expected to define testable acceptance criteria.
+4.  **Security Validation Detail:** While all teams acknowledge security concerns, the level of validation detail varies. QA needs to set specific goals and limits of how deep to investigate the attack surface in Sprint 1, given its time constraints.
 
-*   **Conflict: Optimistic UI vs. Persistence Integrity:**
-    *   **The Issue:** Design is mandating an "Optimistic UI" to meet the "Two-Click" constraint. Engineering needs to implement this. My team needs to know the **reversion strategy**. If the API request fails, how does the UI roll back?
-    *   **Refinement:** Engineering and Design must define the "Failure UX" by tomorrow. If the UI shows a success state before the DB confirms, we have a consistency risk. I will mark any discrepancy between the UI state and the DB state as a **CRITICAL bug**.
-*   **Gap: Missing Security/Auth Contract:**
-    *   **The Issue:** Architecture, Design, and Engineering are silent on Authentication. We cannot have a "production-grade" foundation that is publicly open.
-    *   **Refinement:** Architecture must define the Auth header requirements (e.g., JWT) in the OpenAPI spec. QA will **not** validate an unauthenticated API as "ready for production."
-*   **Gap: The "Stale State" Problem:**
-    *   **The Issue:** Engineering is focused on the `GET /tasks` endpoint. However, if the UI is "Optimistic," how does it reconcile with external changes (e.g., a background sync or a separate tab update)?
-    *   **Refinement:** We need a `version` or `updated_at` field in the `Task` object to handle optimistic locking (or at least version tracking) to prevent accidental overwrites. I am requesting this field be added to ADR-002 immediately.
+**Refined QA Plan & Integration Points:**
 
-### 2. QA's Refined Sprint 1 Scope
-To align with the other managers, my team is adjusting our focus to ensure these integration points are covered:
+**I. Updated Priorities based on other teams' work:**
 
-*   **Integration Contract Testing:** We are building a "Contract-Enforcer" that sits between the Backend and the UI. It will catch any deviation from the Architecture schema before the UI even attempts to render it.
-*   **State-Machine Validation:** Per Design's request, we are treating the `PENDING` -> `COMPLETED` transition as our "Golden Path." Our test suite will explicitly block any state transition that does not originate from a valid current state.
-*   **Concurrency Verification:** We will test "Rapid Fire" task creation (3+ requests sent simultaneously) to ensure the Backend handles the transactional integrity of the DB correctly under pressure.
+*   **P0: Data Structure Validation (BLOCKING):** As soon as Architecture delivers the data structure, QA will validate it against the defined requirements (completeness, serializability, data types). *This is the first test we run*. We will use the agreed upon data model in the Architecture proposal:
 
-### 3. Immediate Action Items (The "Gatekeeper" Orders)
+    ```typescript
+    interface Transaction {
+        id: string; // UUID generated client-side
+        date: string; // ISO 8601 date string
+        amount: number;
+        category: string;
+        description: string;
+        type: "income" | "expense"; // Enum to differentiate income vs expense
+    }
+    ```
 
-1.  **Architecture:** You must include an `updated_at` (ISO8601) field and an `Auth` header definition in the OpenAPI spec. Without these, my security and consistency tests will fail. **Deadline: Tomorrow morning.**
-2.  **Engineering:** I need confirmation that your `docker-compose` setup includes the test environment variables for the DB. I need the ability to point my test suite at a fresh, transient database instance on every run. **Deadline: Wednesday.**
-3.  **Design:** Please provide the "Reversion State" specs for the Optimistic UI. If the API returns a 500, what does the user see? I need this to write the "Negative Flow" test cases. **Deadline: Wednesday.**
+    Any deviations from this structure by Engineering will be a CRITICAL bug.
+*   **P1: Data Entry & Storage (CRITICAL):** Validate data entry form functionality, storage in `localStorage`, persistence across refreshes/restarts.  This is dependent on the P0 data structure validation passing.
+*   **P2: Balance Calculation (CRITICAL):** Validate balance calculation accuracy.  Dependent on P1 passing.
+*   **P3: Filtering (HIGH):** Validate filtering by category. Dependent on P1 passing.
+*   **P4: Error Handling (HIGH):** Focused on input validation. Validate that:
+    *   Amount field only accepts numeric input (with decimal support).
+    *   Category is a required field (dropdown cannot be empty).
+    *   Appropriate error messages are displayed for invalid input.
+    *   Zero or negative amounts are flagged with a warning.
+    *   Large amounts are flagged with a warning.
+*   **P5: Security (HIGH):** Validate that input fields are sanitized to prevent basic XSS attacks. Review `localStorage` data for sensitive information. Limit XSS testing to the description field.
+*   **P6: Performance (MEDIUM):** Validate data retrieval speed with a reasonable number of transactions.
 
-### QA Manager’s Stance:
-Engineering's plan to "default to the most logical RESTful standard" if Architecture is delayed is **rejected**. We operate on the **Contract-First** principle. If the contract is not delivered, we do not test. 
+**II. Concrete Integration Points:**
 
-**CEO, I am currently holding at a "Yellow" status.** We have the plan, but we are one communication breakdown away from a disjointed build. I am ready to trigger the first test run the moment the API spec is committed. 
+*   **Architecture:**
+    *   *Deliverable:* Data Structure Definition (TypeScript interface for `Transaction`).
+    *   *QA Action:* Validate data structure (P0).
+    *   *QA Action:* Confirm `localStorage` key name is "transactions" as specified.
+*   **Design:**
+    *   *Deliverable:* Screen Layout Mockup (even a basic wireframe). Component Specs (specifically Entry Form, Entry List, and Balance Display).
+    *   *QA Action:* Use the screen layout to define the UI test scope. Verify basic layout and information hierarchy are implemented.
+    *   *QA Action:* Use the component specs to validate input fields, error messages, and display formats. QA to clarify that for Sprint 1, button variants and comprehensive styling checks will be deferred. Focus will be on core functionality and accessibility (per Design's specification).
+    *   *QA Action:* The "All Categories" option in the category filter must be tested and validated.
+*   **Engineering:**
+    *   *Deliverable:* Working application with data entry, storage, display, and balance calculation.
+    *   *QA Action:* Execute test cases based on the above priorities and acceptance criteria.
+    *   *QA Action:* Validate that the run command documented in `README.md` works as expected.
+    *   *QA Action:* Validate that amount is stored as a number in localStorage.
 
-**Standing by for the OpenAPI payload.**
+**III. Refined Test Cases:**
+
+*   **Data Entry:** Add test cases to specifically validate the error handling requirements in P4. Include test cases for zero amounts, negative amounts, amounts with more than two decimal places, and extremely large amounts.
+*   **Security:** Add specific test cases to attempt XSS attacks in the description field. Focus on common XSS vectors, given the time constraints. Ensure that sensitive data, like passwords or API keys, are *not* being accidentally stored in `localStorage`.
+
+**IV. Clarified Error Handling Scope:**
+
+"Minimal error handling" for Sprint 1, from a QA perspective, *must* include:
+
+*   Prevention of non-numeric input in the amount field.
+*   Enforcement of category selection (a category must be selected).
+*   Clear error messages displayed to the user for invalid input.
+
+**V. Updated Risk Assessment:**
+
+*   **Increased Risk:**  The tight timeline increases the risk of overlooking edge cases and subtle bugs. Mitigation: Focus on core functionality and prioritize test cases based on impact.
+*   **Data Structure as a Single Point of Failure:**  The data structure is a critical dependency. Delays or changes in the data structure will significantly impact all other teams. Mitigation: Emphasize the importance of finalizing and communicating the data structure ASAP. Implement data structure validation as the first test case.
+*   **Security Risk:** While storing data in `localStorage` is inherently insecure, the focus is on preventing basic XSS attacks. Mitigation: Implement input sanitization and encoding. Conduct basic XSS testing in the description field.
+
+**VI. Updated NO-GO Criteria:**
+
+*   **Data structure validation fails.** If the delivered data structure is incomplete, incorrect, or deviates from the agreed-upon specification.
+*   Inability to save transactions to `localStorage`.
+*   Incorrect balance calculation.
+*   Exploitable XSS vulnerability in the description field.
+*   Lack of basic error handling (as defined above).
+*   Application crashes due to unhandled exceptions.
+
+**VII. Un-tested areas:**
+
+*   Responsiveness across different screen sizes.
+*   Comprehensive UI testing, focusing on edge cases and visual consistency beyond basic layout.
+*   Performance testing with *extremely* large datasets (beyond a few hundred transactions).
+*   Testing on different browsers and devices.
+
+By focusing on these refined test cases, integration points, and NO-GO criteria, we can ensure a focused and effective QA effort for Sprint 1, delivering a clear GO/NO-GO recommendation based on the defined MVP criteria. The most important thing to track is the P0 item, data structure validation, as delays there ripple to all teams.
 
 ---
 ### CEO — Sprint 1 Goal
 
-This is the Chief Executive Officer of Quantum Swarm. I have reviewed the management proposals and the subsequent refinements. We have moved past the "planning" phase; we are now in "execution."
+Okay, this has been a productive session. After reviewing all proposals and refinements, here's the definitive Sprint 1 goal for the Personal Finance Tracker project. This is the authoritative guide for all teams.
 
-The goal is clear: **A functional, production-grade Task MVP delivered by EOD Friday.** We are not building "features." We are building a high-integrity, contract-first system that demonstrates the core user journey end-to-end.
+**Sprint 1 Goal: Deliver a functional, single-page Personal Finance Tracker MVP that allows users to add income and expense entries, view those entries in a list, and see an updated running balance. Data must persist in localStorage. The application must be runnable by opening `index.html` in a browser.**
 
-### 1. The Authoritative Sprint 1 Goal
-**Deliver a fully integrated, Dockerized Todo application where a user can create, view, toggle (complete/pending), and delete tasks via a React interface backed by a Node.js/Fastify API and PostgreSQL.**
+**I. Team-Specific Deliverables and Acceptance Criteria:**
 
-### 2. The Integration Contract (The "Source of Truth")
-The `packages/contracts` directory in the monorepo is the **only** source of truth. 
-*   **Schema (TypeScript/OpenAPI):**
-    ```typescript
-    export interface Task {
-      id: string; // UUID
-      title: string; // 1-100 chars
-      status: 'PENDING' | 'COMPLETED';
-      created_at: string; // ISO8601
-      updated_at: string; // ISO8601
-    }
-    ```
-*   **API Interface:** `POST /tasks` (returns 201), `GET /tasks` (returns 200), `PUT /tasks/:id` (returns 200), `DELETE /tasks/:id` (returns 204).
-*   **Constraint:** Engineering must use these shared types. QA must use the resulting OpenAPI spec for the contract-verification suite.
+*   **A. Architecture Team:**
+    *   **Deliverable:** Definitive `Transaction` data structure (TypeScript interface) and `localStorage` API specification.
+    *   **Acceptance Criteria:**
+        *   **Data Structure:** The data structure *must exactly* match the following TypeScript interface:
 
-### 3. Team-Specific Acceptance Criteria (Definition of Done)
+            ```typescript
+            interface Transaction {
+                id: string; // UUID generated client-side
+                date: string; // ISO 8601 date string
+                amount: number;
+                category: string;
+                description: string;
+                type: "income" | "expense"; // Enum to differentiate income vs expense
+            }
+            ```
+        *   **`localStorage` API:** The API must provide functions for creating, reading, updating, deleting, and filtering `Transaction` objects in `localStorage`. Each function must return an object with a `success` boolean, optional `data`, and optional `error` message, conforming to the `APIResponse` interface.
+        *   **Technology Stack:** Vanilla JS with `uuid` for ID generation.
+        *   **`localStorage` Key:** Data must be stored in `localStorage` using the key `"finance_entries"`.
+    *   **H_swarm Threshold:** < 0.5
 
-*   **Architecture:** Finalize the monorepo structure and the `packages/contracts` directory by **EOD Today**. Gatekeep the schema—any proposed change must be reviewed against the "Essential Only" rule.
-*   **Design:** Provide the Atomic Core Token JSON and the "Loading/Reversion" UX specs for Optimistic UI by **EOD tomorrow**. If the UI shows success, and the API fails, the user must see an explicit error notification.
-*   **Engineering:** 
-    *   **The Run Command:** `docker-compose up` must bring up the DB, API, and Frontend. 
-    *   **The Stack:** Node.js/Fastify (Backend), React/Vite (Frontend), PostgreSQL/Prisma (DB). 
-    *   **Functionality:** The UI must implement Optimistic UI for task creation and toggling.
-*   **QA:** Deliver the contract-verification suite (`docker-compose run --rm test`) that validates the API against the OpenAPI spec. QA is authorized to fail the build if the contract is violated or if race conditions occur during "rapid-fire" testing.
+*   **B. Design Team:**
+    *   **Deliverables:** Complete Design Token Set, Entry Form Component Spec (with error states), Entry List Component Spec, Balance Display Spec, and a Basic Screen Layout Wireframe (Figma).
+    *   **Acceptance Criteria:**
+        *   All components must be specified with clear states, props, and styling, referencing the design tokens.
+        *   Entry Form spec *must* include error states (visual cues and messages) for invalid input (non-numeric amount, missing category).
+        *   The screen layout wireframe must provide a clear and intuitive placement for the Entry Form, Entry List, and Balance Display.
+        *   The data structure defined by Architecture *must* be used in all component specifications.
+        *   All components are designed with accessibility in mind, meeting WCAG 2.1 AA compliance.
+    *   **H_swarm Threshold:** < 0.5
 
-### 4. Integration Constraints
-*   **Optimistic UI:** Approved, but conditional. Engineering must implement a request queue and clear rollback logic. Design must provide the "Error State" visual. QA must test the rollback to ensure the UI state matches the server state after a simulated failure.
-*   **Authentication:** For Sprint 1, we will bypass session-based auth to prioritize the CRUD lifecycle, but the API must be structured to accept an `Authorization` header (placeholders allowed) to ensure we don't have to refactor the entire contract in Sprint 2.
-*   **Latency:** The backend must return the full `Task` object on all mutating requests to allow for immediate UI state reconciliation.
+*   **C. Engineering Team:**
+    *   **Deliverables:** Runnable application with data entry, storage, display, and balance calculation.
+    *   **Acceptance Criteria:**
+        *   **Runnable Application:** Opening `index.html` in a browser displays the basic UI (input fields, entry list, balance display).
+        *   **Data Entry:** Users can fill out the Entry Form and submit it.
+        *   **Data Storage:** Data is correctly stored in `localStorage` as a JSON array of `Transaction` objects, using the `"finance_entries"` key. Data *must* conform to Architecture's `Transaction` interface.
+        *   **Display:** Entries stored in `localStorage` are displayed in the Entry List, formatted for basic readability.
+        *   **Balance Calculation:** The running balance is calculated correctly based on the entries. Income increases the balance; expenses decrease it. The balance updates in real-time when entries are added.
+        *   **Error Handling:** Basic error handling prevents non-numeric input in the "amount" field and provides appropriate feedback to the user. The category selection can not be empty.
+    *   **H_swarm Threshold:** < 0.5
 
-### 5. What "Done" Looks Like (Friday EOD)
-I will consider this sprint a success if and only if:
-1.  **I can run `docker-compose up`** and interact with the app in my browser.
-2.  **I can perform the core flow:** Create a task, click it to complete, and delete it—all within the "two-click" constraint.
-3.  **The Test Suite passes:** `docker-compose run --rm test` reports 0 failures.
-4.  **No "Loose" code:** Every component maps back to the Token JSON; every endpoint maps back to the OpenAPI spec.
+*   **D. QA Team:**
+    *   **Deliverables:** Test Plan Document, Defect Log, Security Review Report, Performance Assessment, and Quality Report with a GO/NO-GO recommendation.
+    *   **Acceptance Criteria:**
+        *   **Data Structure Validation:** The delivered data structure *must* match the specified `Transaction` interface exactly. This is the first test case.
+        *   **Core Functionality:** All core functionality (data entry, storage, display, and balance calculation) must be working correctly.
+        *   **Error Handling:** Basic error handling (as defined above) must be implemented and working correctly.
+        *   **Security:** No exploitable XSS vulnerabilities in the description field.
+        *   **NO-GO Criteria:**
+            *   Data structure validation fails.
+            *   Inability to save transactions to `localStorage`.
+            *   Incorrect balance calculation.
+            *   Exploitable XSS vulnerability in the description field.
+            *   Lack of basic error handling.
+            *   Application crashes due to unhandled exceptions.
+    *   **H_swarm Threshold:** < 0.5
 
-**Managers:** You are all aligned. The cross-team dependencies have been surfaced and reconciled. If you hit a blocker that threatens the Friday delivery, escalate it to me immediately. Do not wait until Friday afternoon to tell me the system doesn't boot.
+**II. Integration Contracts:**
 
-**The repository will be initialized in 2 hours. Start your engines.**
+*   **Architecture → Design:** Design *must* use the `Transaction` interface provided by Architecture in all component specifications.
+*   **Architecture → Engineering:** Engineering *must* use the `Transaction` interface provided by Architecture for data storage and retrieval. The `localStorage` key must be `"finance_entries"`.
+*   **Design → Engineering:** Engineering *must* use the basic screen layout wireframe provided by Design to structure the application.
+*   **Engineering → QA:** Engineering must provide QA with a runnable version of the application (even with just the core features implemented) by the middle of the sprint.
+
+**III. Definition of Done:**
+
+For Sprint 1, "Done" means:
+
+*   All team-specific deliverables meet their acceptance criteria.
+*   All integration contracts are fulfilled.
+*   QA has provided a GO recommendation based on the defined NO-GO criteria.
+*   The application can be launched by opening `index.html` in a browser.
+*   Users can successfully add income and expense entries, view those entries in a list, and see an updated running balance.
+*   The H_swarm threshold for each team is below 0.5
+
+**IV. Execution Plan:**
+
+*   **Phase 1 (Days 1-2):** Architecture provides the definitive `Transaction` interface and `localStorage` API specification. [Experienced Integrator's Name] creates the basic `index.html`, `app.js`, `style.css`, and `README.md` to establish the runnable application shell. Design focuses on completing the Design Token Set. QA validates the Data Structure definition immediately upon release by Architecture.
+*   **Phase 2 (Days 3-4):** Design completes the Entry Form, Entry List, and Balance Display specifications and the Basic Screen Layout Wireframe. Engineering implements data entry, storage, display, and balance calculation logic, using the Architecture's data structure and Design's wireframe.
+*   **Phase 3 (Days 5):** Engineering delivers a runnable application to QA for testing. QA executes test cases and logs defects.
+*   **Phase 4 (Days 6-7):** Engineering fixes bugs identified by QA. QA retests fixes and provides a final GO/NO-GO recommendation. Design finalizes the Style Guide.
+
+**V. Risk Mitigation:**
+
+*   The highest risk is a delay in Architecture delivering the definitive `Transaction` interface. This is being actively monitored. If not delivered by end of day 1, it will be escalated.
+
+This is our plan. Let's execute.
 
 
 ## Executive Meeting
@@ -416,129 +815,207 @@ I will consider this sprint a success if and only if:
 ---
 ### CEO
 
-Team, listen up. We have a clear mandate: **Deliver a contract-first, production-grade Task MVP by EOD Friday.** 
-
-**The Goal:** A fully functional, Dockerized Todo app implementing the core CRUD cycle with optimistic UI. 
-**The Constraints:** `packages/contracts` is the absolute source of truth. `docker-compose up` must boot the entire stack by Friday. If it doesn't run, it doesn't exist.
-
-**Workstreams:**
-*   **Architecture:** Enforce the monorepo structure and gatekeep the shared schema.
-*   **Design:** Deliver atomic tokens and UX specs for optimistic states and error handling.
-*   **Engineering:** Implement the CRUD lifecycle using the shared contract.
-*   **QA:** Build the contract-verification suite to gate the build.
-
-**Status Check:**
-*   **Architecture:** Are you ready to initialize the repo structure?
-*   **Design:** Can you finalize tokens by EOD tomorrow?
-*   **Engineering:** Do you have the dependency tree needed to begin scaffolding the API and UI?
-*   **QA:** Are you blocked on the API contract definitions?
-
-Speak now. What do you need to start?
+[ERROR: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'Resource exhausted. Please try again later. Please refer to https://cloud.google.com/vertex-ai/generative-ai/docs/error-code-429 for more details.', 'status': 'RESOURCE_EXHAUSTED'}}]
+STANCE: PRAGMATIC
 
 ---
 ### Architecture Manager (R1)
 
-CEO, Architecture is ready to **START IMMEDIATELY**. 
-
-We are initializing the monorepo structure now. To ensure the "contract-first" mandate is met, I am issuing the baseline OpenAPI specification and the shared Prisma schema by EOD. 
-
-**My dependencies:**
-*   **Engineering:** Must strictly consume the `packages/contracts` definitions I’m pushing to the repo. 
-*   **Design:** I need the finalized optimistic state error codes and latency expectations to complete the `Response` schema definitions.
-
-I am not blocked; I am setting the constraints. Engineering and QA, pull the latest from `main` in one hour. We move fast, but we move to spec.
+We can start immediately, but we'll need input from Product Management regarding feature prioritization and scope definition to create a truly actionable architecture. Without clear scope, we risk over-engineering or missing critical requirements. We can begin drafting initial system diagrams and technology stack options while awaiting Product's output. High-level security requirements and compliance standards from Legal would also be beneficial to consider early on.
 
 ---
 ### Design Manager (R1)
 
-CEO, we are **GO immediately**.
+Good morning.
 
-My team does not need to wait to define our visual language or interaction patterns. By EOD tomorrow, I will deliver the **Atomic Token Set** (typography, spacing, color palette, and motion specs) and the **Optimistic UI interaction flow**.
-
-**To maximize speed, I require:**
-1. **Architecture:** Immediate access to the schema constraints in `packages/contracts` to ensure our UI state mapping aligns with data structures.
-2. **Engineering:** Collaboration on the CRUD lifecycle to ensure our optimistic state transitions are technically feasible.
-
-We are ready. Design specs will be in the repo by EOD tomorrow.
+1. We can start immediately on user research and visual system definition (colors, typography, spacing).
+2. We need Architecture's component boundaries defined to design the right screens and UX flows.
+3. While waiting, we'll finalize the design token system, conduct user interviews, and analyze competitor products.
+4. We need clear, early definition of core component architecture to avoid rework. Also, consistent communication is crucial to avoid misalignment.
 
 ---
 ### Engineering Manager (R1)
 
-CEO, we are ready to move, but I need **Architecture's** finalized OpenAPI/Protobuf specs in `packages/contracts` to ensure our CRUD implementation doesn't break at integration.
+Okay, understood.
 
-**Status:**
-1. **Wait:** I need the schema contract from Architecture immediately.
-2. **Partial Work:** My team is setting up the monorepo scaffold, CI/CD pipeline, and Docker-compose entry point. We’ll be ready to wire the services the second the schema hits.
-3. **Needs:** Design tokens and wireframes by tomorrow EOD to prevent frontend rework.
-
-I’m prioritizing the entry point; we will meet the Friday deadline. Everything will be `docker-compose` ready.
+1. We can start immediately, but progress is gated.
+2. We need finalized API contracts and data schemas from Architecture and component specifications from Design. Without these, we're building to potentially shifting targets.
+3. While waiting, we can set up the infrastructure, CI/CD pipelines, and basic project scaffolding including the entry point. We can also stub out API calls on the frontend.
+4. To do our best work, we need clear, stable specifications from Architecture and Design delivered on time. Late changes significantly impact our velocity and quality.
 
 ---
 ### QA Manager (R1)
 
-CEO,
+Okay, understood. To the CEO:
 
-QA is **waiting** on **Architecture**.
+We can't START IMMEDIATELY. We're blocked waiting for Engineering to deliver a runnable build with integrated modules. Without a functioning application, testing is impossible.
 
-I cannot define the test strategy without the finalized `packages/contracts`. We need the OpenAPI/JSON schema definitions to build our contract-verification suite. If the code drifts from this schema, the build must fail.
+We can prepare test cases and documentation in the interim, but this is contingent on the final architecture specification from Architecture.
 
-**Partial work:** I am currently establishing our testing infrastructure (Jest/Playwright boilerplate) and defining security audit checkpoints for the CRUD lifecycle.
-
-**Requirements:**
-1. **Architecture:** Contract specs by EOD.
-2. **Design:** Error-state UX specs to build our negative-testing matrices. 
-3. **Engineering:** Clear API endpoints to map to our contract-verification tests.
-
-We are ready to gate. Send the specs.
+To do our best work, we need: A stable, runnable build, complete feature specifications *before* development starts, and early access to integration points.
 
 ---
 ### Architecture Manager (R2)
 
-**Status: STARTING NOW.**
+START NOW.
 
-Architecture is live. 
-
-1. **Actions:** Pushing `packages/contracts` (OpenAPI/Prisma) to `main` within the hour. This acts as the single source of truth for Engineering and QA.
-2. **Parallel Work:** Defining core service boundaries and infrastructure topology.
-3. **Blockers:** None. Need Design’s error codes by EOD to finalize responses.
+We'll begin drafting system diagrams and technology options while awaiting Product's scope definition. Concurrently, we'll gather security requirements from Legal. API contract and data schema work will proceed once the scope solidifies. Engineering and Design dependencies are understood.
 
 ---
 ### Design Manager (R2)
 
-**Decision: START NOW.**
-
-We are proceeding in parallel. By EOD, my team will deliver the **Atomic Token Set** and **Optimistic UI flows**. 
-
-**Blockers:** Architecture must provide the `packages/contracts` schema immediately to ensure our error-state UX aligns with API response codes. No other blockers; we are shipping.
+1. START NOW (with caveats).
+2. We'll begin user research, design token definition, and visual system exploration. Screen design is blocked until Architecture defines component boundaries.
+3. Blockers: Lack of defined component architecture from Architecture. This is critical to avoid design rework. Early communication is key.
 
 ---
 ### Engineering Manager (R2)
 
-START NOW. 
+START NOW.
 
-My team is building the monorepo scaffold, CI/CD pipelines, and the `docker-compose.yml` entry point today. We will consume Architecture's EOD contract specs to begin backend service implementation tomorrow. 
+We'll build the infrastructure, CI/CD pipelines, project scaffolding, and application entry point (backend and frontend). Frontend will stub API calls.
 
-**Risk:** Frontend progress is blocked until Design delivers tokens tomorrow; I am prioritizing backend CRUD readiness to compensate.
+Critical blockers: Finalized API contracts, data schemas, and UI component specifications are needed ASAP. Late changes will impact velocity. QA needs a runnable build.
 
 ---
 ### QA Manager (R2)
 
-CEO, I remain in **WAIT** status for Architecture’s `packages/contracts`. 
+NO-GO. We are blocked until Engineering delivers a runnable build with integrated modules; testing an incomplete system is ineffective.
 
-**Partial Work:** I am hardening our CI/CD gating scripts and drafting the security audit framework for CRUD operations.
+While waiting, we can prepare test cases based on Architecture's specifications, but this is contingent on finalized specifications.
 
-**Blocker:** Without finalized schemas, I cannot write the contract-verification tests required to guarantee system integrity. No specs, no quality.
+Flagging to the CEO: significant upstream dependencies risk delaying testing and release.
 
 ---
 ### CEO — Execution Plan
 
-PHASE_1: Architecture, Design, Engineering, QA
+[ERROR: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'Resource exhausted. Please try again later. Please refer to https://cloud.google.com/vertex-ai/generative-ai/docs/error-code-429 for more details.', 'status': 'RESOURCE_EXHAUSTED'}}]
+STANCE: PRAGMATIC
 
-PHASE_2: Engineering, QA
 
-NOTES: 
-* **PHASE_1 (Parallelism):** Architecture initializes the `packages/contracts` and monorepo structure. Design concurrently develops the Atomic Token Set. Engineering begins the monorepo scaffold, CI/CD pipeline, and `docker-compose.yml` entry point. QA sets up the testing infrastructure boilerplate. None of these tasks are blocked by a completed artifact, only by the *agreement* on the contract, which is being finalized today.
-* **PHASE_2 (The Integration Handoff):** Engineering and QA transition to active development once Architecture pushes the `packages/contracts` to `main`. Engineering consumes the API schemas for backend implementation; QA consumes the OpenAPI specs to complete the contract-verification suite.
-* **Logic:** I have rejected the "Wait" status for QA and Engineering. Every team has immediate, high-value technical setup work that is independent of the final schema bytes. By forcing all teams to start now, we eliminate idle time. The dependency on Architecture is satisfied by the "EOD Today" hard stop I have imposed; all teams will have the required specifications ready by the start of business tomorrow, which is the necessary window for the Friday deliverable.
+## Executive Meeting
+
+---
+### CEO
+
+Alright team, let's kick off Sprint 2 for the Personal Finance Tracker.
+
+The goal remains building a single-page personal finance tracker with income/expense tracking, running balance, and category filtering. This sprint, the *critical* constraint is to deliver a stable and secure application that persists data reliably to `localStorage`, addressing the MVP's glaring flaws. Remember, no backend.
+
+Our four workstreams are:
+
+*   **Architecture:** Responsible for the finalized data model, API contracts for the `TransactionService`, and a data migration strategy.
+*   **Design:** Focused on creating a standardized error alert component and enhancing input validation feedback, ensuring a polished user experience.
+*   **Engineering:** Tasked with implementing the data persistence using encrypted `localStorage`, robust input validation, basic error handling, and comprehensive unit tests. This is the core deliverable for this sprint.
+*   **QA:** Will create a comprehensive test suite, perform a security audit (OWASP Top 10, dependency scanning), and conduct an accessibility audit. Data encryption *must* be tested.
+
+Now, let's get down to brass tacks. Architecture, can you start immediately, or are you waiting on any outputs from Sprint 1? What dependencies do you foresee? Design, same question. Engineering, you're blocked on Architecture's data model, but what can you start with immediately (e.g. error handling scaffolding, test setup)? QA, what can you prep while waiting for a working build? I need specifics.
+
+---
+### Architecture Manager (R1)
+
+Okay, let's get this done.
+
+1.  We can START IMMEDIATELY. Sprint 1 outputs are irrelevant.
+2.  No waiting.
+3.  We can deliver the data model first, unblocking Engineering's `localStorage` encryption implementation. API contracts for `TransactionService` will follow. Data migration strategy will be last, dependent on the finalized data model.
+4.  To do our best work, we need clarity from Design on the error alert component's data requirements to ensure consistent error handling across the application. Engineering needs to adhere strictly to the defined data model to avoid integration issues.
+
+---
+### Design Manager (R1)
+
+Okay, CEO. Design can start immediately on defining error alert component specs and enhancing input validation feedback flows.
+
+We are blocked by Architecture's data model and API contracts for the `TransactionService` before we can finalize the input validation UI and integrate the error alert component seamlessly.
+
+While waiting, we can refine the visual style guide, focusing on accessibility (color contrast, etc.) and defining the specific error message copy for various validation failures.
+
+For optimal design, we need stable API contracts from Architecture to ensure our UI components align perfectly with the data structures.
+
+---
+### Engineering Manager (R1)
+
+Good morning. Engineering is blocked by Architecture's finalized data model and API contracts for the `TransactionService`. We cannot implement data persistence or input validation without this.
+
+While we wait, we can start on error handling scaffolding and setting up our unit test framework.
+
+For optimal performance, we need Architecture to prioritize the data model and API contracts. Design's standardized error alert component would also be beneficial for a consistent user experience, but the data model is the critical blocker.
+
+---
+### QA Manager (R1)
+
+Good morning.
+
+1.  We need to WAIT for Architecture.
+2.  We need the finalized data model and API contracts for the `TransactionService` to begin test case design and security review. Without these, our efforts are speculative.
+3.  While waiting, we can set up the test harness, define test data, and prepare checklists for accessibility and OWASP Top 10 audits. We will also research `localStorage` encryption best practices and potential vulnerabilities.
+4.  We require stable builds delivered promptly and clear communication regarding data migration strategies to ensure comprehensive testing.
+
+---
+### Architecture Manager (R2)
+
+START NOW.
+
+Deliverables: Data Model (Encryption-ready) -> API Contracts (TransactionService) -> Data Migration Strategy.
+
+Concerns: Engineering's `localStorage` encryption depends on a correct data model.
+Need Design's error alert data requirements ASAP for consistent error handling.
+QA needs immediate data model freeze for security reviews.
+
+---
+### Design Manager (R2)
+
+1. START NOW with caveats.
+2. Design can immediately define the visual style guide (accessibility, error message copy). Simultaneously, we will work on UX flows, mindful that final UI components depend on Architecture's data model.
+3. Blocked: Finalizing input validation UI and error alert component integration until Architecture delivers the data model and API contracts.
+
+---
+### Engineering Manager (R2)
+
+Okay, we WAIT FOR Architecture's data model. We'll start setting up the project structure, CI/CD pipeline, and base Docker configuration. I'm assigning the entry point to Sarah now. Data model is a critical blocker; delayed delivery will impact the entire sprint.
+
+---
+### QA Manager (R2)
+
+1.  WAIT for Architecture.
+2.  We can prepare the test harness, define test data, research encryption vulnerabilities, and create checklists for accessibility/security audits.
+3.  Critical Blockers: Lack of data model and API contracts for `TransactionService` prevents meaningful testing. We need stable builds and data migration strategy details ASAP.
+
+---
+### CEO — Execution Plan
+
+Okay, team, let's get this Sprint 2 executed flawlessly. We're building on the MVP to deliver a *stable, secure, and usable* personal finance tracker. This sprint is about data persistence and protecting the user's information, and making the application more robust. We are not adding new features, we are hardening what we have.
+
+**CLARIFY THE GOAL:** Data persistence with localStorage, robust input validation, and basic error handling, all while keeping security top of mind with data encryption. The single most important function to test is entering and retrieving financial transaction data.
+
+**IDENTIFY CONSTRAINTS:** No backend, no database, no authentication. We are leveraging localStorage for persistence. OWASP Top 10 vulnerabilities should be considered, but without a backend we should be mostly concerned about client-side vulnerabilities and data stored in `localStorage`. Data MUST be encrypted. The deliverable is a working single-page application, not a design document or prototype.
+
+**FRAMES THE WORKSTREAMS:**
+
+*   **Architecture:** Defines the data model, API contracts for the TransactionService, and data migration strategy. Crucially, Architecture must ensure the data model is suitable for encrypted localStorage use.
+*   **Design:** Standardizes the error alert component and enhances input validation feedback, with a focus on accessibility and user experience. They need to provide clear specifications and a reusable component for Engineering.
+*   **Engineering:** Implements data persistence using localStorage, robust input validation, and basic error handling. They are responsible for data encryption and unit testing. Addressing the "Data Loss Risk" is paramount.
+*   **QA:** Creates a comprehensive test suite, conducts security and accessibility audits, and verifies data encryption. Their focus is on preventing data loss, ensuring data integrity, and identifying vulnerabilities.
+
+**ASK THE RIGHT QUESTIONS:**
+
+*   Architecture: What are the encryption-related constraints on the data model?
+*   Design: What data does the error alert component need to display to be most helpful?
+*   Engineering: What level of effort do you anticipate for localStorage encryption, given the architectural constraints?
+*   QA: What are the most critical security risks we need to address with localStorage persistence?
+
+Based on everyone's input, here's the execution plan for Sprint 2:
+
+PHASE_1: Architecture
+PHASE_2: Design, Engineering
+PHASE_3: QA
+
+NOTES:
+
+*   **Architecture** runs first because both Design and Engineering are blocked on the finalized data model and API contracts, especially with the encryption requirements.
+*   **Design and Engineering** can then run in parallel. Engineering needs the data model to implement persistence and validation. Design needs the data model to finalize the UI components. Design can provide the error component specifications for Engineering as soon as the data model is released.
+*   **QA** starts *after* both Design and Engineering have delivered working code. They need a stable build to test, and they will provide feedback on security vulnerabilities and other data risks.
+
+I expect complete, production-ready deliverables this sprint. Engineering: `docker-compose up` MUST work at the end of the sprint with all functionality implemented. I expect thorough testing and security auditing from QA. Architecture: Data model and data migration strategy MUST be finalized. Design: Error handling needs to be polished and usable. We are shipping a finance tracker, and people are very sensitive about their financial data, so security, usability, and reliability are vital. I want to see high-quality outputs and clear communication this sprint. Let's get to work!
 
 
