@@ -196,7 +196,7 @@ Complete before Thursday 2 April 23:59.
 - [x] `.env` is not committed (check `.gitignore`)
 - [x] Lab 1 work visible or linked in repo
 - [x] Lab 2 proposal and vision call visible in repo
-- [] `lab-3/generation-strategy.md` committed
+- [ ] `lab-3/generation-strategy.md` committed
 - [x] Team repo matches the tree in the Lab 3 README
 - [x] Google Form completed by one team member
 
