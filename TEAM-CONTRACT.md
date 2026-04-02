@@ -91,4 +91,4 @@ By typing your full name below you confirm you have read this contract and commi
 |---|---|
 | Luka Mikautadze | 2 April 2026 |
 | Rezo Darsavelidze | 2 April 2026 |
-| Giorgi Siradze |  |
+| Giorgi Siradze | 2 April 2026 |
