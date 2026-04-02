@@ -88,36 +88,36 @@ The non-AI version of this application is simply a project management dashboard 
 
 ### 3.1 — Architecture Diagram
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        USER (Founder)                       │
-│              React Frontend (Chat & Dashboard)              │
-└─────────────────────┬───────────────────────────────────────┘
-                      │  REST / WebSocket (Chat & Sprint updates)
-                      ▼
-┌─────────────────────────────────────────────────────────────┐
-│                 MAIN BACKEND (Spring Boot)                  │
-│   - User Auth, Project Management, Billing                  │
-│   - Orchestrates requests to the AI Microservice            │
-│   - Stores User configurations (PostgreSQL)                 │
-└─────────────────────┬───────────────────────────────────────┘
-                      │  Internal API Call (Task payload)
-                      ▼
-┌─────────────────────────────────────────────────────────────┐
-│               AGENT MICROSERVICE (Python)                   │
-│   - Framework: CrewAI / LangGraph                           │
-│   - CEO Agent parses user prompt                            │
-│   - Manager Agents query Memory for Worker selection        │
-│   - Worker Agents execute tasks inside Docker Sandboxes     │
-└──────┬────────────────────────┬──────────────────────┬──────┘
-       │                        │                      │
-       ▼                        ▼                      ▼
-┌──────────────┐         ┌──────────────┐       ┌──────────────┐
-│  LLM APIs    │         │ LONG-TERM MEM│       │ EXTERNAL APIS│
-│ Gemini Flash │         │ (Graph/RAG)  │       │ - GitHub     │
-│ Gemini Pro   │         │ Task History │       │ - Docker     │
-└──────────────┘         └──────────────┘       └──────────────┘
-```
+[User's Browser (React UI)]
+       |
+       | HTTPS / WebSocket (Feature request text, e.g., "Build a login page")
+       v
+[Primary Backend — Spring Boot (Java)]
+       |                         |
+       | JSON task payload       | User ID, Project State
+       v                         v
+[AI Microservice — Python] <---> [Supabase Postgres DB]
+(CrewAI / Agent Orchestrator)    (Stores user projects, chat history)
+       |            |
+       |            | Queries Agent "Experience" context
+       |            v
+       |    [Vector DB] (Long-Term Agent Memory)
+       |
+       | Prompts + Context
+       v
+[OpenRouter API Gateway] 
+       |
+       | Routes requests based on agent persona
+       +--------------------+
+       |                    |
+       v                    v
+[Gemini Pro]         [Gemini Flash]
+(CEO / Planner)      (Workers / Coders)
+       |
+       | Code generation output mapped back to Microservice
+       v
+[GitHub API]
+(Pushes committed code as Pull Requests)
 
 ---
 
