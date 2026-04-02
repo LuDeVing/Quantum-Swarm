@@ -89,27 +89,36 @@ See: docs/design-review/architecture-diagram.png
 ## Section 5 — Prompt and Data Flow
 
 ```
-User action:
-  The user types "Add a secure login page to the app" into the React chat interface and clicks send.
-
-Preprocessing:
-  The Spring Boot backend attaches the User ID, current GitHub branch status, and previous sprint context, then forwards the payload to the Python AI Microservice.
-
-Prompt construction:
-  The Python service constructs a system prompt for the "CEO" agent, injecting its persona rules, the user's raw request, and RAG context (project schema) retrieved from Supabase and Pinecone.
-
-API call:
-  OpenRouter routes the call to `google/gemini-1.5-pro` with a low temperature (0.2) for deterministic, structured planning.
-
-Response parsing:
-  The model returns a JSON-formatted sprint plan. The Python orchestrator parses this JSON into distinct tasks and triggers the Manager Agent to assign them to Gemini Flash Workers.
-
-Confidence / validation:
-  The "Bug Hunter" agent statically analyzes the Programmer agent's code. If the code fails checks 3 times in a row, confidence drops to LOW, the internal loop breaks, and execution halts.
-
-User output:
-  If successful, the user sees: "Sprint Complete. A Pull Request for the login page is waiting in GitHub." 
-  If validation failed, the fallback UI triggers (described in Section 7).
+[User's Browser (React UI)]
+       |
+       | HTTPS / WebSocket (Feature request text, e.g., "Build a login page")
+       v
+[Primary Backend — Spring Boot (Java)]
+       |                         |
+       | JSON task payload       | User ID, Project State
+       v                         v
+[AI Microservice — Python] <---> [Supabase Postgres DB]
+(CrewAI / Agent Orchestrator)    (Stores user projects, chat history)
+       |            |
+       |            | Queries Agent "Experience" context
+       |            v
+       |    [Vector DB] (Long-Term Agent Memory)
+       |
+       | Prompts + Context
+       v
+[OpenRouter API Gateway] 
+       |
+       | Routes requests based on agent persona
+       +--------------------+
+       |                    |
+       v                    v
+[Gemini Pro]         [Gemini Flash]
+(CEO / Planner)      (Workers / Coders)
+       |
+       | Code generation output mapped back to Microservice
+       v
+[GitHub API]
+(Pushes committed code as Pull Requests)
 ```
 
 ---
