@@ -1,10 +1,15 @@
 # Design Review: Quantum Swarm
 
 **Course:** CS-AI-2025 — Building AI-Powered Applications | Spring 2026
+
 **Team Name:** Vector Visions
+
 **Team Members:** Luka Mikautadze | Rezo Darsavelidze | Giorgi Siradze 
+
 **Team Lead (LMS submitter):** Giorgi Siradze
+
 **Submission Due:** Thursday 2 April 2026 at 23:59
+
 **Total Points:** 10
 
 ---
