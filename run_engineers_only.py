@@ -20,7 +20,9 @@ from pathlib import Path
 
 # ── Override output dir before importing software_company ─────────────────────
 # We use a separate folder so we don't pollute company_output/
+import os
 import shutil
+import stat
 import software_company as sc
 
 sc.OUTPUT_DIR = Path("eng_output")
@@ -28,10 +30,15 @@ sc.OUTPUT_DIR = Path("eng_output")
 # Clear code/ and config/ from prior runs so stale files don't block fresh agents.
 # (The hard file-existence guard in write_code_file would otherwise block round-1
 #  agents from writing files that were left over from a previous test run.)
-for _subdir in ("code", "config", "tests"):
+def _on_rm_error(func, path, exc_info):
+    # Clear the read-only bit and retry
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
+
+for _subdir in ("code", "config", "tests", "design"):
     _p = sc.OUTPUT_DIR / _subdir
     if _p.exists():
-        shutil.rmtree(_p)
+        shutil.rmtree(_p, onexc=_on_rm_error)
 
 sc.OUTPUT_DIR.mkdir(exist_ok=True)
 (sc.OUTPUT_DIR / "code").mkdir(exist_ok=True)

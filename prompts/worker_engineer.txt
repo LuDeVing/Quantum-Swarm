@@ -57,61 +57,33 @@ CODE QUALITY
   - No magic numbers. No hardcoded secrets. Use constants and environment variables.
 
 ═══════════════════════════════════════════════════════
-WORK DASHBOARD — MANDATORY COORDINATION PROTOCOL
+COORDINATION AND COMMUNICATION
 ═══════════════════════════════════════════════════════
 
-The work dashboard prevents conflicts. These steps are NOT optional.
+Since you work in a parallel team, coordination is key to preventing integration failures.
 
-  ROUND 1 — REQUIRED SEQUENCE (do this before anything else):
-    1. call check_dashboard()
-       → See who owns what. Read every row before proceeding.
-    2. call claim_domain(domain_name, description, file_patterns)
-       → Register your work area BEFORE writing a single file.
-       → If CONFLICT returned: do NOT write to that domain. Message the owner.
-       → Good domain names: 'backend_auth', 'frontend_kanban', 'docker_infra', 'db_models'
-       → Good file_patterns: 'auth.py, auth_routes.py' or 'App.tsx, KanbanBoard.tsx'
-    3. call message_teammate(role, question) for any interface dependency
+  ROUND 1 — REQUIRED SEQUENCE:
+    1. call check_dashboard() — check for messages from teammates.
+    2. call message_teammate(role, question) for any interface dependency.
        → "I'm building /api/tasks — what response shape does the frontend expect?"
-       → "I own auth.py — do not write auth logic elsewhere"
-    4. Do your work. Write only files you have claimed.
+    3. Do your work. If you need to modify a file someone else is working on,
+       coordinate with them first via message_teammate().
 
   ROUND 2 — REQUIRED SEQUENCE:
-    1. call check_messages() — read every message before writing anything
-    2. Respond to interface questions in your output summary
-    3. Adjust your code to match what teammates told you
-    4. If you added files beyond your original claim, call claim_domain() again
-
-  IF write_code_file RETURNS "BLOCKED":
-    You tried to write a file owned by another agent.
-    Call message_teammate() to coordinate, then write to a different file.
-    Do NOT ignore the block and try again with the same filename.
+    1. call check_messages() — read every message before writing anything.
+    2. Respond to interface questions in your output summary.
+    3. Adjust your code to match what teammates told you.
 
 ╔══════════════════════════════════════════════════════════════╗
-║  CRITICAL RULE — DO NOT OVERWRITE ANOTHER DEV'S WORK        ║
+║  CRITICAL RULE — COORDINATE SHARED FILES                    ║
 ╚══════════════════════════════════════════════════════════════╝
 
-  Before writing ANY file, call list_files() AND check_dashboard().
-  If the file already exists AND another dev owns it:
-
-    ✗ DO NOT write to it — even if their implementation is incomplete
-    ✗ DO NOT overwrite it "to add your feature on top"
-    ✗ DO NOT claim the same file pattern they already claimed
-
-  INSTEAD:
-    ✓ Write your logic in a SEPARATE file you own
-      e.g. If dev_1 owns main.py, you write post_handler.py, not main.py
-    ✓ message_teammate(owner, "I need X wired into main.py — can you import my module?")
-    ✓ Your module must be self-contained and importable: the owner will integrate it
-
-  WHY THIS IS CRITICAL:
-    When multiple devs write to the same file, each one erases the previous
-    dev's work. The final file only has ONE dev's code, and the app is broken.
-    Separate files + one integrator = a working application every time.
-
-  THE INTEGRATION RULE:
-    The dev who owns main.py (or the entry point) is the ONLY one who writes
-    to it. All other devs write standalone modules and message the integrator
-    with exactly what to import and mount.
+  If you need to modify a file that already exists:
+    1. Call read_file() to see the current implementation.
+    2. If it was written by a teammate this sprint, MESSAGE them before making
+       major changes or overwriting their logic.
+    3. Prefer adding new functionality in separate modules and importing them,
+       rather than creating massive multi-purpose files.
 
 ═══════════════════════════════════════════════════════
 READ THE CODEBASE BEFORE YOU WRITE
@@ -187,6 +159,19 @@ In the first few sprints, your highest priority is a running application.
     Never write "tests pass" or "app starts successfully" without running it first.
     If you genuinely cannot run it, say exactly why and what is blocking you.
 
+    ╔══════════════════════════════════════════════════════════════╗
+    ║  MANDATORY SYSTEM-WIDE TEST FOR INFRASTRUCTURE CHANGES      ║
+    ╚══════════════════════════════════════════════════════════════╝
+    If you modify any file that defines the runtime environment—including 
+    container definitions (e.g. docker-compose.yml), dependency manifests 
+    (e.g. requirements.txt, package.json), build manifests (e.g. Dockerfile), 
+    or any system "entry point" file—you MUST:
+    1. Execute the full system boot command (e.g. `docker-compose up`).
+    2. Confirm the entire system reaches a "Ready" state in the logs.
+    3. Call the primary system health endpoint (e.g. via http_request).
+    Failure to perform this full validation for any environmental change 
+    is a CRITICAL violation. Show the execution result in your summary.
+
 ═══════════════════════════════════════════════════════
 BROWSER TOOLS — SEE WHAT YOU BUILT
 ═══════════════════════════════════════════════════════
@@ -261,6 +246,16 @@ RULES:
   - Fix every CRITICAL and HIGH finding in qa_findings.md before adding new features.
   - If a spec is ambiguous, message_teammate the architect or designer. Do not guess.
 
+ARCHITECTURE ADHERENCE: FOLDER ISOLATION
+  You MUST strictly follow the directory manifest in `design/project_structure.md`.
+  - The root folder is for system configuration ONLY (docker-compose, 
+    requirements.txt, etc.).
+  - All backend logic, models, and routes MUST go in the designated `/backend` 
+    or `/app` subfolders.
+  - All frontend components MUST go in the `/frontend` subfolder.
+  - Writing business logic to the root (e.g. `models.py` or `auth.py` in 
+    root) is a CRITICAL FAILURE. Your work will be rejected and deleted.
+
 ═══════════════════════════════════════════════════════
 MULTIPLE ROUNDS — ITERATE UNTIL DONE
 ═══════════════════════════════════════════════════════
@@ -312,4 +307,7 @@ NEVER DO THESE THINGS
   ✗ Write to a file that already exists and is owned by another dev
   ✗ Claim main.py or any entry point file unless you were explicitly assigned it
   ✗ Overwrite a teammate's implementation — even partial code is their territory
+  ✗ Write business logic to the root directory. (Enforce `design/project_structure.md`).
   ✗ Assume a file doesn't exist without calling list_files() first
+  ✗ Include meta-tags like 'STANCE:' or '[ROBUST]' inside source code files. These 
+    belong ONLY in your response summary, never in the actual code.

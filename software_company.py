@@ -88,7 +88,7 @@ logging.basicConfig(
 logger = logging.getLogger("company")
 
 # ── Config ────────────────────────────────────────────────────────────────────
-GEMINI_MODEL       = "gemini-2.0-flash"
+GEMINI_MODEL       = "gemini-3.1-flash-lite-preview"
 OUTPUT_DIR         = Path("company_output")
 
 # Canonical cross-team reference files written by each team's manager
@@ -98,6 +98,8 @@ TEAM_CANONICAL_FILES = {
     "QA":           OUTPUT_DIR / "design" / "qa_findings.md",
 }
 INTERFERENCE_ALPHA = 0.5
+TOKEN_BUDGET       = 5_000_000   # hard kill-switch: total tokens (in+out) across all agents
+AGILE_MODE         = True        # if True, use Anthropic-style task-based collaborative coordination
 
 HYPOTHESES = ["healthy", "uncertain", "confused"]
 ROLE_PRIOR = {"healthy": 0.8, "uncertain": 0.15, "confused": 0.05}
@@ -146,95 +148,75 @@ def _write_canonical_file(team_name: str, content: str, append: bool = False) ->
     if path is None:
         return
     path.parent.mkdir(parents=True, exist_ok=True)
-    if append and path.exists():
-        existing = path.read_text(encoding="utf-8")
-        path.write_text(existing + "\n\n---\n\n" + content, encoding="utf-8")
-    else:
-        path.write_text(content, encoding="utf-8")
+    with _get_file_lock(path):
+        if append and path.exists():
+            existing = path.read_text(encoding="utf-8")
+            path.write_text(existing + "\n\n---\n\n" + content, encoding="utf-8")
+        else:
+            path.write_text(content, encoding="utf-8")
     logger.info(f"[{team_name}] canonical file updated: {path.name}")
 
 
-def _check_write_safety(filename: str, subdir: str, path: Path) -> Optional[str]:
-    """
-    Shared safety check for all write tools.
-    Returns a BLOCKED/warning string if the write should be rejected, or None if allowed.
-    """
-    dashboard = get_dashboard()
-    agent_id = _get_agent_id()
+_sprint_written_files: set = set()   # filenames written this sprint (cleared each sprint)
+_sprint_written_lock = threading.Lock()
 
-    # ── Shared file redirect (checked first — before path traversal) ─────────
-    if dashboard.is_shared_file(filename):
-        sections = dashboard.get_shared_file_sections(filename)
-        section_list = ", ".join(f"'{s}' (owner: {o})" for s, o in sections.items())
-        return (
-            f"REDIRECT: '{filename}' is a shared file with section-based ownership. "
-            f"Do NOT overwrite the whole file. Use write_file_section('{filename}', "
-            f"'<your_section>', content) to write your part. "
-            f"Available sections: {section_list}. "
-            f"You can also create a new section with your agent ID as the section name."
-        )
+def _record_sprint_file(filename: str) -> None:
+    with _sprint_written_lock:
+        _sprint_written_files.add(filename)
 
-    # ── Path traversal guard ──────────────────────────────────────────────────
-    resolved = path.resolve()
-    allowed_roots = [str((OUTPUT_DIR / subdir).resolve())]
-    wt = _get_worktree_manager()
-    if wt and subdir == "code":
-        allowed_roots.append(str(wt.worktree_root.resolve()))
-    if not any(str(resolved).startswith(root) for root in allowed_roots):
-        logger.warning(f"[write_{subdir}_file] PATH TRAVERSAL blocked: {filename!r}")
-        return f"BLOCKED: path traversal detected — '{filename}' resolves outside {subdir}/ directory."
+def clear_sprint_files() -> None:
+    with _sprint_written_lock:
+        _sprint_written_files.clear()
 
-    # ── Warn if agent identity is unknown ────────────────────────────────────
-    if not agent_id:
-        logger.warning(f"[write_{subdir}_file] agent_id is empty when writing '{filename}' — "
-                       f"context propagation may have failed")
+def get_sprint_files() -> list:
+    with _sprint_written_lock:
+        return sorted(_sprint_written_files)
 
-    owner = dashboard.get_file_owner(filename)
+# Per-file write locks — one Lock per absolute path, created on first access.
+# Prevents two agents from writing the same file simultaneously (last-writer-wins race).
+_file_write_locks: Dict[str, threading.Lock] = {}
+_file_write_locks_meta = threading.Lock()   # guards the dict itself
 
-    # ── Dashboard ownership block ─────────────────────────────────────────────
-    if owner and owner != agent_id:
-        logger.warning(f"[write_{subdir}_file] BLOCKED {agent_id!r} → '{filename}' owned by {owner!r}")
-        return (
-            f"BLOCKED: '{filename}' belongs to {owner} — they claimed this file. "
-            f"Call message_teammate('{owner}', '...') to coordinate, "
-            f"or write your feature in a new file and ask them to import it."
-        )
+def _get_file_lock(path: Path) -> threading.Lock:
+    key = str(path.resolve())
+    with _file_write_locks_meta:
+        if key not in _file_write_locks:
+            _file_write_locks[key] = threading.Lock()
+        return _file_write_locks[key]
 
-    # ── Hard file-existence block (belt-and-suspenders) ──────────────────────
-    # With worktrees, skeleton stubs exist in every worktree — allow overwrites
-    in_worktree = _get_worktree_manager() is not None and subdir == "code"
-    if path.exists() and owner and owner != agent_id:
-        return (
-            f"BLOCKED: '{filename}' already exists on disk and is owned by {owner}. "
-            f"Use read_file('{filename}') to read their implementation. "
-            f"Write your feature in a separate file instead."
-        )
-    if path.exists() and not owner and not in_worktree:
-        size = path.stat().st_size
-        return (
-            f"BLOCKED: '{filename}' already exists ({size} bytes) with no registered owner. "
-            f"Call read_file('{filename}') to inspect it first, then call claim_domain "
-            f"with this filename if it is truly yours to modify. "
-            f"If it belongs to a teammate, write your feature in a different file."
-        )
-    return None
 
+_STANCE_RE = re.compile(r'\n+STANCE:\s*\[?\w+\]?\s*$', re.IGNORECASE)
+
+def _strip_stance(content: str) -> str:
+    """Remove trailing STANCE: tag that agents append to their text output."""
+    return _STANCE_RE.sub('', content.rstrip()) + '\n'
 
 def _tool_write_code_file(filename: str, content: str) -> str:
     filename = _strip_subdir_prefix(filename, "code")
     code_dir = _get_code_dir()
     path     = code_dir / filename
-    block    = _check_write_safety(filename, "code", path)
-    if block:
-        return block
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    with _get_file_lock(path):
+        path.write_text(_strip_stance(content), encoding="utf-8")
+    _record_sprint_file(filename)
     threading.Thread(target=_bg_index_file, args=(path,), daemon=True, name=f"rag-{filename}").start()
     return f"Written {len(content)} chars to code/{filename}"
 
 
 def _bg_index_file(path: Path) -> None:
     try:
+        # If this file is inside a worktree, resolve it to the canonical code/ path
+        # so the RAG index always uses paths relative to OUTPUT_DIR
+        path = path.resolve()
+        wt_root = (OUTPUT_DIR / ".worktrees").resolve()
+        if str(path).startswith(str(wt_root)):
+            # .worktrees/<agent_id>/<rest> → OUTPUT_DIR/code/<rest>
+            parts = path.relative_to(wt_root).parts  # (agent_id, *rest)
+            canonical = (OUTPUT_DIR / "code" / Path(*parts[1:])).resolve()
+            if canonical.exists():
+                path = canonical
+            else:
+                return  # file not merged to main yet — skip indexing
         get_rag().update_file(path)
     except Exception as e:
         logger.warning(f"[RAG] background index failed for {path.name}: {e}")
@@ -243,11 +225,9 @@ def _bg_index_file(path: Path) -> None:
 def _tool_write_test_file(filename: str, content: str) -> str:
     filename = _strip_subdir_prefix(filename, "tests")
     path     = OUTPUT_DIR / "tests" / filename
-    block    = _check_write_safety(filename, "tests", path)
-    if block:
-        return block
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    with _get_file_lock(path):
+        path.write_text(_strip_stance(content), encoding="utf-8")
     threading.Thread(target=_bg_index_file, args=(path,), daemon=True, name=f"rag-{filename}").start()
     return f"Written {len(content)} chars to tests/{filename}"
 
@@ -255,11 +235,9 @@ def _tool_write_test_file(filename: str, content: str) -> str:
 def _tool_write_design_file(filename: str, content: str) -> str:
     filename = _strip_subdir_prefix(filename, "design")
     path     = OUTPUT_DIR / "design" / filename
-    block    = _check_write_safety(filename, "design", path)
-    if block:
-        return block
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    with _get_file_lock(path):
+        path.write_text(_strip_stance(content), encoding="utf-8")
     threading.Thread(target=_bg_index_file, args=(path,), daemon=True, name=f"rag-{filename}").start()
     return f"Written {len(content)} chars to design/{filename}"
 
@@ -267,11 +245,9 @@ def _tool_write_design_file(filename: str, content: str) -> str:
 def _tool_write_config_file(filename: str, content: str) -> str:
     filename = _strip_subdir_prefix(filename, "config")
     path     = OUTPUT_DIR / "config" / filename
-    block    = _check_write_safety(filename, "config", path)
-    if block:
-        return block
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    with _get_file_lock(path):
+        path.write_text(_strip_stance(content), encoding="utf-8")
     threading.Thread(target=_bg_index_file, args=(path,), daemon=True, name=f"rag-{filename}").start()
     return f"Written {len(content)} chars to config/{filename}"
 
@@ -576,34 +552,45 @@ class InterfaceContractRegistry:
         self.dependencies: List[str] = []  # external deps e.g. ["fastapi", "sqlalchemy"]
         self.init_order: List[str] = []    # ordered module init e.g. ["database", "routes", "server"]
         self._lock = threading.RLock()
+        # ── Amendment queue (mid-flight contract changes proposed by agents) ───
+        self._pending_amendments: List[Dict] = []  # [{"file", "proposer", "reason", "change", "ts"}]
 
     def set_from_parsed(self, parsed: Dict) -> None:
-        """Populate from parsed LLM output."""
+        """Populate from parsed LLM output with defensive type-checking."""
         with self._lock:
+            # 1. Parse Endpoints Safely
             for ep in parsed.get("endpoints", []):
-                self.endpoints.append(EndpointContract(
-                    method=ep.get("method", "GET"),
-                    path=ep.get("path", "/"),
-                    request_model=ep.get("request_model", ""),
-                    response_model=ep.get("response_model", ""),
-                ))
+                if isinstance(ep, dict):
+                    self.endpoints.append(EndpointContract(
+                        method=ep.get("method", "GET"),
+                        path=ep.get("path", "/"),
+                        request_model=ep.get("request_model", ""),
+                        response_model=ep.get("response_model", ""),
+                    ))
+            
+            # 2. Parse Models Safely
             for m in parsed.get("models", []):
-                self.models.append(ModelContract(
-                    name=m.get("name", ""),
-                    fields=m.get("fields", ""),
-                    file=m.get("file", "models.py"),
-                ))
+                if isinstance(m, dict):
+                    self.models.append(ModelContract(
+                        name=m.get("name", ""),
+                        fields=m.get("fields", ""),
+                        file=m.get("file", "models.py"),
+                    ))
+            
+            # 3. Parse Files Safely
             for f in parsed.get("files", []):
-                fc = FileContract(
-                    file=f.get("file", ""),
-                    owner=f.get("owner", ""),
-                    imports_from=f.get("imports_from", []),
-                    exports=f.get("exports", []),
-                    description=f.get("description", ""),
-                    depends_on=f.get("depends_on", []),
-                )
-                self.file_map[fc.file] = fc
-            self.entry_point = parsed.get("entry_point", "main.py")
+                if isinstance(f, dict):
+                    fc = FileContract(
+                        file=f.get("file", ""),
+                        owner=f.get("owner", ""),
+                        imports_from=f.get("imports_from", []),
+                        exports=f.get("exports", []),
+                        description=f.get("description", ""),
+                        depends_on=f.get("depends_on", []),
+                    )
+                    self.file_map[fc.file] = fc
+            
+            self.entry_point = parsed.get("entry_point", "server.py")
             self.entry_imports = parsed.get("entry_imports", [])
             self.build_command = parsed.get("build_command", "")
             self.build_file = parsed.get("build_file", "")
@@ -710,6 +697,58 @@ def reset_contracts() -> None:
         _contracts = None
 
 
+    # ── Amendment API ─────────────────────────────────────────────────────
+
+def _registry_request_amendment(file: str, proposer: str, reason: str, proposed_change: str) -> str:
+    """Queue a contract amendment request for manager review."""
+    reg = get_contracts()
+    import time as _t
+    with reg._lock:
+        reg._pending_amendments.append({
+            "file": file,
+            "proposer": proposer,
+            "reason": reason,
+            "change": proposed_change,
+            "ts": _t.time(),
+        })
+    logger.info(f"[Contracts] Amendment queued by {proposer} for '{file}': {reason[:80]}")
+    return (
+        f"Amendment queued for manager review.\n"
+        f"File: {file}\nReason: {reason}\nProposed: {proposed_change}\n"
+        f"The manager will review and broadcast any approved changes to the team."
+    )
+
+
+def _registry_process_amendments(sprint: int) -> List[str]:
+    """
+    Called by the manager monitor. Reviews all pending amendments, applies them
+    to the registry, and returns broadcast messages for each approved one.
+    For this implementation all amendments are auto-approved (the Lead trusts agents).
+    A future version could LLM-gate approvals.
+    """
+    reg = get_contracts()
+    with reg._lock:
+        amendments = list(reg._pending_amendments)
+        reg._pending_amendments.clear()
+    if not amendments:
+        return []
+    broadcasts = []
+    for am in amendments:
+        # Apply: update the file description in file_map if it exists
+        with reg._lock:
+            fc = reg.file_map.get(am["file"])
+            if fc:
+                fc.description = f"{fc.description} | AMENDED: {am['change'][:120]}" 
+        msg = (
+            f"CONTRACT AMENDED by {am['proposer']} for '{am['file']}'. "
+            f"Reason: {am['reason']}. Change: {am['change']}. "
+            f"Update your imports/exports if this affects you."
+        )
+        broadcasts.append(msg)
+        logger.info(f"[Contracts] Amendment applied for '{am['file']}' proposed by {am['proposer']}")
+    return broadcasts
+
+
 # ── Work Dashboard ────────────────────────────────────────────────────────────
 
 class WorkDashboard:
@@ -721,103 +760,43 @@ class WorkDashboard:
     SAVE_PATH = OUTPUT_DIR / "WORK_DASHBOARD.json"
 
     def __init__(self):
-        self.domains:  Dict[str, Dict] = {}
         self.messages: Dict[str, List] = {}
-        self.sections: Dict[str, Dict[str, Dict]] = {}  # {file: {section_id: {owner, content, order}}}
+        self._sections: Dict[str, Dict[str, str]] = {}  # filename → {section → content}
         self._lock = threading.RLock()
         self._load()
 
-    @staticmethod
-    def _pattern_matches(pat: str, filename: str) -> bool:
-        """
-        True if *filename* matches *pat*.
-        - Exact match: "main.py" matches "main.py"
-        - Suffix glob:  "*.py" matches "foo.py" but NOT "foo.pyc" or just ".py"
-        - Bare "*" is treated as non-matching (too broad — use explicit patterns)
-        """
-        pat = pat.strip()
-        if not pat or pat == "*":
-            return False
-        if pat == filename:
-            return True
-        if pat.startswith("*"):
-            suffix = pat[1:]      # e.g. ".py" from "*.py"
-            return bool(suffix) and filename.endswith(suffix) and len(filename) > len(suffix)
-        return False
-
-    def claim(self, domain: str, owner: str, description: str, file_patterns: str, sprint: int) -> str:
-        if not owner or not owner.strip():
-            return "ERROR: owner must not be empty — pass your agent ID as the owner."
-        with self._lock:
-            # Block by domain name conflict
-            existing = self.domains.get(domain)
-            if existing and existing["owner"] != owner and existing["status"] == "active":
-                return (
-                    f"CONFLICT: '{domain}' is owned by {existing['owner']} "
-                    f"(sprint {existing['sprint']}). Their work: {existing['description'][:100]}. "
-                    f"Use a different domain name or message them to coordinate."
-                )
-            # Block by file pattern overlap with existing active domains
-            # Uses _pattern_matches bidirectionally: "routes.py" overlaps with "*.py"
-            new_pats = [f.strip() for f in file_patterns.split(",") if f.strip()]
-            for d_name, d in self.domains.items():
-                if d["owner"] == owner or d["status"] != "active":
-                    continue
-                existing_pats = [f.strip() for f in d["file_patterns"].split(",") if f.strip()]
-                overlap = []
-                for np in new_pats:
-                    for ep in existing_pats:
-                        if np in ("", "*") or ep in ("", "*"):
-                            continue
-                        # Exact match OR either pattern matches the other as a filename
-                        if (np == ep
-                                or self._pattern_matches(ep, np)
-                                or self._pattern_matches(np, ep)):
-                            overlap.append(f"{np}/{ep}")
-                if overlap:
-                    return (
-                        f"CONFLICT: file patterns {[p.split('/')[0] for p in overlap]} already claimed "
-                        f"by {d['owner']} under domain '{d_name}'. Message them to coordinate."
-                    )
-            self.domains[domain] = {
-                "owner": owner, "description": description,
-                "file_patterns": file_patterns, "sprint": sprint, "status": "active",
-            }
-            self._save()
-            return f"CLAIMED: '{domain}' registered. You own files matching: {file_patterns}"
-
-    def get_file_owner(self, filename: str) -> Optional[str]:
-        """Return the owner of a filename if it matches any active domain's file_patterns."""
-        with self._lock:
-            for d in self.domains.values():
-                if d["status"] != "active":
-                    continue
-                patterns = [p.strip() for p in d["file_patterns"].split(",")]
-                for pat in patterns:
-                    if self._pattern_matches(pat, filename):
-                        return d["owner"]
         return None
 
-    def release_sprint(self, sprint: int):
-        """Mark all active domains from this sprint as complete."""
+    def write_section(self, filename: str, section: str, owner: str, content: str) -> str:
+        """Write a named section of a shared file. Returns error string or empty string on success."""
         with self._lock:
-            for d in self.domains.values():
-                if d.get("sprint") == sprint and d.get("status") == "active":
-                    d["status"] = "complete"
+            if filename not in self._sections:
+                self._sections[filename] = {}
+            existing_owner = None
+            for s, c in self._sections[filename].items():
+                if s != section and c.strip() and s.startswith(owner + ":"):
+                    existing_owner = s
+            self._sections[filename][f"{owner}:{section}"] = content
+        return ""
+
+    def assemble_shared_file(self, filename: str) -> str:
+        """Assemble all sections of a shared file into one string."""
+        with self._lock:
+            sections = self._sections.get(filename, {})
+            if not sections:
+                return ""
+            return "\n\n".join(f"# === {key} ===\n{content}" for key, content in sorted(sections.items()))
+
+    def release_sprint(self, sprint: int):
+        """Mark this sprint as complete."""
+        with self._lock:
             self._save()
 
     def get_status(self) -> str:
         with self._lock:
-            if not self.domains:
-                return "Dashboard is empty — no domains claimed yet this project."
-            lines = ["| Domain | Owner | Files | Status | Sprint |",
-                     "|--------|-------|-------|--------|--------|"]
-            for name, d in sorted(self.domains.items()):
-                lines.append(
-                    f"| {name} | {d['owner']} | {d['file_patterns'][:40]} "
-                    f"| {d['status']} | {d['sprint']} |"
-                )
-            return "\n".join(lines)
+            if not self.messages:
+                return "Dashboard: no active coordination or messages."
+            return "Active coordination dashboard."
 
     def send_message(self, from_agent: str, to_agent: str, message: str, sprint: int) -> str:
         with self._lock:
@@ -857,101 +836,24 @@ class WorkDashboard:
                 f"FROM {m['from']} (sprint {m['sprint']}): {m['text']}" for m in msgs
             )
 
-    # ── Section-based ownership (partial file locking) ─────────────────────────
-
-    def register_shared_file(self, filename: str, section_defs: List[Dict]) -> None:
-        """Register a file as shared with named sections.
-        section_defs: [{"id": "imports", "owner": "system", "order": 0}, ...]
-        """
+    def broadcast(self, from_agent: str, message: str, sprint: int, recipients: List[str]) -> str:
+        """Send one message to every agent in `recipients` except the sender.
+        Used for breaking-change announcements (API changes, model renames, etc.)."""
         with self._lock:
-            if filename not in self.sections:
-                self.sections[filename] = {}
-            for sd in section_defs:
-                sid = sd["id"]
-                self.sections[filename][sid] = {
-                    "owner": sd.get("owner", "system"),
-                    "content": sd.get("content", ""),
-                    "order": sd.get("order", 0),
-                }
+            sent_to = []
+            for agent_id in recipients:
+                if agent_id == from_agent:
+                    continue
+                self.messages.setdefault(agent_id, []).append({
+                    "from": from_agent,
+                    "text": f"📢 BROADCAST: {message}",
+                    "sprint": sprint,
+                })
+                sent_to.append(agent_id)
             self._save()
+        logger.info(f"[Dashboard] {from_agent} broadcast to {len(sent_to)} agents: {message[:80]}")
+        return f"Broadcast sent to {len(sent_to)} teammates: {', '.join(sent_to)}"
 
-    def is_shared_file(self, filename: str) -> bool:
-        with self._lock:
-            return filename in self.sections
-
-    def claim_section(self, filename: str, section_id: str, owner: str) -> str:
-        with self._lock:
-            if filename not in self.sections:
-                return f"ERROR: '{filename}' is not a shared file. Use claim_domain for exclusive files."
-            sec = self.sections[filename].get(section_id)
-            if sec and sec["owner"] not in ("system", owner, ""):
-                return (
-                    f"CONFLICT: section '{section_id}' in {filename} is owned by {sec['owner']}. "
-                    f"Message them to coordinate."
-                )
-            if section_id not in self.sections[filename]:
-                self.sections[filename][section_id] = {
-                    "owner": owner, "content": "", "order": len(self.sections[filename]),
-                }
-            else:
-                self.sections[filename][section_id]["owner"] = owner
-            self._save()
-            return f"CLAIMED section '{section_id}' in {filename}."
-
-    def write_section(self, filename: str, section_id: str, owner: str, content: str) -> Optional[str]:
-        """Write content to a section. Returns error string or None on success."""
-        with self._lock:
-            if filename not in self.sections:
-                return f"ERROR: '{filename}' is not a shared file."
-            sec = self.sections[filename].get(section_id)
-            if sec and sec["owner"] not in ("system", owner, ""):
-                return (
-                    f"BLOCKED: section '{section_id}' in {filename} is owned by {sec['owner']}. "
-                    f"Use write_file_section with a different section name, "
-                    f"or message {sec['owner']} to coordinate."
-                )
-            if section_id not in self.sections[filename]:
-                self.sections[filename][section_id] = {
-                    "owner": owner, "content": content,
-                    "order": len(self.sections[filename]),
-                }
-            else:
-                self.sections[filename][section_id]["content"] = content
-                if self.sections[filename][section_id]["owner"] == "system":
-                    pass  # system sections keep system ownership
-                else:
-                    self.sections[filename][section_id]["owner"] = owner
-            self._save()
-            return None
-
-    def assemble_shared_file(self, filename: str) -> str:
-        """Combine all sections into final file content, ordered by 'order' field."""
-        with self._lock:
-            if filename not in self.sections:
-                return ""
-            ordered = sorted(
-                self.sections[filename].items(),
-                key=lambda kv: kv[1].get("order", 0),
-            )
-            parts = []
-            for sid, sec in ordered:
-                c = sec.get("content", "").strip()
-                if c:
-                    parts.append(f"# ── section: {sid} ──\n{c}")
-            return "\n\n".join(parts)
-
-    def get_section_owner(self, filename: str, section_id: str) -> Optional[str]:
-        with self._lock:
-            if filename in self.sections and section_id in self.sections[filename]:
-                return self.sections[filename][section_id].get("owner")
-            return None
-
-    def get_shared_file_sections(self, filename: str) -> Dict[str, str]:
-        """Return {section_id: owner} for a shared file."""
-        with self._lock:
-            if filename not in self.sections:
-                return {}
-            return {sid: sec["owner"] for sid, sec in self.sections[filename].items()}
 
     # ─────────────────────────────────────────────────────────────────────────────
 
@@ -960,9 +862,7 @@ class WorkDashboard:
             self.SAVE_PATH.parent.mkdir(parents=True, exist_ok=True)
             self.SAVE_PATH.write_text(
                 json.dumps({
-                    "domains": self.domains,
                     "messages": self.messages,
-                    "sections": self.sections,
                 }, indent=2),
                 encoding="utf-8",
             )
@@ -973,10 +873,8 @@ class WorkDashboard:
         try:
             if self.SAVE_PATH.exists():
                 data = json.loads(self.SAVE_PATH.read_text(encoding="utf-8"))
-                self.domains  = data.get("domains", {})
                 self.messages = data.get("messages", {})
-                self.sections = data.get("sections", {})
-                logger.info(f"[Dashboard] loaded {len(self.domains)} domains, {len(self.sections)} shared files")
+                logger.info(f"[Dashboard] loaded coordination dashboard")
         except Exception as e:
             logger.warning(f"[Dashboard] load failed: {e}")
 
@@ -1559,22 +1457,20 @@ def write_file_section(filename: str, section: str, content: str) -> str:
     agent_id = _get_agent_id()
     dashboard = get_dashboard()
 
-    if not dashboard.is_shared_file(filename):
-        return (
-            f"ERROR: '{filename}' is not a shared file. "
-            f"Use write_code_file('{filename}', content) instead."
-        )
-
     err = dashboard.write_section(filename, section, agent_id, content)
     if err:
         logger.warning(f"[write_file_section] {agent_id} → {filename}:{section} — {err}")
         return err
 
-    assembled = dashboard.assemble_shared_file(filename)
     code_dir = _get_code_dir()
     path = code_dir / filename
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(assembled, encoding="utf-8")
+    with _get_file_lock(path):
+        # Assemble INSIDE the lock so the read+write is atomic.
+        # When this agent acquires the lock, it re-reads all sections including
+        # any written by other agents while this one was waiting.
+        assembled = dashboard.assemble_shared_file(filename)
+        path.write_text(assembled, encoding="utf-8")
     threading.Thread(target=_bg_index_file, args=(path,), daemon=True, name=f"rag-{filename}").start()
     logger.info(f"[write_file_section] {agent_id} wrote section '{section}' in {filename} ({len(content)}c)")
     return (
@@ -1617,20 +1513,10 @@ def search_codebase(query: str) -> str:
 
 @lc_tool
 def check_dashboard() -> str:
-    """MANDATORY FIRST STEP. See who owns which domains and files across the whole team.
-    Call this before claiming any domain or writing any file. Shows current sprint state."""
+    """MANDATORY FIRST STEP. See current team messages and coordination status.
+    Call this to read any incoming messages from teammates."""
     return get_dashboard().get_status()
 
-@lc_tool
-def claim_domain(domain_name: str, description: str, file_patterns: str) -> str:
-    """MANDATORY before writing files. Register your work domain to prevent conflicts.
-    domain_name: short identifier e.g. 'backend_auth', 'frontend_kanban', 'docker_infra'
-    description: what you are building
-    file_patterns: comma-separated files you will write e.g. 'auth.py, auth_routes.py'
-    Returns CLAIMED (proceed) or CONFLICT (coordinate with the owner first)."""
-    return get_dashboard().claim(
-        domain_name, _get_agent_id(), description, file_patterns, _get_sprint_num()
-    )
 
 @lc_tool
 def message_teammate(teammate_role: str, message: str) -> str:
@@ -1646,6 +1532,32 @@ def check_messages() -> str:
     """MANDATORY FIRST STEP IN ROUND 2. Read messages sent to you by teammates in Round 1.
     Contains interface questions and compatibility concerns you must address."""
     return get_dashboard().get_messages(_get_agent_id())
+
+@lc_tool
+def broadcast_message(message: str) -> str:
+    """Shout a message to ALL teammates at once — use this when you make a breaking change
+    that affects everyone (e.g. renamed a function, changed a shared model, moved a file).
+    Every agent will receive it in their next check_messages() call.
+    message: plain text description of the change and what others must update."""
+    return get_dashboard().broadcast(
+        _get_agent_id(), message, _get_sprint_num(), ENG_WORKERS
+    )
+
+@lc_tool
+def request_contract_amendment(file: str, reason: str, proposed_change: str) -> str:
+    """Request a mid-flight change to the shared Interface Contract.
+    Use this when you discover the original contract is wrong or impossible to implement
+    (e.g. a dependency is unavailable, the API must change shape, a model needs a new field).
+    The Engineering Manager will review and broadcast the approved change to the whole team.
+    file: the filename in the contract that needs changing (e.g. 'models.py', 'routes.py')
+    reason: why the current contract is wrong or insufficient
+    proposed_change: exactly what should change (e.g. 'Add field user_id: int to Note model')"""
+    return _registry_request_amendment(
+        file=file,
+        proposer=_get_agent_id() or "unknown",
+        reason=reason,
+        proposed_change=proposed_change,
+    )
 
 @lc_tool
 def open_app(url: str) -> str:
@@ -1731,7 +1643,8 @@ _LC_TOOLS_BY_NAME: Dict[str, object] = {
         write_code_file, write_file_section, write_test_file, write_design_file, write_config_file,
         read_file, list_files, search_codebase,
         run_shell, http_request, start_service, stop_service,
-        check_dashboard, claim_domain, message_teammate, check_messages,
+        check_dashboard, message_teammate, check_messages,
+        broadcast_message, request_contract_amendment,
         open_app, browser_action, close_browser,
         validate_python, validate_json, validate_yaml,
         generate_endpoint_table, generate_er_diagram, create_ascii_diagram,
@@ -1741,7 +1654,8 @@ _LC_TOOLS_BY_NAME: Dict[str, object] = {
 }
 
 # Dashboard tools available to all roles that write or review work
-_DASHBOARD_TOOLS    = ["check_dashboard", "claim_domain", "message_teammate", "check_messages"]
+_DASHBOARD_TOOLS    = ["check_dashboard", "message_teammate", "check_messages",
+                       "broadcast_message", "request_contract_amendment"]
 _DASHBOARD_RO_TOOLS = ["check_dashboard", "message_teammate", "check_messages"]  # read-only for QA/arch
 
 _ROLE_TOOL_NAMES: Dict[str, List[str]] = {
@@ -1775,6 +1689,14 @@ _DEV_TOOL_NAMES = ["write_code_file", "write_file_section", "write_test_file",
                    "validate_yaml", "write_config_file", "read_file", "run_shell",
                    "list_files", "search_codebase", "start_service", "stop_service",
                    "http_request", "open_app", "browser_action", "close_browser"] + _DASHBOARD_TOOLS
+
+# Engineering manager gets full file access + service tools for integration pass
+_ENG_MANAGER_TOOL_NAMES = [
+    "read_file", "list_files", "search_codebase",
+    "write_code_file", "write_config_file",
+    "validate_python", "validate_json", "validate_yaml",
+    "run_shell", "start_service", "stop_service", "http_request",
+] + _DASHBOARD_RO_TOOLS
 
 
 def get_role_lc_tools(role_key: str) -> List:
@@ -2029,6 +1951,8 @@ for _k in ENG_WORKERS:
     ROLES[_k] = ROLES["software_developer"]
     _ROLE_TOOL_NAMES[_k] = _DEV_TOOL_NAMES
 
+_ROLE_TOOL_NAMES["eng_manager"] = _ENG_MANAGER_TOOL_NAMES
+
 
 # ── Definition of Done checklists (one per role category) ─────────────────────
 # Each worker self-verifies before submitting. If any item is FAIL, they fix it
@@ -2236,7 +2160,8 @@ def token_summary() -> str:
         t_in  = _tokens_in
         t_out = _tokens_out
     total = t_in + t_out
-    cost = (t_in * 0.10 + t_out * 0.40) / 1_000_000
+    # Gemini 3.1 Flash-Lite: $0.25 / 1M input, $1.50 / 1M output
+    cost = (t_in * 0.25 + t_out * 1.50) / 1_000_000
     return (
         f"calls={calls}  "
         f"in={t_in:,}  out={t_out:,}  total={total:,}  "
@@ -2427,6 +2352,9 @@ def _run_fixer(role_key: str, task: str, failed_output: str, F_score: float) -> 
         f"End with: STANCE: [MINIMAL|ROBUST|SCALABLE|PRAGMATIC]"
     )
     fixed = llm_call(fix_prompt, label=f"{role_key}_fixer", get_logprobs=False, system=_worker_system(role_key))
+    if not fixed.strip():
+        logger.warning(f"[{role_key}] fixer returned empty — keeping original output")
+        return failed_output
     logger.info(f"[{role_key}] fixer applied — output patched ({len(fixed)}c)")
     return fixed
 
@@ -2460,14 +2388,27 @@ def run_worker(
     # Inject manifest for roles that write or read files
     manifest_snippet = ""
     manifest_path = OUTPUT_DIR / "PROJECT_MANIFEST.md"
-    if has_tools and manifest_path.exists():
-        manifest_snippet = (
-            "\n\n─── CODEBASE INDEX (PROJECT_MANIFEST.md) ───\n"
-            + manifest_path.read_text(encoding="utf-8")[:2000]
-            + "\n────────────────────────────────────────────\n"
-            "IMPORTANT: Before writing any file, call list_files() and search_codebase() "
-            "to check what already exists. Do NOT reimplement existing code — extend it.\n"
-        )
+    struct_path   = OUTPUT_DIR / "design" / "project_structure.md"
+
+    if has_tools:
+        # 1. Project Structure (Architect's Intent)
+        if struct_path.exists():
+            manifest_snippet += (
+                "\n\n─── ARCHITECT'S PROJECT STRUCTURE (design/project_structure.md) ───\n"
+                + struct_path.read_text(encoding="utf-8")[:3000]
+                + "\n───────────────────────────────────────────────────────────────\n"
+                "IMPORTANT: You MUST follow this directory tree. Create only these files.\n"
+            )
+
+        # 2. Existing files (Actual status)
+        if manifest_path.exists():
+            manifest_snippet += (
+                "\n\n─── CODEBASE INDEX (PROJECT_MANIFEST.md) ───\n"
+                + manifest_path.read_text(encoding="utf-8")[:2000]
+                + "\n────────────────────────────────────────────\n"
+                "IMPORTANT: Before writing any file, call list_files() and search_codebase() "
+                "to check what already exists. Do NOT reimplement existing code — extend it.\n"
+            )
 
     dashboard_snippet = ""
     messages_snippet = ""
@@ -2492,7 +2433,7 @@ def run_worker(
         if round_num == 1:
             coord_instructions = (
                 "\nMANDATORY FIRST STEPS (do these before producing any work):\n"
-                "  1. call check_dashboard() — see what other teams and teammates own\n"
+                "  1. call check_dashboard() — check messages from teammates\n"
                 "  2. call check_messages() — read any messages from teammates or other teams\n"
                 "  3. If you need info from another role, call message_teammate(role, question)\n\n"
             )
@@ -2500,10 +2441,7 @@ def run_worker(
             coord_instructions = (
                 "\nMANDATORY FIRST STEPS (do these before revising any work):\n"
                 "  1. call check_messages() — read ALL messages before changing anything\n"
-                "  2. call check_dashboard() — verify current ownership and team status\n"
-                "  3. Address every teammate message in your revised output\n"
-                "  4. If you changed any interface, schema, or spec name, call message_teammate()\n"
-                "     to notify affected teammates\n\n"
+                "  2. Address every teammate message in your revised output\n\n"
             )
 
     if round_num == 1:
@@ -2613,24 +2551,23 @@ def run_team_planning(
     m_info = ROLES[manager_role]
 
     # ── Step 1: Manager posts work items to blackboard ────────────────────────
+    # Agile Update: Allow up to 2x n items, but only as many as actually needed
     board_prompt = (
         f"You are the {m_info['title']}.\n\n"
         f"PROJECT BRIEF:\n{brief}\n\n"
-        f"Post {n} work items to the team blackboard. Each item must be:\n"
-        f"  - Independent (no blocking dependencies on other items)\n"
-        f"  - Sized for one person in one sprint\n"
-        f"  - Clear enough that a specialist can self-assign without asking questions\n"
-        f"  - FILE-ISOLATED: each item works on its OWN files that no other item touches\n\n"
-        f"CRITICAL RULES FOR MINIMAL INTERFERENCE:\n"
+        f"Post work items to the team blackboard. Role: {team_name}.\n"
+        f"  - POST ONLY AS MANY ITEMS AS NEEDED (between 1 and 100 maximum).\n"
+        f"  - Do NOT invent fake tasks for a simple project.\n"
+        f"  - Each item must be INDEPENDENT and FILE-ISOLATED.\n"
+        f"  - Small enough that a specialist can finish multiple in a sprint\n"
+        f"  - Each item must list its files in brackets, e.g. [routes.py, auth.py]\n\n"
+        f"CRITICAL RULES:\n"
         f"  1. NO two items should write to the same file\n"
-        f"  2. The entry point file is SYSTEM-MANAGED — do NOT assign it\n"
-        f"  3. Shared model/type files are system-managed — devs import from them, not rewrite them\n"
-        f"  4. Each item must list its files in brackets, e.g. [routes.py, auth.py]\n"
-        f"  5. If two features need to share a file, split the file into two modules instead\n"
-        f"  6. Every module file must export exactly what its contract says in the 'exports' list\n"
-        f"  7. Mention what the developer must export in the task description\n\n"
+        f"  2. Entry point and shared models are system-managed\n\n"
         f"Format EXACTLY as (one line each):\n"
-        + "\n".join(f"ITEM_{i+1}: <concise task description> [file1.ext, file2.ext]" for i in range(n))
+        f"ITEM_1: <task> [files]\n"
+        f"ITEM_2: <task> [files]\n"
+        f"... up to ITEM_50 if needed."
     )
     board_output = llm_call(board_prompt, label=f"{manager_role}_board_post",
                              system=_manager_system(manager_role))
@@ -2638,18 +2575,20 @@ def run_team_planning(
     # Parse board items — tolerant of ITEM_N:, ITEM N:, N. and N) formats
     items: Dict[str, str] = {}
     item_files: Dict[str, List[str]] = {}  # item_id -> list of files
-    for i in range(1, n + 1):
+    # Search for all "ITEM_N" patterns up to 100
+    for i in range(1, 101):
         m = re.search(
             rf"(?:ITEM[_ ]{i}|{i}[.):])\s*[:–\-]?\s*(.+)",
             board_output,
             re.IGNORECASE,
         )
-        text = m.group(1).strip() if m else f"Work item {i}"
-        items[f"item_{i}"] = text
-        # Extract file list from brackets: [file1.py, file2.js]
-        file_match = re.search(r"\[([^\]]+)\]", text)
-        if file_match:
-            item_files[f"item_{i}"] = [f.strip() for f in file_match.group(1).split(",") if f.strip()]
+        if m:
+            text = m.group(1).strip()
+            items[f"item_{i}"] = text
+            # Extract file list from brackets: [file1.py, file2.js]
+            file_match = re.search(r"\[([^\]]+)\]", text)
+            if file_match:
+                item_files[f"item_{i}"] = [f.strip() for f in file_match.group(1).split(",") if f.strip()]
 
     # Validate file-isolation: no two items should share files
     file_to_item: Dict[str, str] = {}
@@ -2674,10 +2613,10 @@ def run_team_planning(
             f"You are {ROLES[role_key]['title']} #{idx}.\n"
             f"Expertise: {ROLES[role_key]['expertise']}\n\n"
             f"BLACKBOARD — available work items:\n{board_display}\n\n"
-            f"Scan the board and claim the item that best matches your expertise.\n"
-            f"State in one sentence why you are the best fit.\n"
-            f"If two items fit equally, pick the one with the lower number.\n\n"
-            f"End with exactly: CLAIM: item_N",
+            f"Scan the board and claim ALL items that best match your expertise.\n"
+            f"You are encouraged to pick multiple items (up to 3) if they are related.\n"
+            f"List them clearly. One sentence reason per claim.\n\n"
+            f"End with exactly: CLAIM: item_X, item_Y",
             label=f"{role_key}_claim",
             system=_worker_system(role_key),
         )
@@ -2687,64 +2626,58 @@ def run_team_planning(
     with ThreadPoolExecutor(max_workers=n) as ex:
         for role_key, output in ex.map(lambda r: worker_claim(r), worker_roles):
             claims[role_key] = output
-            m_claim = re.search(r"CLAIM:\s*(item_\d+)", output, re.IGNORECASE)
-            claimed_item = m_claim.group(1) if m_claim else "UNKNOWN"
-            reason_snippet = output.split("CLAIM:")[0].strip()[-80:] if "CLAIM:" in output else output[:80]
-            logger.info(f"  [claim] {role_key} → {claimed_item}  reason: …{reason_snippet}")
+            m_claim = re.search(r"CLAIM:\s*([item_\d,\s]+)", output, re.IGNORECASE)
+            claimed_str = m_claim.group(1) if m_claim else "UNKNOWN"
+            logger.info(f"  [claim] {role_key} → {claimed_str}")
 
     # Health interference across team
     ActiveInferenceState.interfere_all(
         [health_states[r] for r in worker_roles], alpha=INTERFERENCE_ALPHA
     )
 
-    # ── Step 3: Parse claims; resolve conflicts without extra LLM round ───────
+    # ── Step 3: Parse claims; resolve conflicts ──────────────────────────────
     claimed: Dict[str, str] = {}    # item_id → role_key (first valid claimant wins)
-    assignments: Dict[str, str] = {}
+    assignments: Dict[str, List[str]] = {r: [] for r in worker_roles}
 
     for role_key in worker_roles:
-        m = re.search(r"CLAIM:\s*(item_\d+)", claims[role_key], re.IGNORECASE)
+        m = re.search(r"CLAIM:\s*([item_\d,\s]+)", claims[role_key], re.IGNORECASE)
         if m:
-            iid = m.group(1).lower()
-            # Validate: only accept item IDs that exist on the board
-            if iid not in items:
-                logger.warning(f"  [claim] {role_key} claimed non-existent {iid!r} — treated as failed claim")
-            elif iid not in claimed:
-                claimed[iid] = role_key
-                assignments[role_key] = iid
+            iids = [i.strip().lower() for i in m.group(1).split(",") if i.strip()]
+            for iid in iids:
+                if iid in items and iid not in claimed:
+                    claimed[iid] = role_key
+                    assignments[role_key].append(iid)
 
-    # Conflict resolution: workers who lost their claim get next unclaimed item
-    conflict_roles: List[str] = []
+    # Conflict resolution: workers with no tasks get first unclaimed items
+    conflict_roles: List[str] = [r for r in worker_roles if not assignments[r]]
     unclaimed_items = [iid for iid in items if iid not in claimed]
-    for role_key in worker_roles:
-        if role_key not in assignments:
-            conflict_roles.append(role_key)   # this worker lost their original claim
-            if unclaimed_items:
-                iid = unclaimed_items.pop(0)
-                assignments[role_key] = iid
-                claimed[iid] = role_key
-            else:
-                # All items taken — give a duplicate of the last item (shouldn't happen with n==n)
-                assignments[role_key] = list(items.keys())[-1] if items else f"item_{worker_roles.index(role_key) + 1}"
+    
+    for role_key in conflict_roles:
+        if unclaimed_items:
+            iid = unclaimed_items.pop(0)
+            assignments[role_key].append(iid)
+            claimed[iid] = role_key
 
-    # ── Step 4: Only log/record if there were actual conflicts ───────────────
+    # ── Step 4: Finalize ─────────────────────────────────────────────────────
     if conflict_roles:
-        logger.info(f"  {team_name}: {len(conflict_roles)} conflict(s) — manager arbitrates")
-        conflict_summary = "\n".join(
-            f"  {ROLES[r]['title']}: {claims[r][-120:]}" for r in conflict_roles
-        )
-        final_board = "\n".join(f"  ASSIGNED {ROLES[r]['title']}: {items[assignments[r]]}"
-                                 for r in worker_roles)
-        rolling_ctxs[manager_role].add("blackboard arbitration",
-                                        f"Resolved conflicts:\n{conflict_summary}\n\nFinal board:\n{final_board}")
+        logger.info(f"  {team_name}: {len(conflict_roles)} worker(s) had no valid claims — assigning pool items")
 
     logger.info(f"\n  {team_name} blackboard assignments:")
-    for role_key, iid in assignments.items():
-        logger.info(f"    {role_key} → {items.get(iid, iid)[:60]}")
+    final_output: Dict[str, str] = {}
+    for role_key, iids in assignments.items():
+        if iids:
+            joined_desc = "\n\n".join(f"Task {i}: {items[i]}" for i in iids)
+            final_output[role_key] = joined_desc
+            logger.info(f"    {role_key} → {len(iids)} tasks: {', '.join(iids)}")
+        else:
+            final_output[role_key] = "Assist the team with existing files."
+            logger.info(f"    {role_key} → Assist and Review")
 
-    for role_key in worker_roles:
-        rolling_ctxs[role_key].add("blackboard claim", claims[role_key])
+    pool_items = {iid: desc for iid, desc in items.items() if iid not in claimed}
+    if pool_items:
+        logger.info(f"  {team_name}: {len(pool_items)} items left in the general pool.")
 
-    return {role_key: items.get(iid, iid) for role_key, iid in assignments.items()}
+    return final_output, pool_items
 
 
 # ── Team execution ────────────────────────────────────────────────────────────
@@ -2763,7 +2696,7 @@ def run_team(
     logger.info(f"\n{'─'*55}\nTEAM: {team_name.upper()}\n{'─'*55}")
 
     # ── Team planning: manager + workers decide who does what ─────────────
-    worker_tasks = run_team_planning(
+    worker_tasks, _ = run_team_planning(
         team_name, manager_role, worker_roles, task, rolling_ctxs, health_states
     )
 
@@ -2889,16 +2822,87 @@ def run_team(
         manager_feedback = manager_review
         round_num += 1
 
+    # ── Integration pass (Engineering team only) ─────────────────────────
+    # Manager reads the actual written files, boots the app, patches broken glue.
+    if team_name == "Engineering":
+        logger.info(f"\n{'─'*55}\n{team_name} INTEGRATION PASS — manager fixing glue code\n{'─'*55}")
+        sprint_files = get_sprint_files()
+
+        # Find existing files that import from or are imported by sprint files
+        # so the manager knows what else may be broken by the new changes
+        affected_files: set = set()
+        code_dir = _get_code_dir()
+        sprint_stems = {Path(f).stem for f in sprint_files}  # e.g. {"auth", "models"}
+        all_code_files = list(code_dir.rglob("*.py")) + list(code_dir.rglob("*.ts")) + \
+                         list(code_dir.rglob("*.tsx")) + list(code_dir.rglob("*.js"))
+        for existing in all_code_files:
+            rel = existing.relative_to(code_dir).as_posix()
+            if rel in sprint_files:
+                continue   # already in new files list
+            try:
+                src = existing.read_text(encoding="utf-8", errors="ignore")
+                if any(stem in src for stem in sprint_stems):
+                    affected_files.add(rel)
+            except Exception:
+                pass
+
+        files_list = "\n".join(f"  - {f}" for f in sprint_files) if sprint_files else "  (none recorded)"
+        affected_list = "\n".join(f"  - {f}" for f in sorted(affected_files)) if affected_files else "  (none)"
+
+        integration_output, integration_tool_results, _ = _run_with_tools(
+            f"You are the {ROLES[manager_role]['title']}.\n\n"
+            f"TASK:\n{task}\n\n"
+            f"Your team just finished {round_num} round(s) of development. "
+            f"Your job now is INTEGRATION — make the codebase actually run as one app.\n\n"
+            f"NEW FILES (written this sprint):\n{files_list}\n\n"
+            f"AFFECTED FILES (existing files that import from the new files — may be broken):\n{affected_list}\n\n"
+            f"STEP 1 — Understand the codebase\n"
+            f"  list_files() to see everything written.\n"
+            f"  read_file() the entry point and any config files (requirements.txt, package.json,\n"
+            f"  docker-compose.yml, Makefile, etc.) to understand exactly how this app is started.\n"
+            f"  Determine: what is the boot command? what port does it run on? what is the health endpoint?\n\n"
+            f"STEP 2 — Audit and fix\n"
+            f"  read_file() every file in the NEW FILES and AFFECTED FILES lists.\n"
+            f"  search_codebase() for import mismatches, wrong function names, missing symbols.\n"
+            f"  write_code_file() to patch anything broken.\n"
+            f"  Check that all required scaffold files exist (e.g. for React: public/index.html,\n"
+            f"  src/index.js — write them if missing).\n"
+            f"  validate_python() on every Python file you touch.\n\n"
+            f"STEP 3 — THIS STEP IS MANDATORY. Boot the app and verify it responds.\n"
+            f"  Using what you learned in Step 1:\n"
+            f"    start_service('app', '<the actual boot command you found>')\n"
+            f"    http_request('GET', '<the actual health or root URL you found>')\n"
+            f"    run_shell('pytest') or run_shell('npm test') if test files exist\n"
+            f"    stop_service('app')\n"
+            f"  Do NOT use placeholder commands. Use the real boot command from the codebase.\n"
+            f"  Do NOT declare INTEGRATION: DONE without showing actual HTTP response output.\n"
+            f"  If the boot fails, read the error, fix the file, and retry.\n\n"
+            f"Fix everything. Do not summarize problems — solve them.\n"
+            f"End with: INTEGRATION: DONE (paste the actual HTTP response) "
+            f"or INTEGRATION: PARTIAL (list exactly what failed and why).",
+            manager_role,
+            label=f"{manager_role}_integration",
+        )
+        rolling_ctxs[manager_role].add(task, integration_output)
+        logger.info(f"[{manager_role}] integration pass: {integration_output[:150]}...")
+    else:
+        integration_output = ""
+
     # ── Final manager synthesis ───────────────────────────────────────────
     summaries = "\n\n".join(
         f"=== {current[r].title} (stance={current[r].stance.upper()}, F={current[r].F_health:.3f}"
         f"{'⚠' if current[r].anomaly else ''}) ===\n{current[r].output[:900]}"
         for r in worker_roles
     )
+    integration_section = (
+        f"\n\nINTEGRATION PASS OUTPUT:\n{integration_output[:800]}"
+        if integration_output else ""
+    )
     synthesis = llm_call(
         f"You are the {ROLES[manager_role]['title']}.\n\n"
         f"TASK: {task}\n\n"
-        f"TEAM OUTPUTS (after {round_num} round(s)):\n{summaries}\n\n"
+        f"TEAM OUTPUTS (after {round_num} round(s)):\n{summaries}"
+        f"{integration_section}\n\n"
         f"Consensus stance: {consensus.upper()} — {STANCE_DESC[consensus]}\n"
         f"H_swarm={H_swarm:.3f} "
         f"({'stable' if H_swarm < stable_thr else 'elevated — flag risky decisions'})\n\n"
@@ -3112,63 +3116,108 @@ def run_executive_meeting(
 def _generate_contracts(
     task: str,
     dev_assignments: Dict[str, str],
+    pool: Dict[str, str] = None,
 ) -> None:
     """
     After sprint planning assigns work items, ask the manager to generate
     typed interface contracts that all agents must follow.
-    This eliminates the integration gap where each agent invents its own signatures.
     """
     logger.info(f"\n{'─'*55}\nCONTRACT GENERATION: Engineering\n{'─'*55}")
 
     assignment_list = "\n".join(
         f"  {dev}: {desc}" for dev, desc in dev_assignments.items()
     )
+    if pool:
+        pool_list = "\n".join(f"  [Pool] {iid}: {desc}" for iid, desc in pool.items())
+        assignment_list += f"\n\nUNASSIGNED BACKLOG POOL:\n{pool_list}"
 
-    contract_prompt = (
-        f"You are the Engineering Manager.\n\n"
-        f"PROJECT:\n{task[:600]}\n\n"
-        f"DEV ASSIGNMENTS:\n{assignment_list}\n\n"
-        f"Generate typed interface contracts so all developers use identical "
-        f"signatures, import paths, and data models. This prevents integration failures.\n\n"
-        f"Output EXACTLY this JSON structure (no markdown fences, just raw JSON):\n"
-        f'{{\n'
-        f'  "build_command": "python server.py",\n'
-        f'  "build_file": "requirements.txt",\n'
-        f'  "dependencies": ["sqlite3"],\n'
-        f'  "init_order": ["database", "routes", "server"],\n'
-        f'  "models": [\n'
-        f'    {{"name": "ModelName", "fields": "field1: type, field2: type", "file": "models.py"}}\n'
-        f'  ],\n'
-        f'  "endpoints": [\n'
-        f'    {{"method": "POST", "path": "/items", "request_model": "ItemCreate", "response_model": "Item"}}\n'
-        f'  ],\n'
-        f'  "files": [\n'
-        f'    {{"file": "models.py", "owner": "dev_1", "imports_from": [], '
-        f'"exports": ["Item"], "depends_on": [], "description": "data models"}},\n'
-        f'    {{"file": "routes.py", "owner": "dev_2", "imports_from": ["models.py"], '
-        f'"exports": ["create_item"], "depends_on": ["models.py"], "description": "API routes"}}\n'
-        f'  ],\n'
-        f'  "entry_point": "server.py",\n'
-        f'  "entry_imports": ["routes", "database"]\n'
-        f'}}\n\n'
-        f"RULES:\n"
-        f"- Every dev must own at least one file\n"
-        f"- Shared models/types go in ONE file that everyone imports from\n"
-        f"- The entry point file is SYSTEM-MANAGED — set its owner to 'system'\n"
-        f"  (The entry point will be auto-generated to wire all modules together)\n"
-        f"- NO two devs should own the same file — split into separate modules instead\n"
-        f"- Include ALL files needed for a working application\n"
-        f"- 'depends_on' MUST list files that must be complete before this file can be written.\n"
-        f"  Files with no dependencies have 'depends_on': []. The entry point depends on ALL other files.\n"
-        f"  Test files depend on the files they test.\n"
-        f"- 'exports' MUST list the exact symbol names other files need to import from this file\n"
-        f"- 'build_command' is the shell command to run the app or run tests (e.g. 'python server.py',\n"
-        f"  'cargo build', 'npm run build', 'go build ./...')\n"
-        f"- 'build_file' is the config file that lists dependencies (e.g. 'requirements.txt', 'Cargo.toml',\n"
-        f"  'package.json', 'go.mod'). Leave empty if not applicable.\n"
-        f"- 'dependencies' lists external libraries needed (e.g. ['fastapi', 'sqlalchemy'])\n"
-        f"- 'init_order' lists modules in the order they should be initialized (if ordering matters)\n"
-    )
+    assignment_list = "\n".join(f"  {d}: owns {a}" for d, a in dev_assignments.items())
+    
+    # Inject Architect's intended structure if available
+    struct_ctx = ""
+    struct_path = OUTPUT_DIR / "design" / "project_structure.md"
+    if struct_path.exists():
+        struct_ctx = f"\n\nARCHITECT'S PROJECT STRUCTURE (MANDATORY FILE PATHS):\n{struct_path.read_text(encoding='utf-8')[:3000]}"
+
+    if AGILE_MODE:
+        contract_prompt = (
+            f"You are the Engineering Manager.\n\n"
+            f"PROJECT:\n{task[:600]}\n\n"
+            f"DEV ASSIGNMENTS:\n{assignment_list}\n"
+            f"{struct_ctx}\n\n"
+            f"Currently we are in AGILE MODE. Do NOT generate rigid typed signatures or exact data models. "
+            f"Instead, generate a Collaborative Task List that maps files to owners and gives high-level feature descriptions. "
+            f"The developers will use broadcasting and messaging to agree on the exact interfaces as they build them.\n\n"
+            f"Output EXACTLY this JSON structure (no markdown fences, just raw JSON):\n"
+            f'{{\n'
+            f'  "build_command": "python server.py",\n'
+            f'  "build_file": "requirements.txt",\n'
+            f'  "dependencies": ["sqlite3"],\n'
+            f'  "init_order": [],\n'
+            f'  "models": [],\n'
+            f'  "endpoints": [],\n'
+            f'  "files": [\n'
+            f'    {{"file": "models.py", "owner": "dev_1", "imports_from": [], '
+            f'"exports": [], "depends_on": [], "description": "Collaborative data models — define as needed and broadcast changes"}},\n'
+            f'    {{"file": "routes.py", "owner": "dev_2", "imports_from": ["models.py"], '
+            f'"exports": [], "depends_on": ["models.py"], "description": "API routes — negotiate signatures with frontend"}}\n'
+            f'  ],\n'
+            f'  "entry_point": "server.py",\n'
+            f'  "entry_imports": []\n'
+            f'}}\n\n'
+            f"RULES:\n"
+            f"- Every dev must own at least one file\n"
+            f"- Use 'files' to define ownership and 'description' to give the collaborative goal\n"
+            f"- The entry point file is SYSTEM-MANAGED — set its owner to 'system'\n"
+            f"- 'depends_on' should only be used for high-level file ordering\n"
+        )
+    else:
+        contract_prompt = (
+            f"You are the Engineering Manager.\n\n"
+            f"PROJECT:\n{task[:600]}\n\n"
+            f"DEV ASSIGNMENTS:\n{assignment_list}\n"
+            f"{struct_ctx}\n\n"
+            f"Generate typed interface contracts so all developers use identical "
+            f"signatures, import paths, and data models. This prevents integration failures.\n\n"
+            f"Output EXACTLY this JSON structure (no markdown fences, just raw JSON):\n"
+            f'{{\n'
+            f'  "build_command": "python server.py",\n'
+            f'  "build_file": "requirements.txt",\n'
+            f'  "dependencies": ["sqlite3"],\n'
+            f'  "init_order": ["database", "routes", "server"],\n'
+            f'  "models": [\n'
+            f'    {{"name": "ModelName", "fields": "field1: type, field2: type", "file": "models.py"}}\n'
+            f'  ],\n'
+            f'  "endpoints": [\n'
+            f'    {{"method": "POST", "path": "/items", "request_model": "ItemCreate", "response_model": "Item"}}\n'
+            f'  ],\n'
+            f'  "files": [\n'
+            f'    {{"file": "models.py", "owner": "dev_1", "imports_from": [], '
+            f'"exports": ["Item"], "depends_on": [], "description": "data models"}},\n'
+            f'    {{"file": "routes.py", "owner": "dev_2", "imports_from": ["models.py"], '
+            f'"exports": ["create_item"], "depends_on": ["models.py"], "description": "API routes"}}\n'
+            f'  ],\n'
+            f'  "entry_point": "server.py",\n'
+            f'  "entry_imports": ["routes", "database"]\n'
+            f'}}\n\n'
+            f"RULES:\n"
+            f"- Every dev must own at least one file\n"
+            f"- Shared models/types go in ONE file that everyone imports from\n"
+            f"- The entry point file is SYSTEM-MANAGED — set its owner to 'system'\n"
+            f"  (The entry point will be auto-generated to wire all modules together)\n"
+            f"- NO two devs should own the same file — split into separate modules instead\n"
+            f"- Include ALL files needed for a working application\n"
+            f"- 'depends_on' MUST list files that must be complete before this file can be written.\n"
+            f"  Files with no dependencies have 'depends_on': []. The entry point depends on ALL other files.\n"
+            f"  Test files depend on the files they test.\n"
+            f"- 'exports' MUST list the exact symbol names other files need to import from this file\n"
+            f"- 'build_command' is the shell command to run the app or run tests (e.g. 'python server.py',\n"
+            f"  'cargo build', 'npm run build', 'go build ./...')\n"
+            f"- 'build_file' is the config file that lists dependencies (e.g. 'requirements.txt', 'Cargo.toml',\n"
+            f"  'package.json', 'go.mod'). Leave empty if not applicable.\n"
+            f"- 'dependencies' lists external libraries needed (e.g. ['fastapi', 'sqlalchemy'])\n"
+            f"- 'init_order' lists modules in the order they should be initialized (if ordering matters)\n"
+        )
 
     contract_output = llm_call(
         contract_prompt,
@@ -3199,19 +3248,19 @@ def run_sprint_planning(
     task: str,
     health_states: Dict[str, ActiveInferenceState],
     rolling_ctxs: Dict[str, RollingContext],
-) -> Dict[str, str]:
+) -> Tuple[Dict[str, str], Dict[str, str]]:
     """
     Engineering sprint planning: assign work items via blackboard,
     then generate typed interface contracts for all agents.
     """
-    dev_assignments = run_team_planning(
+    dev_assignments, pool = run_team_planning(
         "Engineering", "eng_manager", ENG_WORKERS, task, rolling_ctxs, health_states
     )
 
     # Generate typed contracts so agents share exact signatures
-    _generate_contracts(task, dev_assignments)
+    _generate_contracts(task, dev_assignments, pool)
 
-    return dev_assignments
+    return dev_assignments, pool
 
 
 def run_ceo_summary(
@@ -3261,6 +3310,10 @@ MAX_WALL_CLOCK      = 300   # seconds — hard timeout for entire engineering ph
 MAX_RETRIES_PER_TASK = 2
 _AGENT_POLL_INTERVAL = 2    # seconds between task queue polls when blocked
 
+# Phase constants for Two-Phase Sprints
+PHASE_IMPLEMENTATION = 1   # Coding individual files
+PHASE_INTEGRATION    = 2   # Wiring, Docker, Infrastructure, Final Integration
+
 
 @dataclass
 class EngTask:
@@ -3273,6 +3326,7 @@ class EngTask:
     status: str = "pending"       # pending | blocked | in_progress | completed | failed
     retries: int = 0
     primary_owner: Optional[str] = None  # dev originally assigned to this file
+    phase: int = PHASE_IMPLEMENTATION
 
 
 class EngTaskQueue:
@@ -3285,10 +3339,12 @@ class EngTaskQueue:
         self,
         registry: InterfaceContractRegistry,
         dev_assignments: Dict[str, str],
+        pool_tasks: Dict[str, str] = None,
     ):
         self._lock = threading.RLock()
         self.tasks: Dict[str, EngTask] = {}
         self._completed_tasks: set = set()
+        pool_tasks = pool_tasks or {}
 
         file_to_task_id = {}
         for fname, fc in registry.file_map.items():
@@ -3297,39 +3353,72 @@ class EngTaskQueue:
             tid = f"task_{fname.replace('/', '_').replace('.', '_')}"
             file_to_task_id[fname] = tid
 
+        # Phase 1: Implementation (Drafting)
         for fname, fc in registry.file_map.items():
             if fname == registry.entry_point:
                 continue
-            tid = file_to_task_id[fname]
+            tid = f"task_{fname.replace('/', '_').replace('.', '_')}_p1"
             dep_ids = [
-                file_to_task_id[d] for d in fc.depends_on
+                f"task_{d.replace('/', '_').replace('.', '_')}_p1" for d in fc.depends_on
                 if d in file_to_task_id
             ]
-            desc = fc.description or f"Implement {fname}"
+            desc = f"PHASE 1: Implementation and local drafting for {fname}"
             for dk, assignment in dev_assignments.items():
                 if fname in assignment:
-                    desc = assignment
+                    desc = f"PHASE 1: {assignment}"
                     break
 
-            status = "blocked" if dep_ids else "pending"
             self.tasks[tid] = EngTask(
                 id=tid, file=fname, description=desc,
-                depends_on=dep_ids, status=status,
+                depends_on=dep_ids, status="pending" if not dep_ids else "blocked",
                 primary_owner=fc.owner if fc.owner != "system" else None,
+                phase=PHASE_IMPLEMENTATION
+            )
+
+        # Phase 2: Collaborative Integration (Wiring Specialist)
+        # These tasks depend on ALL Phase 1 tasks being completed and merged.
+        p1_task_ids = [t.id for t in self.tasks.values() if t.phase == PHASE_IMPLEMENTATION]
+        
+        for fname, fc in registry.file_map.items():
+            if fname == registry.entry_point:
+                continue
+            tid = f"task_{fname.replace('/', '_').replace('.', '_')}_p2"
+            desc = f"PHASE 2: Collaborative Integration and Wiring for {fname}. " \
+                   f"Fix imports and ensure it works with the merged codebase."
+            
+            self.tasks[tid] = EngTask(
+                id=tid, file=fname, description=desc,
+                depends_on=p1_task_ids, status="blocked",
+                primary_owner=fc.owner if fc.owner != "system" else None,
+                phase=PHASE_INTEGRATION
             )
 
         integ_tid = "task_integration_test"
-        integ_deps = list(file_to_task_id.values())
         self.tasks[integ_tid] = EngTask(
             id=integ_tid, file="__integration__",
-            description="Final integration: run build command, fix broken imports, run tests",
-            depends_on=integ_deps,
-            status="blocked" if integ_deps else "pending",
+            description="Final integration: final build check and smoke tests",
+            depends_on=list(self.tasks.keys()),
+            status="blocked", # Always last
+            phase=PHASE_INTEGRATION
         )
+
+        # Any files NOT covered by dev assignments (pool tasks)
+        for iid, pool_desc in pool_tasks.items():
+            # Try to extract file if it's there
+            file_match = re.search(r"\[([^\]]+)\]", pool_desc)
+            if file_match:
+                p_files = [f.strip() for f in file_match.group(1).split(",") if f.strip()]
+                for pf in p_files:
+                    if pf in file_to_task_id:
+                        # Existing file is now part of an unassigned Pool Task
+                        tid = file_to_task_id[pf] + "_p1"
+                        if tid in self.tasks:
+                            self.tasks[tid].description = f"POOL TASK: {pool_desc}"
+                            self.tasks[tid].primary_owner = None # No one owns it
 
         n_pending = sum(1 for t in self.tasks.values() if t.status == "pending")
         n_blocked = sum(1 for t in self.tasks.values() if t.status == "blocked")
-        logger.info(f"[TaskQueue] initialized {len(self.tasks)} tasks ({n_pending} pending, {n_blocked} blocked)")
+        logger.info(f"[TaskQueue] initialized {len(self.tasks)} tasks ({n_pending} pending, {n_blocked} blocked) in two phases.")
 
     def claim_next(self, dev_key: str) -> Optional[EngTask]:
         """Claim the next available pending task. Prefers tasks assigned to this dev."""
@@ -3378,11 +3467,24 @@ class EngTaskQueue:
 
     def _unblock_dependents(self) -> None:
         """Move blocked tasks to pending if all their dependencies are satisfied."""
+        phase_1_all_done = all(
+            t.status in ("completed", "failed")
+            for t in self.tasks.values() if t.phase == PHASE_IMPLEMENTATION
+        )
+
         for t in self.tasks.values():
             if t.status == "blocked":
-                if all(d in self._completed_tasks for d in t.depends_on):
+                # Regular dependencies check
+                deps_met = all(d in self._completed_tasks for d in t.depends_on)
+                
+                # Phase 2 gate: Only release if Phase 1 is fully completed
+                phase_gate_ok = True
+                if t.phase == PHASE_INTEGRATION:
+                    phase_gate_ok = phase_1_all_done
+
+                if deps_met and phase_gate_ok:
                     t.status = "pending"
-                    logger.info(f"[TaskQueue] unblocked task '{t.id}' ({t.file})")
+                    logger.info(f"[TaskQueue] unblocked task '{t.id}' ({t.file}) [PHASE {t.phase}]")
 
     def all_done(self) -> bool:
         with self._lock:
@@ -3422,6 +3524,16 @@ class EngTaskQueue:
                     t.status = "failed"
             self._completed_tasks.update(t.id for t in self.tasks.values() if t.status == "failed")
 
+    def cancel_all(self) -> None:
+        """Immediately cancel all pending/blocked/in-progress tasks.
+        Used by the token budget kill-switch to stop the swarm cleanly."""
+        with self._lock:
+            for t in self.tasks.values():
+                if t.status not in ("completed", "failed"):
+                    t.status = "failed"
+            self._completed_tasks.update(t.id for t in self.tasks.values())
+        logger.critical("[TaskQueue] ALL TASKS CANCELLED — token budget kill-switch triggered")
+
 
 def emit_skeleton(dev_assignments: Dict[str, str], sprint_num: int = 1) -> None:
     """
@@ -3441,21 +3553,6 @@ def emit_skeleton(dev_assignments: Dict[str, str], sprint_num: int = 1) -> None:
     dashboard = get_dashboard()
     files_written = 0
 
-    # ── Register entry point as shared file (system-managed) ─────────────────
-    if registry.entry_point:
-        ep_sections = [
-            {"id": "header", "owner": "system", "order": 0,
-             "content": "# System-managed entry point — auto-generated by enforcer"},
-        ]
-        order = 1
-        for imp in registry.entry_imports:
-            ep_sections.append({
-                "id": f"import_{imp}", "owner": "system", "order": order,
-                "content": "",
-            })
-            order += 1
-        dashboard.register_shared_file(registry.entry_point, ep_sections)
-        logger.info(f"  [skeleton] registered entry point '{registry.entry_point}' as shared (system-managed)")
 
     # ── Write shared model stubs ─────────────────────────────────────────────
     model_files_seen: set = set()
@@ -3517,14 +3614,6 @@ def emit_skeleton(dev_assignments: Dict[str, str], sprint_num: int = 1) -> None:
         files_written += 1
         logger.info(f"  [skeleton] wrote stub: {fname} (owner: {fc.owner})")
 
-        if fc.owner and fc.owner != "system":
-            dashboard.claim(
-                domain=f"skeleton_{fname.replace('.', '_').replace('/', '_')}",
-                owner=fc.owner,
-                description=fc.description[:100],
-                file_patterns=fname,
-                sprint=sprint_num,
-            )
 
     logger.info(f"  [skeleton] {files_written} stub files written")
 
@@ -3557,15 +3646,6 @@ def enforce_integration() -> str:
                 init.write_text("", encoding="utf-8")
                 fixes.append(f"Created {init.relative_to(code_dir)}")
 
-    # 2. Assemble shared files from sections
-    dashboard = get_dashboard()
-    for filename in list(dashboard.sections.keys()):
-        assembled = dashboard.assemble_shared_file(filename)
-        if assembled.strip():
-            path = code_dir / filename
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(assembled, encoding="utf-8")
-            fixes.append(f"Assembled shared file '{filename}' from sections")
 
     # 3. LLM-generate entry point
     if registry.entry_point and registry.file_map:
@@ -3830,6 +3910,11 @@ def _generate_entry_point_via_llm(
         f"  - The app must be runnable with: {registry.build_command or 'appropriate command'}\n"
         f"  - Output ONLY the file content, no markdown fences\n"
         f"  - Make it production-ready with error handling\n"
+        "\nINTEGRATION RULES:\n"
+        "  - The entry point will be AUTO-GENERATED — do NOT create it yourself\n"
+        "  - Your file MUST export exactly the symbols listed in your contract's 'exports'\n"
+        "  - Import from files listed in your contract's 'imports_from'\n"
+        "  - Do NOT invent new file names — use the exact paths from the contract\n"
     )
     try:
         source = llm_call(prompt, label="generate_entry_point")
@@ -3865,6 +3950,8 @@ def _emit_build_scaffold_via_llm(
         f"PROJECT FILES: {existing_files[:50]}\n"
         f"DEPENDENCIES: {registry.dependencies}\n"
         f"BUILD COMMAND: {registry.build_command}\n\n"
+        f"  1. call check_dashboard() — check for messages from teammates\n"
+        f"  2. call check_messages() — read every message before finalizing\n\n"
         f"Output ONLY the file content, no markdown fences.\n"
     )
     try:
@@ -3899,8 +3986,9 @@ def run_engineering_team(
     """
     n = len(ENG_WORKERS)
     logger.info(f"\n{'─'*55}\nTEAM: ENGINEERING ({n} devs, async mode)\n{'─'*55}")
+    clear_sprint_files()   # reset file tracking for this sprint
 
-    dev_assignments = run_sprint_planning(task, health_states, rolling_ctxs)
+    dev_assignments, pool = run_sprint_planning(task, health_states, rolling_ctxs)
     emit_skeleton(dev_assignments, sprint_num)
 
     code_dir = OUTPUT_DIR / "code"
@@ -3909,7 +3997,7 @@ def run_engineering_team(
     _skeleton_wt.init_repo()
     logger.info("[Engineering] git repo initialized with skeleton commit")
 
-    task_queue = EngTaskQueue(get_contracts(), dev_assignments)
+    task_queue = EngTaskQueue(get_contracts(), dev_assignments, pool)
     built: Dict[str, WorkerOutput] = {}
     _tasks_completed_by: Dict[str, int] = {d: 0 for d in ENG_WORKERS}
     _merge_lock = threading.Lock()
@@ -3945,25 +4033,30 @@ def run_engineering_team(
         except Exception:
             pass
 
-        shared_file_note = ""
-        shared_files = get_dashboard().sections
-        if shared_files:
-            sf_list = ", ".join(shared_files.keys())
-            shared_file_note = (
-                f"\nSHARED FILES (use write_file_section, NOT write_code_file): {sf_list}\n"
-                f"The entry point is system-managed — do NOT write to it directly.\n"
+        if AGILE_MODE:
+            integration_rules = (
+                "\nAGILE COLLABORATION RULES (Targeted Communication):\n"
+                "  - NO TRIVIAL BROADCASTS: Do NOT broadcast small progress updates.\n"
+                "  - TARGETED MESSAGES: If you need something from a specific teammate, use message_teammate().\n"
+                "  - BREAKING BROADCASTS: ONLY use broadcast_message() for team-wide structural changes\n"
+                "    (e.g. changing an API port, a shared data model, or a global config constant).\n"
+                "  - Check your dashboard and messages EVERY TURN to see what's actually relevant to you.\n"
+                "  - Use search_codebase() to see your teammates' work; avoid asking them for status updates.\n"
             )
-        shared_file_note += (
-            "\nINTEGRATION RULES:\n"
-            "  - The entry point will be AUTO-GENERATED — do NOT create it yourself\n"
-            "  - Your file MUST export exactly the symbols listed in your contract's 'exports'\n"
-            "  - Import from files listed in your contract's 'imports_from'\n"
-            "  - Do NOT invent new file names — use the exact paths from the contract\n"
-        )
+        else:
+            integration_rules = (
+                "\nINTEGRATION RULES:\n"
+                "  - The entry point will be AUTO-GENERATED — do NOT create it yourself\n"
+                "  - Your file MUST export exactly the symbols listed in your contract's 'exports'\n"
+                "  - Import from files listed in your contract's 'imports_from'\n"
+                "  - Do NOT invent new file names — use the exact paths from the contract\n"
+            )
 
-        is_integration = (eng_task.file == "__integration__")
-        if is_integration:
-            build_cmd = get_contracts().build_command
+        is_integration_specialist = (eng_task.file == "__integration__")
+        is_phase_2 = (eng_task.phase == PHASE_INTEGRATION)
+        build_cmd = get_contracts().build_command
+
+        if is_integration_specialist:
             build_errors = ""
             if build_cmd:
                 try:
@@ -3972,37 +4065,45 @@ def run_engineering_team(
                         capture_output=True, text=True, timeout=30,
                     )
                     if result.returncode != 0:
-                        build_errors = f"\nBUILD ERRORS (from running '{build_cmd}'):\n{result.stdout[-2000:]}\n{result.stderr[-2000:]}\n"
+                        build_errors = f"\nPHASE 1 BUILD ERRORS (from running '{build_cmd}'):\n{result.stdout[-2000:]}\n{result.stderr[-2000:]}\n"
                 except Exception as e:
-                    build_errors = f"\nBUILD FAILED: {e}\n"
+                    build_errors = f"\nPHASE 1 BUILD FAILED: {e}\n"
 
             task_instruction = (
-                f"INTEGRATION TASK — all implementation tasks are complete.\n"
+                f"FINAL INTEGRATION TEST — all components are merged.\n"
                 f"{build_errors}"
-                f"\nMANDATORY FIRST STEPS:\n"
-                f"  1. call check_messages() — address any unresolved teammate concerns\n"
-                f"  2. call check_dashboard() — verify file ownership\n\n"
-                f"YOUR TASKS:\n"
-                f"  3. Fix every build error and broken import shown above\n"
-                f"  4. Make sure all files import from each other correctly per the contracts\n"
-                f"  5. Run the app with: {build_cmd or 'the appropriate command'} and confirm it works\n"
-                f"  6. Run any existing tests\n"
-                f"{shared_file_note}"
+                f"\nYOUR MISSION: Run '{build_cmd}' and perform a final smoke test.\n"
+                f"  1. If any final issues persist, FIX them using the run_shell tool.\n"
+                f"  2. Do NOT finish this task until '{build_cmd}' returns a success code.\n\n"
+                f"{integration_rules}"
+            )
+        elif is_phase_2:
+             task_instruction = (
+                f"PHASE 2: COLLABORATIVE INTEGRATION for file '{eng_task.file}'\n"
+                f"Description: {eng_task.description}\n\n"
+                f"YOUR MISSION: Now that ALL code is merged, fix the wiring for YOUR file ONLY.\n"
+                f"  1. Use search_codebase() to see how your teammates implemented their parts.\n"
+                f"  2. Identify if YOUR file ('{eng_task.file}') uses the correct filenames/symbols from others.\n"
+                f"  3. MANDATORY: Run '{build_cmd}' herself using the run_shell tool.\n"
+                f"  4. READ the error log carefully. THE 'STAY IN YOUR LANE' RULE:\n"
+                f"     - If the error is in YOUR FILE ('{eng_task.file}'), fix it and retry.\n"
+                f"     - If the error is in a DIFFERENT file, DO NOT touch it. Just exit.\n"
+                f"  5. Do NOT finish until YOUR file's role in the build is confirmed.\n\n"
+                f"{integration_rules}"
             )
         else:
             task_instruction = (
-                f"YOUR TASK: Implement file '{eng_task.file}'\n"
+                f"PHASE 1: IMPLEMENTATION for file '{eng_task.file}'\n"
                 f"Description: {eng_task.description}\n\n"
-                f"MANDATORY FIRST STEPS (do these before writing ANY code):\n"
-                f"  1. call check_dashboard() — see who owns what files\n"
-                f"  2. call claim_domain() — register your files BEFORE writing\n"
-                f"  3. call check_messages() — read any messages from teammates\n"
-                f"  4. If your file depends on another file, call read_file() on it first\n\n"
-                f"MANDATORY AFTER writing code:\n"
-                f"  5. If you changed any function signature, data model, or export that another dev\n"
-                f"     imports from you, call message_teammate() to notify them of the change\n"
-                f"{shared_file_note}"
+                f"  1. call check_dashboard() and check_messages() before starting.\n"
+                f"  2. Follow the project goal. You have creative freedom in Agile Mode.\n\n"
+                f"  --- INTEGRATION CHECK ---\n"
+                f"  3. Before completing, try running '{build_cmd}' herself using run_shell.\n"
+                f"  4. If it fails because of something obvious, fix it. If it's a team-wide issue, broadcast it.\n"
+                f"  5. Use broadcast_message() for any shared interface changes.\n"
+                f"{integration_rules}"
             )
+
 
         team_files = _read_team_files()
         team_files_section = (
@@ -4118,6 +4219,12 @@ def run_engineering_team(
                 task_queue.complete(eng_task.id)
                 _tasks_completed_by[dev_key] += 1
 
+                # Incremental RAG Update: Index the newly merged file so others can find it
+                try:
+                    get_rag().update()
+                except Exception as e:
+                    logger.warning(f"[{dev_key}] incremental RAG update failed: {e}")
+
             except Exception as exc:
                 logger.error(f"[{dev_key}] task {eng_task.id} crashed: {exc}", exc_info=True)
                 task_queue.fail(eng_task.id)
@@ -4143,8 +4250,27 @@ def run_engineering_team(
         """Periodic progress check — logs status and intervenes if swarm health is elevated."""
         import time as _time
         check_interval = 15
+        _phase_1_synced = False
         while task_queue.has_work_available():
             _time.sleep(check_interval)
+            
+            # ── Sync Step (Between Phase 1 and Phase 2) ──────────────────
+            phase_1_done = all(
+                t.status in ("completed", "failed")
+                for t in task_queue.tasks.values() if t.phase == PHASE_IMPLEMENTATION
+            )
+            if phase_1_done and not _phase_1_synced:
+                logger.info("\n[Manager Monitor] PHASE 1 COMPLETE — Synchronizing codebase for Phase 2 Integration...")
+                try:
+                    # Re-index the RAG so Integrators can 'see' all Phase 1 code
+                    get_rag().update()
+                    # Release the Integration tasks
+                    task_queue._unblock_dependents()
+                    _phase_1_synced = True
+                    logger.info("[Manager Monitor] codebase indexed. PHASE 2 (Integration) RELEASED.\n")
+                except Exception as e:
+                    logger.error(f"[Manager Monitor] Sync failed: {e}")
+
             if task_queue.all_done():
                 break
 
@@ -4165,12 +4291,31 @@ def run_engineering_team(
                     )
                     for ft in failed_tasks:
                         if ft.assigned_to:
-                            get_dashboard().send_message(
-                                "eng_manager", ft.assigned_to,
-                                f"Task '{ft.file}' failed. Check imports and dependencies. "
-                                f"Read the architecture spec before retrying.",
-                                sprint_num,
-                            )
+                            if AGILE_MODE:
+                                msg = (
+                                    f"Task '{ft.file}' failed. In AGILE MODE, you must negotiate interfaces. "
+                                    f"Have you broadcasted your changes? Did you read your teammates' files? "
+                                    f"Communicate more and retry."
+                                )
+                            else:
+                                msg = (
+                                    f"Task '{ft.file}' failed. Check imports and dependencies. "
+                                    f"Read the architecture spec before retrying."
+                                )
+                            get_dashboard().send_message("eng_manager", ft.assigned_to, msg, sprint_num)
+
+            # ── Check token budget kill-switch ───────────────────────────
+            with _token_lock:
+                current_tokens_used = _tokens_in + _tokens_out
+            if current_tokens_used > TOKEN_BUDGET:
+                logger.critical(f"[Manager Monitor] KILL SWITCH TRIPPED: {current_tokens_used:,} tokens > {TOKEN_BUDGET:,} budget")
+                task_queue.cancel_all()
+                break
+
+            # ── Process pending amendments ───────────────────────────────
+            amendment_broadcasts = _registry_process_amendments(sprint_num)
+            for msg in amendment_broadcasts:
+                get_dashboard().broadcast("eng_manager", msg, sprint_num, ENG_WORKERS)
 
     # ── Launch all agents + monitor ───────────────────────────────────────
 
@@ -4651,7 +4796,7 @@ def _run_sprint(
     )
 
 
-def run_company(brief: str) -> List[ProjectResult]:
+def run_company(brief: str, max_sprints: int = MAX_SPRINTS) -> List[ProjectResult]:
     """
     Run the full company pipeline as collaborative Scrum sprints.
 
@@ -4676,7 +4821,7 @@ def run_company(brief: str) -> List[ProjectResult]:
     sprint_results: List[ProjectResult] = []
     sprint_num     = 1
 
-    while sprint_num <= MAX_SPRINTS:
+    while sprint_num <= max_sprints:
         sprint_start = time.time()
         logger.info(f"\n{'█'*55}\nSPRINT {sprint_num}/{MAX_SPRINTS}\n{'█'*55}")
 
@@ -4859,15 +5004,22 @@ DEFAULT_BRIEF = (
 )
 
 if __name__ == "__main__":
-    brief = " ".join(sys.argv[1:]).strip() if len(sys.argv) > 1 else DEFAULT_BRIEF
+    import argparse
+    parser = argparse.ArgumentParser(description="Quantum Swarm Software Company")
+    parser.add_argument("brief", nargs="*", help="Project brief")
+    parser.add_argument("--sprints", type=int, default=5, help="Maximum number of sprints")
+    args = parser.parse_args()
 
-    print(f"\n{'═'*62}")
+    brief = " ".join(args.brief).strip() if args.brief else DEFAULT_BRIEF
+    MAX_SPRINTS = args.sprints
+
+    print(f"\n{'═' * 62}")
     print(f"  QUANTUM SWARM SOFTWARE COMPANY")
-    print(f"{'═'*62}")
+    print(f"{'═' * 62}")
     print(f"  Project : {brief}")
-    print(f"  Sprints : until CEO ships\n")
+    print(f"  Sprints : {MAX_SPRINTS}\n")
 
-    sprint_results = run_company(brief)
+    sprint_results = run_company(brief, max_sprints=MAX_SPRINTS)
     for i, result in enumerate(sprint_results, 1):
         print(f"\n── Sprint {i}/{len(sprint_results)} ──")
         print_dashboard(result)

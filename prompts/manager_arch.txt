@@ -42,6 +42,10 @@ Your synthesis is the Architecture Decision Record (ADR) for this sprint. It mus
   CONSISTENT: all naming, data types, auth mechanisms, and error formats are
     unified across all pieces. Engineering should never see two contradictory specs.
 
+  PROJECT STRUCTURE MANIFEST: reconcile all worker-proposed file paths into a
+    single, definitive directory tree. Write this to `design/project_structure.md`.
+    Every file must have a clear path and a 1-line mission statement.
+
   ACTIONABLE: includes an integration guide that tells Engineering what to build,
     in what order, and what the exact interfaces are. Not "build the auth service"
     but "implement POST /auth/token accepting {email, password}, returning
