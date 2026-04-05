@@ -1,0 +1,313 @@
+{
+  "tasks": {
+    "task_app_models_agent_types_ts_p1": {
+      "id": "task_app_models_agent_types_ts_p1",
+      "file": "app/models/agent_types.ts",
+      "description": "PHASE 1: Task item_1: Define global state types and agent configuration schema [app/models/agent_types.ts]\n\nTask item_3: Implement Agent state management service and mock API client [app/services/agent_service.ts]\n\nTask item_5: Build Agent card component with hover/status animations [app/components/AgentCard.tsx]",
+      "depends_on": [],
+      "assigned_to": "dev_1",
+      "status": "completed",
+      "retries": 0,
+      "primary_owner": "dev_1",
+      "phase": 1
+    },
+    "task_app_config_theme_ts_p1": {
+      "id": "task_app_config_theme_ts_p1",
+      "file": "app/config/theme.ts",
+      "description": "PHASE 1: Task item_2: Create shared theme configuration and Tailwind utility presets [app/config/theme.ts]",
+      "depends_on": [],
+      "assigned_to": "dev_3",
+      "status": "completed",
+      "retries": 0,
+      "primary_owner": "dev_5",
+      "phase": 1
+    },
+    "task_app_services_agent_service_ts_p1": {
+      "id": "task_app_services_agent_service_ts_p1",
+      "file": "app/services/agent_service.ts",
+      "description": "PHASE 1: Task item_1: Define global state types and agent configuration schema [app/models/agent_types.ts]\n\nTask item_3: Implement Agent state management service and mock API client [app/services/agent_service.ts]\n\nTask item_5: Build Agent card component with hover/status animations [app/components/AgentCard.tsx]",
+      "depends_on": [
+        "task_app_models_agent_types_ts_p1"
+      ],
+      "assigned_to": "dev_1",
+      "status": "completed",
+      "retries": 0,
+      "primary_owner": "dev_1",
+      "phase": 1
+    },
+    "task_app_utils_animations_ts_p1": {
+      "id": "task_app_utils_animations_ts_p1",
+      "file": "app/utils/animations.ts",
+      "description": "PHASE 1: Task item_7: Integrate Framer Motion for swarm entry/exit transitions [app/utils/animations.ts]",
+      "depends_on": [
+        "task_app_config_theme_ts_p1"
+      ],
+      "assigned_to": "dev_2",
+      "status": "completed",
+      "retries": 0,
+      "primary_owner": "dev_2",
+      "phase": 1
+    },
+    "task_app_components_Layout_tsx_p1": {
+      "id": "task_app_components_Layout_tsx_p1",
+      "file": "app/components/Layout.tsx",
+      "description": "PHASE 1: Task item_4: Create responsive layout wrapper and navigation shell [app/components/Layout.tsx]",
+      "depends_on": [
+        "task_app_config_theme_ts_p1"
+      ],
+      "assigned_to": "dev_7",
+      "status": "completed",
+      "retries": 0,
+      "primary_owner": "dev_6",
+      "phase": 1
+    },
+    "task_app_components_AgentCard_tsx_p1": {
+      "id": "task_app_components_AgentCard_tsx_p1",
+      "file": "app/components/AgentCard.tsx",
+      "description": "PHASE 1: Task item_1: Define global state types and agent configuration schema [app/models/agent_types.ts]\n\nTask item_3: Implement Agent state management service and mock API client [app/services/agent_service.ts]\n\nTask item_5: Build Agent card component with hover/status animations [app/components/AgentCard.tsx]",
+      "depends_on": [
+        "task_app_models_agent_types_ts_p1",
+        "task_app_utils_animations_ts_p1"
+      ],
+      "assigned_to": "dev_2",
+      "status": "completed",
+      "retries": 0,
+      "primary_owner": "dev_1",
+      "phase": 1
+    },
+    "task_app_components_Dashboard_tsx_p1": {
+      "id": "task_app_components_Dashboard_tsx_p1",
+      "file": "app/components/Dashboard.tsx",
+      "description": "PHASE 1: Task item_6: Implement Dashboard view with grid layout and swarm status visualization [app/components/Dashboard.tsx]",
+      "depends_on": [
+        "task_app_services_agent_service_ts_p1",
+        "task_app_components_AgentCard_tsx_p1"
+      ],
+      "assigned_to": "dev_6",
+      "status": "completed",
+      "retries": 0,
+      "primary_owner": "dev_4",
+      "phase": 1
+    },
+    "task_tests_integration_agent_flow_test_ts_p1": {
+      "id": "task_tests_integration_agent_flow_test_ts_p1",
+      "file": "tests/integration/agent_flow.test.ts",
+      "description": "PHASE 1: Task item_8: Create integration test suite for agent lifecycle states [tests/integration/agent_flow.test.ts]",
+      "depends_on": [
+        "task_app_services_agent_service_ts_p1"
+      ],
+      "assigned_to": "dev_1",
+      "status": "completed",
+      "retries": 0,
+      "primary_owner": "dev_3",
+      "phase": 1
+    },
+    "task_app_models_agent_types_ts_p2": {
+      "id": "task_app_models_agent_types_ts_p2",
+      "file": "app/models/agent_types.ts",
+      "description": "PHASE 2: Collaborative Integration and Wiring for app/models/agent_types.ts. Fix imports and ensure it works with the merged codebase.",
+      "depends_on": [
+        "task_app_models_agent_types_ts_p1",
+        "task_app_config_theme_ts_p1",
+        "task_app_services_agent_service_ts_p1",
+        "task_app_utils_animations_ts_p1",
+        "task_app_components_Layout_tsx_p1",
+        "task_app_components_AgentCard_tsx_p1",
+        "task_app_components_Dashboard_tsx_p1",
+        "task_tests_integration_agent_flow_test_ts_p1"
+      ],
+      "assigned_to": "dev_7",
+      "status": "failed",
+      "retries": 2,
+      "primary_owner": "dev_1",
+      "phase": 2
+    },
+    "task_app_config_theme_ts_p2": {
+      "id": "task_app_config_theme_ts_p2",
+      "file": "app/config/theme.ts",
+      "description": "PHASE 2: Collaborative Integration and Wiring for app/config/theme.ts. Fix imports and ensure it works with the merged codebase.",
+      "depends_on": [
+        "task_app_models_agent_types_ts_p1",
+        "task_app_config_theme_ts_p1",
+        "task_app_services_agent_service_ts_p1",
+        "task_app_utils_animations_ts_p1",
+        "task_app_components_Layout_tsx_p1",
+        "task_app_components_AgentCard_tsx_p1",
+        "task_app_components_Dashboard_tsx_p1",
+        "task_tests_integration_agent_flow_test_ts_p1"
+      ],
+      "assigned_to": "dev_5",
+      "status": "failed",
+      "retries": 2,
+      "primary_owner": "dev_5",
+      "phase": 2
+    },
+    "task_app_services_agent_service_ts_p2": {
+      "id": "task_app_services_agent_service_ts_p2",
+      "file": "app/services/agent_service.ts",
+      "description": "PHASE 2: Collaborative Integration and Wiring for app/services/agent_service.ts. Fix imports and ensure it works with the merged codebase.",
+      "depends_on": [
+        "task_app_models_agent_types_ts_p1",
+        "task_app_config_theme_ts_p1",
+        "task_app_services_agent_service_ts_p1",
+        "task_app_utils_animations_ts_p1",
+        "task_app_components_Layout_tsx_p1",
+        "task_app_components_AgentCard_tsx_p1",
+        "task_app_components_Dashboard_tsx_p1",
+        "task_tests_integration_agent_flow_test_ts_p1"
+      ],
+      "assigned_to": "dev_1",
+      "status": "failed",
+      "retries": 2,
+      "primary_owner": "dev_1",
+      "phase": 2
+    },
+    "task_app_utils_animations_ts_p2": {
+      "id": "task_app_utils_animations_ts_p2",
+      "file": "app/utils/animations.ts",
+      "description": "PHASE 2: Collaborative Integration and Wiring for app/utils/animations.ts. Fix imports and ensure it works with the merged codebase.",
+      "depends_on": [
+        "task_app_models_agent_types_ts_p1",
+        "task_app_config_theme_ts_p1",
+        "task_app_services_agent_service_ts_p1",
+        "task_app_utils_animations_ts_p1",
+        "task_app_components_Layout_tsx_p1",
+        "task_app_components_AgentCard_tsx_p1",
+        "task_app_components_Dashboard_tsx_p1",
+        "task_tests_integration_agent_flow_test_ts_p1"
+      ],
+      "assigned_to": "dev_8",
+      "status": "failed",
+      "retries": 2,
+      "primary_owner": "dev_2",
+      "phase": 2
+    },
+    "task_app_components_Layout_tsx_p2": {
+      "id": "task_app_components_Layout_tsx_p2",
+      "file": "app/components/Layout.tsx",
+      "description": "PHASE 2: Collaborative Integration and Wiring for app/components/Layout.tsx. Fix imports and ensure it works with the merged codebase.",
+      "depends_on": [
+        "task_app_models_agent_types_ts_p1",
+        "task_app_config_theme_ts_p1",
+        "task_app_services_agent_service_ts_p1",
+        "task_app_utils_animations_ts_p1",
+        "task_app_components_Layout_tsx_p1",
+        "task_app_components_AgentCard_tsx_p1",
+        "task_app_components_Dashboard_tsx_p1",
+        "task_tests_integration_agent_flow_test_ts_p1"
+      ],
+      "assigned_to": "dev_6",
+      "status": "failed",
+      "retries": 2,
+      "primary_owner": "dev_6",
+      "phase": 2
+    },
+    "task_app_components_AgentCard_tsx_p2": {
+      "id": "task_app_components_AgentCard_tsx_p2",
+      "file": "app/components/AgentCard.tsx",
+      "description": "PHASE 2: Collaborative Integration and Wiring for app/components/AgentCard.tsx. Fix imports and ensure it works with the merged codebase.",
+      "depends_on": [
+        "task_app_models_agent_types_ts_p1",
+        "task_app_config_theme_ts_p1",
+        "task_app_services_agent_service_ts_p1",
+        "task_app_utils_animations_ts_p1",
+        "task_app_components_Layout_tsx_p1",
+        "task_app_components_AgentCard_tsx_p1",
+        "task_app_components_Dashboard_tsx_p1",
+        "task_tests_integration_agent_flow_test_ts_p1"
+      ],
+      "assigned_to": "dev_2",
+      "status": "failed",
+      "retries": 2,
+      "primary_owner": "dev_1",
+      "phase": 2
+    },
+    "task_app_components_Dashboard_tsx_p2": {
+      "id": "task_app_components_Dashboard_tsx_p2",
+      "file": "app/components/Dashboard.tsx",
+      "description": "PHASE 2: Collaborative Integration and Wiring for app/components/Dashboard.tsx. Fix imports and ensure it works with the merged codebase.",
+      "depends_on": [
+        "task_app_models_agent_types_ts_p1",
+        "task_app_config_theme_ts_p1",
+        "task_app_services_agent_service_ts_p1",
+        "task_app_utils_animations_ts_p1",
+        "task_app_components_Layout_tsx_p1",
+        "task_app_components_AgentCard_tsx_p1",
+        "task_app_components_Dashboard_tsx_p1",
+        "task_tests_integration_agent_flow_test_ts_p1"
+      ],
+      "assigned_to": "dev_4",
+      "status": "failed",
+      "retries": 2,
+      "primary_owner": "dev_4",
+      "phase": 2
+    },
+    "task_tests_integration_agent_flow_test_ts_p2": {
+      "id": "task_tests_integration_agent_flow_test_ts_p2",
+      "file": "tests/integration/agent_flow.test.ts",
+      "description": "PHASE 2: Collaborative Integration and Wiring for tests/integration/agent_flow.test.ts. Fix imports and ensure it works with the merged codebase.",
+      "depends_on": [
+        "task_app_models_agent_types_ts_p1",
+        "task_app_config_theme_ts_p1",
+        "task_app_services_agent_service_ts_p1",
+        "task_app_utils_animations_ts_p1",
+        "task_app_components_Layout_tsx_p1",
+        "task_app_components_AgentCard_tsx_p1",
+        "task_app_components_Dashboard_tsx_p1",
+        "task_tests_integration_agent_flow_test_ts_p1"
+      ],
+      "assigned_to": "dev_3",
+      "status": "failed",
+      "retries": 2,
+      "primary_owner": "dev_3",
+      "phase": 2
+    },
+    "task_integration_test": {
+      "id": "task_integration_test",
+      "file": "__integration__",
+      "description": "Final integration: final build check and smoke tests",
+      "depends_on": [
+        "task_app_models_agent_types_ts_p1",
+        "task_app_config_theme_ts_p1",
+        "task_app_services_agent_service_ts_p1",
+        "task_app_utils_animations_ts_p1",
+        "task_app_components_Layout_tsx_p1",
+        "task_app_components_AgentCard_tsx_p1",
+        "task_app_components_Dashboard_tsx_p1",
+        "task_tests_integration_agent_flow_test_ts_p1",
+        "task_app_models_agent_types_ts_p2",
+        "task_app_config_theme_ts_p2",
+        "task_app_services_agent_service_ts_p2",
+        "task_app_utils_animations_ts_p2",
+        "task_app_components_Layout_tsx_p2",
+        "task_app_components_AgentCard_tsx_p2",
+        "task_app_components_Dashboard_tsx_p2",
+        "task_tests_integration_agent_flow_test_ts_p2"
+      ],
+      "assigned_to": null,
+      "status": "failed",
+      "retries": 0,
+      "primary_owner": null,
+      "phase": 2
+    }
+  },
+  "completed_tasks": [
+    "task_app_components_Dashboard_tsx_p1",
+    "task_app_models_agent_types_ts_p2",
+    "task_app_utils_animations_ts_p2",
+    "task_app_services_agent_service_ts_p1",
+    "task_app_config_theme_ts_p1",
+    "task_tests_integration_agent_flow_test_ts_p1",
+    "task_app_services_agent_service_ts_p2",
+    "task_app_components_Dashboard_tsx_p2",
+    "task_app_config_theme_ts_p2",
+    "task_app_components_Layout_tsx_p1",
+    "task_app_utils_animations_ts_p1",
+    "task_tests_integration_agent_flow_test_ts_p2",
+    "task_app_components_Layout_tsx_p2",
+    "task_app_components_AgentCard_tsx_p2",
+    "task_app_components_AgentCard_tsx_p1",
+    "task_integration_test",
+    "task_app_models_agent_types_ts_p1"
+  ]
+}

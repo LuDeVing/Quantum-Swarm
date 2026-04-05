@@ -100,6 +100,14 @@ TEAM_CANONICAL_FILES = {
 INTERFERENCE_ALPHA = 0.5
 TOKEN_BUDGET       = 5_000_000   # hard kill-switch: total tokens (in+out) across all agents
 AGILE_MODE         = True        # if True, use Anthropic-style task-based collaborative coordination
+TEST_GATE_ENABLED  = True        # if True, run test suite after every PHASE_INTEGRATION task
+TEST_GATE_HOOKS: List[str] = []  # if non-empty, run these commands instead of auto-detect
+                                  # e.g. ["pytest tests/ --tb=short -q", "mypy src/", "eslint src/"]
+TEAMMATE_IDLE_HOOKS: List[str] = []  # commands to run when an agent finishes all tasks
+                                      # non-zero exit logs failure and injects output into context
+TASK_CREATED_HOOKS: List[str] = []   # commands to validate a task before it starts
+                                      # receives task description via stdin + ENG_TASK_DESCRIPTION env
+                                      # non-zero exit rejects the task (calls task_queue.fail())
 
 HYPOTHESES = ["healthy", "uncertain", "confused"]
 ROLE_PRIOR = {"healthy": 0.8, "uncertain": 0.15, "confused": 0.05}
@@ -3419,6 +3427,47 @@ class EngTaskQueue:
         n_pending = sum(1 for t in self.tasks.values() if t.status == "pending")
         n_blocked = sum(1 for t in self.tasks.values() if t.status == "blocked")
         logger.info(f"[TaskQueue] initialized {len(self.tasks)} tasks ({n_pending} pending, {n_blocked} blocked) in two phases.")
+        self._load()   # crash recovery: reload persisted state if available
+        self._persist()
+
+    _PERSIST_PATH = OUTPUT_DIR / "task_queue_state.json"
+
+    def _persist(self) -> None:
+        """Serialize queue state to disk after every mutation."""
+        try:
+            self._PERSIST_PATH.parent.mkdir(parents=True, exist_ok=True)
+            state = {
+                "tasks": {
+                    tid: {
+                        "id": t.id, "file": t.file, "description": t.description,
+                        "depends_on": t.depends_on, "assigned_to": t.assigned_to,
+                        "status": t.status, "retries": t.retries,
+                        "primary_owner": t.primary_owner, "phase": t.phase,
+                    }
+                    for tid, t in self.tasks.items()
+                },
+                "completed_tasks": list(self._completed_tasks),
+            }
+            self._PERSIST_PATH.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        except Exception as e:
+            logger.warning(f"[TaskQueue] persist failed: {e}")
+
+    def _load(self) -> None:
+        """Reload queue state from disk if available (crash recovery)."""
+        if not self._PERSIST_PATH.exists():
+            return
+        try:
+            data = json.loads(self._PERSIST_PATH.read_text(encoding="utf-8"))
+            for tid, td in data.get("tasks", {}).items():
+                if tid in self.tasks:
+                    t = self.tasks[tid]
+                    t.status      = td.get("status", t.status)
+                    t.assigned_to = td.get("assigned_to", t.assigned_to)
+                    t.retries     = td.get("retries", t.retries)
+            self._completed_tasks = set(data.get("completed_tasks", []))
+            logger.info(f"[TaskQueue] crash-recovery: reloaded state from {self._PERSIST_PATH.name}")
+        except Exception as e:
+            logger.warning(f"[TaskQueue] load failed: {e}")
 
     def claim_next(self, dev_key: str) -> Optional[EngTask]:
         """Claim the next available pending task. Prefers tasks assigned to this dev."""
@@ -3437,6 +3486,7 @@ class EngTaskQueue:
                 chosen.status = "in_progress"
                 chosen.assigned_to = dev_key
                 logger.info(f"[TaskQueue] {dev_key} claimed task '{chosen.id}' ({chosen.file})")
+                self._persist()
             return chosen
 
     def complete(self, task_id: str) -> None:
@@ -3448,6 +3498,7 @@ class EngTaskQueue:
                 self._completed_tasks.add(task_id)
                 logger.info(f"[TaskQueue] task '{task_id}' COMPLETED")
                 self._unblock_dependents()
+                self._persist()
 
     def fail(self, task_id: str) -> None:
         """Mark a task failed. It may be retried by another agent."""
@@ -3464,6 +3515,7 @@ class EngTaskQueue:
                     self._completed_tasks.add(task_id)
                     logger.error(f"[TaskQueue] task '{task_id}' FAILED permanently after {task.retries} retries")
                     self._unblock_dependents()
+                self._persist()
 
     def _unblock_dependents(self) -> None:
         """Move blocked tasks to pending if all their dependencies are satisfied."""
@@ -3686,6 +3738,123 @@ def _run_build_command(registry: InterfaceContractRegistry) -> str:
     except Exception as e:
         return f"BUILD ERROR: {e}"
     return ""
+
+
+@dataclass
+class TestGateResult:
+    passed:  bool    # True if tests exited 0, or no test suite found
+    skipped: bool    # True if no test files were detected
+    output:  str     # raw stdout+stderr trimmed to 4000 chars
+    command: str     # command that ran (empty if skipped)
+
+
+def _run_test_gate(code_dir: Path) -> TestGateResult:
+    """
+    Run the project's test suite.
+    If TEST_GATE_HOOKS is non-empty, run each hook command in sequence — the gate
+    fails on the first non-zero exit.  When empty, fall back to auto-detection
+    (pytest or npm).
+    Returns TestGateResult. Never raises — all failures are captured in .output.
+    Called only for PHASE_INTEGRATION tasks when TEST_GATE_ENABLED is True.
+    """
+    # ── Configurable hooks path ───────────────────────────────────────────
+    if TEST_GATE_HOOKS:
+        combined_output: List[str] = []
+        for hook_cmd in TEST_GATE_HOOKS:
+            try:
+                result = subprocess.run(
+                    hook_cmd, shell=True, capture_output=True, text=True,
+                    timeout=60, cwd=str(code_dir),
+                )
+                raw = (result.stdout + result.stderr)[-4000:]
+                combined_output.append(f"[hook: {hook_cmd}]\n{raw}")
+                if result.returncode != 0:
+                    return TestGateResult(
+                        passed=False, skipped=False,
+                        output="\n".join(combined_output),
+                        command=hook_cmd,
+                    )
+            except subprocess.TimeoutExpired:
+                combined_output.append(f"[hook: {hook_cmd}] TIMEOUT after 60s")
+                return TestGateResult(
+                    passed=False, skipped=False,
+                    output="\n".join(combined_output),
+                    command=hook_cmd,
+                )
+            except Exception as e:
+                combined_output.append(f"[hook: {hook_cmd}] ERROR: {e}")
+                return TestGateResult(
+                    passed=False, skipped=False,
+                    output="\n".join(combined_output),
+                    command=hook_cmd,
+                )
+        return TestGateResult(
+            passed=True, skipped=False,
+            output="\n".join(combined_output),
+            command="; ".join(TEST_GATE_HOOKS),
+        )
+
+    # ── Auto-detect path (language-agnostic) ─────────────────────────────
+    tests_dir = code_dir / "tests"
+
+    def _has_test_files(*globs: str) -> bool:
+        for d in (tests_dir, code_dir):
+            if d.exists():
+                for g in globs:
+                    if any(d.rglob(g)):
+                        return True
+        return False
+
+    def _has_file(*names: str) -> bool:
+        return any((code_dir / n).exists() for n in names)
+
+    def _makefile_has_test() -> bool:
+        mf = code_dir / "Makefile"
+        if not mf.exists():
+            return False
+        try:
+            return "test" in mf.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            return False
+
+    # Detection order: most-specific first
+    if _has_test_files("test_*.py", "*_test.py"):
+        cmd = f"pytest {str(tests_dir)} --tb=short -q"
+    elif _has_file("Cargo.toml"):
+        cmd = "cargo test"
+    elif _has_file("go.mod"):
+        cmd = "go test ./..."
+    elif _has_file("pom.xml"):
+        cmd = "mvn test -q"
+    elif _has_file("build.gradle", "build.gradle.kts"):
+        cmd = "gradle test"
+    elif _has_file("*.csproj") or any(code_dir.glob("*.sln")):
+        cmd = "dotnet test"
+    elif _has_file("CMakeLists.txt"):
+        cmd = "cmake --build build/ && ctest --test-dir build/ --output-on-failure"
+    elif _makefile_has_test():
+        cmd = "make test"
+    elif _has_test_files("*.spec.ts", "*.spec.js", "*.test.ts", "*.test.js") or _has_file("package.json"):
+        cmd = "npm test --if-present"
+    elif _has_test_files("*_spec.rb", "*_test.rb"):
+        cmd = "bundle exec rspec"
+    else:
+        return TestGateResult(passed=True, skipped=True, output="", command="")
+
+    try:
+        result = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True,
+            timeout=120, cwd=str(code_dir),
+        )
+        raw = (result.stdout + result.stderr)[-4000:]
+        return TestGateResult(passed=(result.returncode == 0), skipped=False,
+                              output=raw, command=cmd)
+    except subprocess.TimeoutExpired:
+        return TestGateResult(passed=False, skipped=False, command=cmd,
+                              output="TEST GATE TIMEOUT: suite did not finish within 120s.")
+    except Exception as e:
+        return TestGateResult(passed=False, skipped=False, command=cmd,
+                              output=f"TEST GATE ERROR: {e}")
 
 
 # ── Git Worktree isolation for engineering agents ─────────────────────────────
@@ -4202,6 +4371,37 @@ def run_engineering_team(
                 _time.sleep(_AGENT_POLL_INTERVAL)
                 continue
 
+            # ── TaskCreated hook: pre-task validator ──────────────────────
+            if TASK_CREATED_HOOKS:
+                _task_rejected = False
+                _hook_outputs: List[str] = []
+                _task_env = {**os.environ, "ENG_TASK_DESCRIPTION": eng_task.description}
+                for _hook_cmd in TASK_CREATED_HOOKS:
+                    try:
+                        _hook_proc = subprocess.run(
+                            _hook_cmd, shell=True, capture_output=True, text=True,
+                            timeout=30, cwd=str(code_dir), env=_task_env,
+                            input=eng_task.description,
+                        )
+                        _hook_out = (_hook_proc.stdout + _hook_proc.stderr)[-1000:]
+                        _hook_outputs.append(f"[task-hook: {_hook_cmd}]\n{_hook_out}")
+                        if _hook_proc.returncode != 0:
+                            _task_rejected = True
+                            break
+                    except Exception as _hook_e:
+                        _hook_outputs.append(f"[task-hook: {_hook_cmd}] ERROR: {_hook_e}")
+                        _task_rejected = True
+                        break
+                if _task_rejected:
+                    _rejection_msg = "\n".join(_hook_outputs)
+                    logger.warning(
+                        f"[{dev_key}] TASK REJECTED by pre-task hook: {eng_task.id}\n"
+                        f"{_rejection_msg[:300]}"
+                    )
+                    task_queue.fail(eng_task.id)
+                    continue
+            # ─────────────────────────────────────────────────────────────
+
             wt = GitWorktreeManager(code_dir, [dev_key])
             try:
                 wt.create_worktrees()
@@ -4216,8 +4416,43 @@ def run_engineering_team(
                     if resolutions:
                         logger.info(f"[{dev_key}] merge resolutions:\n" + "\n".join(resolutions))
 
-                task_queue.complete(eng_task.id)
-                _tasks_completed_by[dev_key] += 1
+                # ── Test Gate (Anthropic-style hard mechanical gate) ──────
+                if TEST_GATE_ENABLED and eng_task.phase == PHASE_INTEGRATION:
+                    gate = _run_test_gate(OUTPUT_DIR / "code")
+                    if gate.skipped:
+                        logger.info(f"[{dev_key}] TEST GATE skipped — no test files detected")
+                        task_queue.complete(eng_task.id)
+                        _tasks_completed_by[dev_key] += 1
+                    elif gate.passed:
+                        logger.info(f"[{dev_key}] TEST GATE passed — '{gate.command}'")
+                        task_queue.complete(eng_task.id)
+                        _tasks_completed_by[dev_key] += 1
+                    else:
+                        eng_task_obj = task_queue.tasks.get(eng_task.id)
+                        retries_used = eng_task_obj.retries if eng_task_obj else MAX_RETRIES_PER_TASK
+                        if retries_used < MAX_RETRIES_PER_TASK:
+                            logger.warning(
+                                f"[{dev_key}] TEST GATE FAILED "
+                                f"(retry {retries_used + 1}/{MAX_RETRIES_PER_TASK}) "
+                                f"— '{gate.command}'\n{gate.output[:500]}"
+                            )
+                            rolling_ctxs[dev_key].add(
+                                f"TEST GATE FAILED — {eng_task.file}",
+                                f"Command: {gate.command}\nOutput:\n{gate.output}"
+                            )
+                            task_queue.fail(eng_task.id)
+                            # _tasks_completed_by NOT incremented — retry doesn't count
+                        else:
+                            logger.warning(
+                                f"[{dev_key}] TEST GATE FAILED but retries exhausted "
+                                f"— accepting '{eng_task.id}' to avoid deadlock"
+                            )
+                            task_queue.complete(eng_task.id)
+                            _tasks_completed_by[dev_key] += 1
+                else:
+                    task_queue.complete(eng_task.id)
+                    _tasks_completed_by[dev_key] += 1
+                # ─────────────────────────────────────────────────────────
 
                 # Incremental RAG Update: Index the newly merged file so others can find it
                 try:
@@ -4243,6 +4478,33 @@ def run_engineering_team(
             ActiveInferenceState.interfere_all(
                 [health_states[d] for d in ENG_WORKERS], alpha=INTERFERENCE_ALPHA
             )
+
+        # ── TeammateIdle hook: runs after agent exhausts all tasks ────────
+        if TEAMMATE_IDLE_HOOKS:
+            _idle_outputs: List[str] = []
+            _idle_all_passed = True
+            for _idle_cmd in TEAMMATE_IDLE_HOOKS:
+                try:
+                    _idle_proc = subprocess.run(
+                        _idle_cmd, shell=True, capture_output=True, text=True,
+                        timeout=60, cwd=str(code_dir),
+                    )
+                    _idle_out = (_idle_proc.stdout + _idle_proc.stderr)[-2000:]
+                    _idle_outputs.append(f"[idle-hook: {_idle_cmd}]\n{_idle_out}")
+                    if _idle_proc.returncode != 0:
+                        _idle_all_passed = False
+                        break
+                except Exception as _idle_e:
+                    _idle_outputs.append(f"[idle-hook: {_idle_cmd}] ERROR: {_idle_e}")
+                    _idle_all_passed = False
+                    break
+            _idle_combined = "\n".join(_idle_outputs)
+            if _idle_all_passed:
+                logger.info(f"[{dev_key}] TEAMMATE IDLE HOOK passed")
+            else:
+                logger.warning(f"[{dev_key}] TEAMMATE IDLE HOOK FAILED\n{_idle_combined[:300]}")
+                rolling_ctxs[dev_key].add("TEAMMATE IDLE HOOK FAILED", _idle_combined)
+        # ─────────────────────────────────────────────────────────────────
 
     # ── Manager monitor ───────────────────────────────────────────────────
 
