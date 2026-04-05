@@ -193,11 +193,15 @@ def _get_file_lock(path: Path) -> threading.Lock:
         return _file_write_locks[key]
 
 
-_STANCE_RE = re.compile(r'\n+STANCE:\s*\[?\w+\]?\s*$', re.IGNORECASE)
+_STANCE_LINE_RE = re.compile(r'^\s*STANCE:\s*\[?\w+\]?\s*$', re.IGNORECASE)
 
 def _strip_stance(content: str) -> str:
-    """Remove trailing STANCE: tag that agents append to their text output."""
-    return _STANCE_RE.sub('', content.rstrip()) + '\n'
+    """Remove trailing STANCE: tag that agents append to their text output.
+    Handles both LF and CRLF line endings."""
+    lines = content.rstrip().splitlines()
+    while lines and _STANCE_LINE_RE.match(lines[-1]):
+        lines.pop()
+    return '\n'.join(lines) + '\n'
 
 def _tool_write_code_file(filename: str, content: str) -> str:
     filename = _strip_subdir_prefix(filename, "code")
