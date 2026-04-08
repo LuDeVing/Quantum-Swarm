@@ -68,12 +68,8 @@ import pickle
 
 import numpy as np
 from dotenv import load_dotenv
+import inspect
 from google import genai
-
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.tools import tool as lc_tool
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
-from langgraph.prebuilt import create_react_agent
 
 load_dotenv()
 sys.path.insert(0, str(Path(__file__).parent))
@@ -88,7 +84,7 @@ logging.basicConfig(
 logger = logging.getLogger("company")
 
 # ── Config ────────────────────────────────────────────────────────────────────
-GEMINI_MODEL       = "gemini-3.1-flash-lite-preview"
+GEMINI_MODEL       = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite-preview")
 OUTPUT_DIR         = Path("company_output")
 
 # Canonical cross-team reference files written by each team's manager
@@ -100,11 +96,23 @@ TEAM_CANONICAL_FILES = {
 INTERFERENCE_ALPHA = 0.5
 TOKEN_BUDGET       = 5_000_000   # hard kill-switch: total tokens (in+out) across all agents
 AGILE_MODE         = True        # if True, use Anthropic-style task-based collaborative coordination
-TEST_GATE_ENABLED  = True        # if True, run test suite after every PHASE_INTEGRATION task
+TEST_GATE_ENABLED  = True        # if True, run test suite in the manager fix loop
 TEST_GATE_HOOKS: List[str] = []  # if non-empty, run these commands instead of auto-detect
                                   # e.g. ["pytest tests/ --tb=short -q", "mypy src/", "eslint src/"]
+SELF_VERIFY_ENABLED = os.getenv("SELF_VERIFY_ENABLED", "1").strip() not in ("0", "false", "no")
+MANAGER_FIX_MAX_ROUNDS = int(os.getenv("MANAGER_FIX_MAX_ROUNDS", "10"))
+# If true, agents may call launch_application() to start arbitrary desktop programs (same user as Python).
+AGENT_LAUNCH_APPS_ENABLED = os.getenv("AGENT_LAUNCH_APPS_ENABLED", "0").strip().lower() in (
+    "1", "true", "yes", "on",
+)
+# If true, agents may take full-screen screenshots and control the mouse/keyboard anywhere on screen.
+# WARNING: gives agents the same input control as the logged-in user. Only enable in trusted runs.
+AGENT_DESKTOP_CONTROL_ENABLED = os.getenv("AGENT_DESKTOP_CONTROL_ENABLED", "0").strip().lower() in (
+    "1", "true", "yes", "on",
+)
 TEAMMATE_IDLE_HOOKS: List[str] = []  # commands to run when an agent finishes all tasks
                                       # non-zero exit logs failure and injects output into context
+TEAMMATE_IDLE_MAX_RETRIES: int = 3   # how many times to re-activate an idle agent on hook failure
 TASK_CREATED_HOOKS: List[str] = []   # commands to validate a task before it starts
                                       # receives task description via stdin + ENG_TASK_DESCRIPTION env
                                       # non-zero exit rejects the task (calls task_queue.fail())
@@ -204,64 +212,95 @@ def _strip_stance(content: str) -> str:
     return '\n'.join(lines) + '\n'
 
 def _tool_write_code_file(filename: str, content: str) -> str:
-    filename = _strip_subdir_prefix(filename, "code")
-    code_dir = _get_code_dir()
-    path     = code_dir / filename
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with _get_file_lock(path):
+    try:
+        filename = _strip_subdir_prefix(filename, "code")
+        if not filename or any(c in filename for c in ("*", "?", "<", ">", "|")):
+            return f"ERROR: invalid filename {filename!r}"
+        code_dir = _get_code_dir()
+        path     = code_dir / filename
+        logger.info(f"[write_code_file] writing {filename} → {path}")
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(_strip_stance(content), encoding="utf-8")
-    _record_sprint_file(filename)
-    threading.Thread(target=_bg_index_file, args=(path,), daemon=True, name=f"rag-{filename}").start()
-    return f"Written {len(content)} chars to code/{filename}"
+        _record_sprint_file(filename)
+        threading.Thread(target=_bg_index_file, args=(path,), daemon=True, name=f"rag-{filename}").start()
+        return f"Written {len(content)} chars to code/{filename}"
+    except Exception as e:
+        logger.error(f"[write_code_file] FAILED for {filename!r}: {e}", exc_info=True)
+        return f"ERROR writing code/{filename}: {e}"
 
 
 def _bg_index_file(path: Path) -> None:
     try:
-        # If this file is inside a worktree, resolve it to the canonical code/ path
-        # so the RAG index always uses paths relative to OUTPUT_DIR
-        path = path.resolve()
+        path    = path.resolve()
         wt_root = (OUTPUT_DIR / ".worktrees").resolve()
         if str(path).startswith(str(wt_root)):
-            # .worktrees/<agent_id>/<rest> → OUTPUT_DIR/code/<rest>
-            parts = path.relative_to(wt_root).parts  # (agent_id, *rest)
+            # File is inside a worktree — index it in the owning agent's WorktreeRAG.
+            # Parts layout: (.worktrees / <agent_id> / <rest…>)
+            parts    = path.relative_to(wt_root).parts
+            if len(parts) < 2:
+                return
+            agent_id = parts[0]
+            rel_str  = "/".join(parts[1:])   # forward-slash, relative to worktree root
+            logger.info(f"[RAG:bg] worktree file → WorktreeRAG[{agent_id}]: {rel_str}")
+            wt_rag   = get_worktree_rag(agent_id)
+            if wt_rag is not None:
+                wt_rag.index_file(path, rel_str)
+            # If the file has already been merged to canonical code/, update global RAG too
             canonical = (OUTPUT_DIR / "code" / Path(*parts[1:])).resolve()
             if canonical.exists():
-                path = canonical
-            else:
-                return  # file not merged to main yet — skip indexing
-        get_rag().update_file(path)
+                logger.info(f"[RAG:bg] also updating global RAG for merged canonical: {rel_str}")
+                get_rag().update_file(canonical)
+        else:
+            rel = str(path).replace("\\", "/")
+            logger.info(f"[RAG:bg] non-worktree file → global RAG: {rel}")
+            get_rag().update_file(path)
     except Exception as e:
-        logger.warning(f"[RAG] background index failed for {path.name}: {e}")
+        logger.warning(f"[RAG:bg] index failed for {path.name}: {e}")
 
 
 def _tool_write_test_file(filename: str, content: str) -> str:
-    filename = _strip_subdir_prefix(filename, "tests")
-    path     = OUTPUT_DIR / "tests" / filename
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with _get_file_lock(path):
+    try:
+        filename = _strip_subdir_prefix(filename, "tests")
+        if not filename or any(c in filename for c in ("*", "?", "<", ">", "|")):
+            return f"ERROR: invalid filename {filename!r}"
+        path = OUTPUT_DIR / "tests" / filename
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(_strip_stance(content), encoding="utf-8")
-    threading.Thread(target=_bg_index_file, args=(path,), daemon=True, name=f"rag-{filename}").start()
-    return f"Written {len(content)} chars to tests/{filename}"
+        threading.Thread(target=_bg_index_file, args=(path,), daemon=True, name=f"rag-{filename}").start()
+        return f"Written {len(content)} chars to tests/{filename}"
+    except Exception as e:
+        logger.error(f"[write_test_file] FAILED for {filename!r}: {e}")
+        return f"ERROR writing tests/{filename}: {e}"
 
 
 def _tool_write_design_file(filename: str, content: str) -> str:
-    filename = _strip_subdir_prefix(filename, "design")
-    path     = OUTPUT_DIR / "design" / filename
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with _get_file_lock(path):
+    try:
+        filename = _strip_subdir_prefix(filename, "design")
+        if not filename or any(c in filename for c in ("*", "?", "<", ">", "|")):
+            return f"ERROR: invalid filename {filename!r}"
+        path = OUTPUT_DIR / "design" / filename
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(_strip_stance(content), encoding="utf-8")
-    threading.Thread(target=_bg_index_file, args=(path,), daemon=True, name=f"rag-{filename}").start()
-    return f"Written {len(content)} chars to design/{filename}"
+        threading.Thread(target=_bg_index_file, args=(path,), daemon=True, name=f"rag-{filename}").start()
+        return f"Written {len(content)} chars to design/{filename}"
+    except Exception as e:
+        logger.error(f"[write_design_file] FAILED for {filename!r}: {e}")
+        return f"ERROR writing design/{filename}: {e}"
 
 
 def _tool_write_config_file(filename: str, content: str) -> str:
-    filename = _strip_subdir_prefix(filename, "config")
-    path     = OUTPUT_DIR / "config" / filename
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with _get_file_lock(path):
+    try:
+        filename = _strip_subdir_prefix(filename, "config")
+        if not filename or any(c in filename for c in ("*", "?", "<", ">", "|")):
+            return f"ERROR: invalid filename {filename!r}"
+        path = OUTPUT_DIR / "config" / filename
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(_strip_stance(content), encoding="utf-8")
-    threading.Thread(target=_bg_index_file, args=(path,), daemon=True, name=f"rag-{filename}").start()
-    return f"Written {len(content)} chars to config/{filename}"
+        threading.Thread(target=_bg_index_file, args=(path,), daemon=True, name=f"rag-{filename}").start()
+        return f"Written {len(content)} chars to config/{filename}"
+    except Exception as e:
+        logger.error(f"[write_config_file] FAILED for {filename!r}: {e}")
+        return f"ERROR writing config/{filename}: {e}"
 
 
 def _tool_read_file(filename: str) -> str:
@@ -291,11 +330,21 @@ class CodebaseRAG:
     """
 
     EMBED_MODEL  = "gemini-embedding-001"
-    CACHE_PATH   = OUTPUT_DIR / "rag_index.pkl"
+    # CACHE_PATH must NOT be a class-level attribute — OUTPUT_DIR can be overridden
+    # at runtime (e.g. run_engineers_only.py sets sc.OUTPUT_DIR = "eng_output"), and a
+    # frozen class attribute would keep pointing at "company_output/rag_index.pkl",
+    # loading stale cache from a prior full-company run into an engineers-only run.
     CHUNK_LINES  = 60          # max lines per chunk
     TOP_K        = 5           # chunks returned per query
     SUBDIRS      = ["code", "tests", "design", "config"]
-    EXTENSIONS   = {".py", ".ts", ".tsx", ".js", ".json", ".yaml", ".yml", ".md"}
+    # Keep this aligned with files the swarm regularly generates.
+    # Missing extensions here causes full update() to silently drop files
+    # that update_file() may have indexed earlier.
+    EXTENSIONS   = {
+        ".py", ".ts", ".tsx", ".js", ".jsx",
+        ".json", ".yaml", ".yml", ".md",
+        ".css", ".html",
+    }
 
     def __init__(self):
         self.chunks:     List[Dict]   = []   # {"file", "text", "hash"}
@@ -311,12 +360,35 @@ class CodebaseRAG:
     def update(self):
         """Scan all output files, embed new/changed chunks, persist cache."""
         with self._update_lock:
+            logger.info(f"[RAG:update] starting full scan — OUTPUT_DIR={OUTPUT_DIR.resolve()}")
             new_chunks = self._scan_files()
             if not new_chunks:
+                # If repo is empty (or no supported files), clear stale index state.
+                logger.warning(f"[RAG:update] scan returned 0 chunks — clearing index")
+                with self._lock:
+                    self.chunks = []
+                    self.embeddings = None
+                    self._save_cache()
                 return
+            unique_files = sorted(set(c["file"] for c in new_chunks))
+            logger.info(f"[RAG:update] scan found {len(new_chunks)} chunks from {len(unique_files)} files: {unique_files}")
             with self._lock:
-                to_embed = [c for c in new_chunks if not self._already_embedded(c["hash"])]
+                to_embed = [c for c in new_chunks if not self._already_embedded(c["hash"]) and c.get("text", "").strip()]
             if not to_embed:
+                # No new chunks to embed, but still prune stale entries for deleted/renamed files.
+                logger.info(f"[RAG:update] all chunks already embedded — pruning stale entries, keeping {len(unique_files)} files")
+                with self._lock:
+                    existing_by_hash = {c["hash"]: c for c in self.chunks if "vec" in c}
+                    self.chunks = [
+                        {**c, "vec": existing_by_hash[c["hash"]]["vec"]}
+                        for c in new_chunks
+                        if c["hash"] in existing_by_hash
+                    ]
+                    if self.chunks:
+                        self.embeddings = np.stack([c["vec"] for c in self.chunks])
+                    else:
+                        self.embeddings = None
+                    self._save_cache()
                 return
             logger.info(f"[RAG] embedding {len(to_embed)} new chunks across {len(set(c['file'] for c in to_embed))} files")
             vecs = self._embed_batch([c["text"] for c in to_embed])
@@ -344,9 +416,10 @@ class CodebaseRAG:
             try:
                 text = path.read_text(encoding="utf-8", errors="ignore")
             except Exception as e:
-                logger.warning(f"[RAG] update_file read failed for {path}: {e}")
+                logger.warning(f"[RAG:update_file] read failed for {path}: {e}")
                 return
-            rel = str(path.relative_to(OUTPUT_DIR))
+            rel = str(path.resolve().relative_to(OUTPUT_DIR.resolve())).replace("\\", "/")
+            logger.info(f"[RAG:update_file] indexing {rel}  ({len(text)} chars)")
             new_chunk_texts = self._split_into_chunks(text, path.suffix)
             new_chunks = []
             for chunk_text in new_chunk_texts:
@@ -354,7 +427,7 @@ class CodebaseRAG:
                 new_chunks.append({"file": rel, "text": chunk_text, "hash": h})
             # Only embed chunks not already in the index — check inside lock
             with self._lock:
-                to_embed = [c for c in new_chunks if not self._already_embedded(c["hash"])]
+                to_embed = [c for c in new_chunks if not self._already_embedded(c["hash"]) and c.get("text", "").strip()]
                 existing_by_hash = {c["hash"]: c for c in self.chunks if "vec" in c}
             if to_embed:
                 vecs = self._embed_batch([c["text"] for c in to_embed])
@@ -404,9 +477,10 @@ class CodebaseRAG:
             return "[No files indexed yet]"
         seen: Dict[str, str] = {}
         for c in self.chunks:
-            if c["file"] not in seen:
+            fname = c["file"].replace("\\", "/")
+            if fname not in seen:
                 first_lines = c["text"].strip().split("\n")[:3]
-                seen[c["file"]] = " | ".join(l.strip() for l in first_lines if l.strip())[:120]
+                seen[fname] = " | ".join(l.strip() for l in first_lines if l.strip())[:120]
         lines = [f"- **{fname}**: {summary}" for fname, summary in sorted(seen.items())]
         return "\n".join(lines)
 
@@ -414,103 +488,131 @@ class CodebaseRAG:
         """Return sorted list of all indexed files."""
         if not self.chunks:
             return "[No files indexed yet]"
-        files = sorted(set(c["file"] for c in self.chunks))
+        # Normalise to forward slashes so the model can use paths directly in tool calls
+        files = sorted(set(c["file"].replace("\\", "/") for c in self.chunks))
         return "\n".join(files)
 
     # ── internals ─────────────────────────────────────────────────────────
 
     def _scan_files(self) -> List[Dict]:
         chunks = []
+        scanned_files: List[str] = []
         for subdir in self.SUBDIRS:
             base = OUTPUT_DIR / subdir
             if not base.exists():
                 continue
             for path in base.rglob("*"):
+                if "node_modules" in path.parts or ".git" in path.parts:
+                    continue
                 if path.suffix not in self.EXTENSIONS or not path.is_file():
                     continue
                 try:
                     text = path.read_text(encoding="utf-8", errors="ignore")
                 except Exception:
                     continue
-                rel = str(path.relative_to(OUTPUT_DIR))
+                rel = str(path.resolve().relative_to(OUTPUT_DIR.resolve())).replace("\\", "/")
+                scanned_files.append(rel)
                 for chunk_text in self._split_into_chunks(text, path.suffix):
                     h = hashlib.md5((rel + chunk_text).encode()).hexdigest()
                     chunks.append({"file": rel, "text": chunk_text, "hash": h})
+        logger.debug(
+            f"[RAG._scan_files] OUTPUT_DIR={OUTPUT_DIR.resolve()}  "
+            f"found {len(scanned_files)} files: {scanned_files}"
+        )
         return chunks
 
     def _split_into_chunks(self, text: str, ext: str) -> List[str]:
-        """Split by function/class boundaries for .py, by fixed lines otherwise."""
-        lines = text.split("\n")
-        if ext == ".py":
-            chunks, buf = [], []
-            for line in lines:
-                if (line.startswith("def ") or line.startswith("class ")) and buf:
-                    chunks.append("\n".join(buf))
-                    buf = []
-                buf.append(line)
-                if len(buf) >= self.CHUNK_LINES:
-                    chunks.append("\n".join(buf))
-                    buf = []
-            if buf:
-                chunks.append("\n".join(buf))
-            return [c for c in chunks if c.strip()]
-        else:
-            return [
-                "\n".join(lines[i:i + self.CHUNK_LINES])
-                for i in range(0, len(lines), self.CHUNK_LINES)
-                if lines[i:i + self.CHUNK_LINES]
-            ]
+        return _rag_split_chunks(text, ext, self.CHUNK_LINES)
 
     def _already_embedded(self, h: str) -> bool:
         return any(c.get("hash") == h and "vec" in c for c in self.chunks)
 
     def _embed_batch(self, texts: List[str]) -> Optional[List[np.ndarray]]:
-        try:
-            client = get_client()
-            vecs = []
-            # Gemini embedding API: batch up to 100
-            for i in range(0, len(texts), 100):
-                batch = texts[i:i + 100]
-                resp = client.models.embed_content(
-                    model=self.EMBED_MODEL,
-                    contents=batch,
-                )
-                for emb in resp.embeddings:
-                    vecs.append(np.array(emb.values, dtype=np.float32))
-            return vecs
-        except Exception as e:
-            logger.warning(f"[RAG] embed_batch failed: {e}")
-            return None
+        return _rag_embed_batch(texts)
 
     def _embed_one(self, text: str) -> Optional[np.ndarray]:
-        result = self._embed_batch([text])
-        return result[0] if result else None
+        return _rag_embed_one(text)
+
+    @property
+    def cache_path(self) -> Path:
+        """Compute cache path at access time so OUTPUT_DIR overrides take effect."""
+        return OUTPUT_DIR / "rag_index.pkl"
 
     def _save_cache(self):
         try:
-            self.CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.CACHE_PATH, "wb") as f:
+            self.cache_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.cache_path, "wb") as f:
                 pickle.dump({"chunks": self.chunks}, f)
         except Exception as e:
             logger.warning(f"[RAG] cache save failed: {e}")
 
     def _load_cache(self):
         try:
-            if self.CACHE_PATH.exists():
-                with open(self.CACHE_PATH, "rb") as f:
+            if self.cache_path.exists():
+                with open(self.cache_path, "rb") as f:
                     data = pickle.load(f)
                 self.chunks = data.get("chunks", [])
                 valid = [c for c in self.chunks if "vec" in c]
                 if valid:
                     self.embeddings = np.stack([c["vec"] for c in valid])
                     self.chunks = valid
-                    logger.info(f"[RAG] loaded {len(self.chunks)} cached chunks")
+                    logger.info(f"[RAG] loaded {len(self.chunks)} cached chunks from {self.cache_path}")
         except Exception as e:
             logger.warning(f"[RAG] cache load failed: {e}")
             self.chunks = []
 
 
-# Singleton
+# ── Shared RAG utilities (used by both CodebaseRAG and WorktreeRAG) ───────────
+
+_RAG_EMBED_MODEL = CodebaseRAG.EMBED_MODEL
+_RAG_CHUNK_LINES = CodebaseRAG.CHUNK_LINES
+_RAG_EXTENSIONS  = CodebaseRAG.EXTENSIONS
+
+def _rag_split_chunks(text: str, ext: str, chunk_lines: int = _RAG_CHUNK_LINES) -> List[str]:
+    """Split text by function/class boundary (.py) or fixed line window (everything else)."""
+    lines = text.split("\n")
+    if ext == ".py":
+        chunks, buf = [], []
+        for line in lines:
+            if (line.startswith("def ") or line.startswith("class ")) and buf:
+                chunks.append("\n".join(buf))
+                buf = []
+            buf.append(line)
+            if len(buf) >= chunk_lines:
+                chunks.append("\n".join(buf))
+                buf = []
+        if buf:
+            chunks.append("\n".join(buf))
+        return [c for c in chunks if c.strip()]
+    return [
+        chunk for chunk in (
+            "\n".join(lines[i:i + chunk_lines])
+            for i in range(0, len(lines), chunk_lines)
+        )
+        if chunk.strip()
+    ]
+
+def _rag_embed_batch(texts: List[str]) -> Optional[List[np.ndarray]]:
+    try:
+        client = get_client()
+        vecs = []
+        for i in range(0, len(texts), 100):
+            batch = texts[i:i + 100]
+            resp = client.models.embed_content(model=_RAG_EMBED_MODEL, contents=batch)
+            for emb in resp.embeddings:
+                vecs.append(np.array(emb.values, dtype=np.float32))
+        return vecs
+    except Exception as e:
+        logger.warning(f"[RAG] embed_batch failed: {e}")
+        return None
+
+def _rag_embed_one(text: str) -> Optional[np.ndarray]:
+    result = _rag_embed_batch([text])
+    return result[0] if result else None
+
+
+# ── Global CodebaseRAG singleton ───────────────────────────────────────────────
+
 _rag: Optional[CodebaseRAG] = None
 _rag_lock = threading.Lock()
 
@@ -519,8 +621,118 @@ def get_rag() -> CodebaseRAG:
     if _rag is None:
         with _rag_lock:
             if _rag is None:
+                logger.info(f"[RAG:init] creating global CodebaseRAG — OUTPUT_DIR={OUTPUT_DIR.resolve()}")
                 _rag = CodebaseRAG()
     return _rag
+
+
+# ── Per-agent WorktreeRAG ──────────────────────────────────────────────────────
+
+class WorktreeRAG:
+    """
+    Lightweight in-memory RAG for a single agent's git worktree.
+
+    Purpose: let an agent search and list its own in-progress files before they
+    are merged to main and picked up by the global CodebaseRAG.  No disk
+    persistence — the index is ephemeral and cleared after each merge.
+
+    Paths are stored as forward-slash paths relative to the worktree root so
+    they are directly usable as write_code_file / read_file arguments.
+    """
+
+    def __init__(self, agent_id: str):
+        self.agent_id = agent_id
+        self.chunks:    List[Dict]            = []
+        self.embeddings: Optional[np.ndarray] = None
+        self._lock = threading.RLock()
+
+    # ── public API ────────────────────────────────────────────────────────
+
+    def index_file(self, abs_path: Path, rel_str: str) -> None:
+        """Embed a single file and update the in-memory index.
+
+        abs_path  – absolute path to the file inside the worktree.
+        rel_str   – forward-slash path relative to worktree root (e.g. 'backend/app/models.py').
+        """
+        try:
+            text = abs_path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            return
+        if not text.strip():
+            return
+
+        new_chunks = [
+            {"file": rel_str, "text": ct,
+             "hash": hashlib.md5((rel_str + ct).encode()).hexdigest()}
+            for ct in _rag_split_chunks(text, abs_path.suffix)
+        ]
+        if not new_chunks:
+            return
+
+        with self._lock:
+            existing_by_hash = {c["hash"]: c for c in self.chunks if "vec" in c}
+            already = {c["hash"] for c in self.chunks if "vec" in c}
+
+        to_embed = [c for c in new_chunks if c["hash"] not in already and c["text"].strip()]
+        if to_embed:
+            vecs = _rag_embed_batch([c["text"] for c in to_embed])
+            if vecs:
+                for chunk, vec in zip(to_embed, vecs):
+                    chunk["vec"] = vec
+
+        for c in new_chunks:
+            if "vec" not in c and c["hash"] in existing_by_hash:
+                c["vec"] = existing_by_hash[c["hash"]]["vec"]
+
+        valid = [c for c in new_chunks if "vec" in c]
+        with self._lock:
+            self.chunks = [c for c in self.chunks if c["file"] != rel_str] + valid
+            self.embeddings = np.stack([c["vec"] for c in self.chunks]) if self.chunks else None
+        logger.info(f"[WtRAG:{self.agent_id}] indexed {rel_str} ({len(valid)} chunks, total={len(self.chunks)})")
+
+    def query(self, query_str: str, top_k: int = 3) -> str:
+        """Return top-k most relevant code chunks from this agent's worktree."""
+        with self._lock:
+            if not self.chunks or self.embeddings is None:
+                return ""
+            emb_snap    = self.embeddings.copy()
+            chunk_snap  = list(self.chunks)
+        q_vec = _rag_embed_one(query_str)
+        if q_vec is None:
+            return ""
+        sims    = emb_snap @ q_vec / (np.linalg.norm(emb_snap, axis=1) * np.linalg.norm(q_vec) + 1e-10)
+        top_idx = np.argsort(sims)[::-1][:top_k]
+        return "\n\n".join(
+            f"### {chunk_snap[i]['file']} (similarity={sims[i]:.2f})\n```\n{chunk_snap[i]['text'][:600]}\n```"
+            for i in top_idx
+        )
+
+    def list_files(self) -> List[str]:
+        """Return sorted list of relative file paths indexed in this worktree."""
+        with self._lock:
+            return sorted(set(c["file"] for c in self.chunks))
+
+    def clear(self) -> None:
+        """Drop all indexed chunks — called after worktree is merged to main."""
+        with self._lock:
+            n = len(self.chunks)
+            self.chunks    = []
+            self.embeddings = None
+        logger.info(f"[WtRAG:{self.agent_id}] cleared {n} chunks after merge")
+
+
+# Per-agent WorktreeRAG registry
+_worktree_rags: Dict[str, WorktreeRAG] = {}
+_worktree_rags_lock = threading.Lock()
+
+def get_worktree_rag(agent_id: str) -> Optional[WorktreeRAG]:
+    """Return (creating if needed) the WorktreeRAG for the given agent."""
+    if not agent_id:
+        return None
+    with _worktree_rags_lock:
+        if agent_id not in _worktree_rags:
+            _worktree_rags[agent_id] = WorktreeRAG(agent_id)
+        return _worktree_rags[agent_id]
 
 
 # ── Interface Contracts ────────────────────────────────────────────────────────
@@ -559,8 +771,10 @@ class InterfaceContractRegistry:
         self.file_map: Dict[str, FileContract] = {}   # filename -> FileContract
         self.entry_point: str = "main.py"
         self.entry_imports: List[str] = []  # modules the entry point must import
-        self.build_command: str = ""   # e.g. "python server.py", "cargo build", "npm run build"
-        self.build_file: str = ""      # e.g. "requirements.txt", "Cargo.toml", "package.json"
+        self.build_command: str = ""      # e.g. "python server.py", "cargo build", "npm run build"
+        self.build_file: str = ""         # e.g. "requirements.txt", "Cargo.toml", "package.json"
+        self.install_command: str = ""    # e.g. "npm install", "pip install -r requirements.txt"
+        self.gitignore_patterns: List[str] = []  # e.g. ["node_modules/", "dist/", "__pycache__/"]
         self.dependencies: List[str] = []  # external deps e.g. ["fastapi", "sqlalchemy"]
         self.init_order: List[str] = []    # ordered module init e.g. ["database", "routes", "server"]
         self._lock = threading.RLock()
@@ -606,6 +820,8 @@ class InterfaceContractRegistry:
             self.entry_imports = parsed.get("entry_imports", [])
             self.build_command = parsed.get("build_command", "")
             self.build_file = parsed.get("build_file", "")
+            self.install_command = parsed.get("install_command", "")
+            self.gitignore_patterns = parsed.get("gitignore_patterns", [])
             self.dependencies = parsed.get("dependencies", [])
             self.init_order = parsed.get("init_order", [])
 
@@ -797,7 +1013,7 @@ class WorkDashboard:
             sections = self._sections.get(filename, {})
             if not sections:
                 return ""
-            return "\n\n".join(f"# === {key} ===\n{content}" for key, content in sorted(sections.items()))
+            return "\n\n".join(content for _, content in sorted(sections.items()))
 
     def release_sprint(self, sprint: int):
         """Mark this sprint as complete."""
@@ -1006,7 +1222,7 @@ class BrowserPool:
             screenshot_bytes = page.screenshot(full_page=False)
             img_b64          = base64.b64encode(screenshot_bytes).decode()
             resp = get_client().models.generate_content(
-                model="gemini-2.0-flash",
+                model=GEMINI_MODEL,
                 contents=[{
                     "parts": [
                         {"text": (
@@ -1048,25 +1264,105 @@ def get_browser_pool() -> BrowserPool:
 import contextvars as _cv
 _agent_id_ctx:   _cv.ContextVar[str] = _cv.ContextVar("agent_id",   default="")
 _sprint_num_ctx: _cv.ContextVar[int] = _cv.ContextVar("sprint_num", default=1)
+_task_file_ctx:  _cv.ContextVar[str] = _cv.ContextVar("task_file",  default="")
 
 def _get_agent_id()   -> str: return _agent_id_ctx.get()
 def _get_sprint_num() -> int: return _sprint_num_ctx.get()
+def _get_task_file()  -> str: return _task_file_ctx.get()
 def _set_agent_ctx(agent_id: str, sprint_num: int) -> None:
     _agent_id_ctx.set(agent_id)
     _sprint_num_ctx.set(sprint_num)
+def _set_task_file(task_file: str) -> None:
+    _task_file_ctx.set(task_file)
 
 # Sprint goal is set once per sprint before any threads start — read-only during execution
 _current_sprint_goal: str = ""
 
 
 def _tool_search_codebase(query: str) -> str:
-    """Query the RAG index for relevant code chunks."""
-    return get_rag().query(query)
+    """Search for relevant code — own in-progress work first, then merged codebase."""
+    agent_id = _get_agent_id()
+    label    = f"[search_codebase:{agent_id or 'anon'}]"
+    parts: List[str] = []
+
+    # Own worktree RAG (freshest, agent-local)
+    if agent_id:
+        wt_rag = get_worktree_rag(agent_id)
+        if wt_rag is not None:
+            wt_files = wt_rag.list_files()
+            logger.info(f"{label} worktree RAG has {len(wt_files)} files: {wt_files}")
+            own = wt_rag.query(query, top_k=3)
+            if own:
+                parts.append(f"=== Your in-progress work ===\n{own}")
+        else:
+            logger.info(f"{label} no worktree RAG for agent")
+
+    # Global merged RAG
+    global_chunks = len(get_rag().chunks)
+    logger.info(f"{label} global RAG has {global_chunks} chunks  query={query!r:.60}")
+    global_result = get_rag().query(query)
+    if global_result and not global_result.startswith("[RAG:"):
+        parts.append(f"=== Merged codebase ===\n{global_result}")
+
+    logger.info(f"{label} returning {len(parts)} result sections")
+    return "\n\n".join(parts) if parts else "[No relevant code found]"
 
 
 def _tool_list_files() -> str:
-    """List all files currently in the codebase index."""
-    return get_rag().list_files()
+    """List all source files — merged codebase plus this agent's own in-progress work."""
+    agent_id = _get_agent_id()
+    label    = f"[list_files:{agent_id or 'anon'}]"
+
+    # ── merged global files ────────────────────────────────────────────────────
+    # Global RAG stores paths as "code/<rel>" (relative to OUTPUT_DIR).
+    # Strip the leading "code/" so agents see bare paths like "app/models.py"
+    # that can be passed directly to write_code_file / read_file.
+    raw_global = get_rag().list_files()
+    global_rag_paths: set = (
+        set(raw_global.split("\n"))
+        if raw_global != "[No files indexed yet]"
+        else set()
+    )
+    # Strip "code/" prefix for display; keep raw set for dedup against worktree
+    def _strip_code_prefix(p: str) -> str:
+        return p[5:] if p.startswith("code/") else p
+
+    lines = [_strip_code_prefix(p) for p in global_rag_paths]
+
+    logger.info(
+        f"{label} OUTPUT_DIR={OUTPUT_DIR.resolve()}  "
+        f"global RAG has {len(global_rag_paths)} files"
+        + (f": {sorted(lines)}" if lines else " (empty)")
+    )
+
+    # ── own worktree files not yet merged ──────────────────────────────────────
+    # Worktree paths are already relative to the code/ dir (e.g. "app/models.py").
+    # The global RAG stores them as "code/app/models.py", so prepend "code/" for
+    # the dedup check, then add the bare path if it's genuinely new.
+    wt     = _wt_manager_ctx.get()          # type: ignore[attr-defined]
+    wt_own: List[str] = []
+    if agent_id and wt is not None:
+        wt_dir = wt.get_agent_code_dir(agent_id)
+        if wt_dir and wt_dir.exists():
+            for p in wt_dir.rglob("*"):
+                if not p.is_file() or ".git" in p.parts or "node_modules" in p.parts:
+                    continue
+                if p.suffix not in _RAG_EXTENSIONS:
+                    continue
+                rel        = str(p.relative_to(wt_dir)).replace("\\", "/")
+                global_key = f"code/{rel}"
+                if global_key not in global_rag_paths:
+                    lines.append(f"{rel} [in-progress]")
+                    wt_own.append(rel)
+        logger.info(f"{label} worktree dir={wt_dir}  new in-progress files={wt_own}")
+    else:
+        logger.info(f"{label} no active worktree (agent_id={agent_id!r}, wt={wt})")
+
+    if not lines:
+        return "[No files indexed yet]"
+    result = "\n".join(sorted(lines))
+    logger.info(f"{label} returning {len(lines)} files total:\n{result}")
+    return result
 
 
 def _tool_validate_python(code: str) -> str:
@@ -1230,6 +1526,8 @@ def _tool_scan_vulnerabilities(code: str) -> str:
     return "\n".join(findings) if findings else "No obvious vulnerabilities detected"
 
 
+_RUN_SHELL_TIMEOUT = 120   # seconds; raised from 30 so build commands (npm, pip, go) don't get killed
+
 def _tool_run_shell(command: str) -> str:
     """Run a shell command in the output directory and return stdout + stderr (last 3000 chars)."""
     import subprocess
@@ -1239,15 +1537,17 @@ def _tool_run_shell(command: str) -> str:
             shell=True,
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=_RUN_SHELL_TIMEOUT,
             cwd=str(_get_code_dir()),
+            encoding="utf-8",
+            errors="replace",
         )
-        out = result.stdout + result.stderr
+        out = (result.stdout or "") + (result.stderr or "")
         out = out[-3000:] if len(out) > 3000 else out
         return out or "(no output)"
     except subprocess.TimeoutExpired:
         return (
-            "ERROR: command timed out after 30s. "
+            f"ERROR: command timed out after {_RUN_SHELL_TIMEOUT}s. "
             "To start a long-running server use start_service(), not run_shell()."
         )
     except Exception as e:
@@ -1424,22 +1724,94 @@ def _tool_check_owasp(feature: str) -> str:
     return "Relevant OWASP Top 10 risks:\n" + "\n".join(f"  • {r}" for r in set(relevant))
 
 
-# ── LangChain tool definitions (native function calling — no regex parsing) ───
-# Tools accept native Python types; Gemini passes structured JSON args automatically.
+# ── Native Anthropic tool registry ───────────────────────────────────────────
+# Tools are plain Python functions registered in _TOOL_CALLABLES.
+# JSON schemas are generated automatically from signatures + docstrings.
 
-@lc_tool
+_TOOL_CALLABLES: Dict[str, Callable] = {}
+
+
+def _register_tool(fn: Callable) -> Callable:
+    """Register a Python function as an Anthropic tool (replaces @lc_tool)."""
+    _TOOL_CALLABLES[fn.__name__] = fn
+    return fn
+
+
+def _py_type_to_json_schema(annotation) -> dict:
+    """Convert a Python type annotation to a JSON Schema property dict."""
+    if annotation is inspect.Parameter.empty or annotation is None:
+        return {"type": "string"}
+    origin = getattr(annotation, "__origin__", None)
+    if origin is list:
+        args = getattr(annotation, "__args__", (None,))
+        item_schema = _py_type_to_json_schema(args[0]) if args and args[0] else {}
+        return {"type": "array", "items": item_schema}
+    if origin is dict:
+        return {"type": "object"}
+    _SIMPLE: Dict[type, str] = {str: "string", int: "integer", float: "number", bool: "boolean"}
+    if annotation in _SIMPLE:
+        return {"type": _SIMPLE[annotation]}
+    return {"type": "string"}
+
+
+def _make_anthropic_tool_def(fn: Callable) -> dict:
+    """Build a native Anthropic tool definition dict from a function's signature + docstring."""
+    try:
+        hints = {}
+        try:
+            hints = {k: v for k, v in fn.__annotations__.items() if k != "return"}
+        except Exception:
+            pass
+        sig = inspect.signature(fn)
+        props: Dict[str, dict] = {}
+        required: List[str] = []
+        for name, param in sig.parameters.items():
+            annotation = hints.get(name, inspect.Parameter.empty)
+            schema = _py_type_to_json_schema(annotation)
+            schema["description"] = name
+            props[name] = schema
+            if param.default is inspect.Parameter.empty:
+                required.append(name)
+        return {
+            "name": fn.__name__,
+            "description": (fn.__doc__ or fn.__name__).strip()[:500],
+            "input_schema": {
+                "type": "object",
+                "properties": props,
+                "required": required,
+            },
+        }
+    except Exception as e:
+        logger.warning(f"[tool-def] Failed to build schema for {fn.__name__}: {e}")
+        return {
+            "name": fn.__name__,
+            "description": (fn.__doc__ or fn.__name__).strip()[:500],
+            "input_schema": {"type": "object", "properties": {}, "required": []},
+        }
+
+
+def get_role_anthropic_tools(role_key: str) -> List[dict]:
+    """Return a list of Anthropic tool definition dicts for the given role."""
+    names = _ROLE_TOOL_NAMES.get(role_key, [])
+    missing = [n for n in names if n not in _TOOL_CALLABLES]
+    if missing:
+        logger.warning(f"[{role_key}] tools not found in registry (skipped): {missing}")
+    return [_make_anthropic_tool_def(_TOOL_CALLABLES[n]) for n in names if n in _TOOL_CALLABLES]
+
+
+@_register_tool
 def run_shell(command: str) -> str:
     """Run a shell command in the project output directory. Use to start services, install deps,
     run tests, or verify the app boots. Returns combined stdout+stderr."""
     return _tool_run_shell(command)
 
-@lc_tool
+@_register_tool
 def http_request(method: str, url: str, body: str = "") -> str:
     """Make an HTTP request to a running service. method: GET/POST/PUT/DELETE.
     body: JSON string for POST/PUT. Returns HTTP status + response body."""
     return _tool_http_request(method, url, body)
 
-@lc_tool
+@_register_tool
 def start_service(name: str, command: str) -> str:
     """Start a long-running background process (server, worker, etc.) and return its startup output.
     name: a label you pick (e.g. 'api', 'frontend') — used to stop it later.
@@ -1447,18 +1819,18 @@ def start_service(name: str, command: str) -> str:
     Always call stop_service(name) when you're done testing."""
     return _tool_start_service(name, command)
 
-@lc_tool
+@_register_tool
 def stop_service(name: str) -> str:
     """Stop a background service started with start_service(name).
     Always stop services when done — leaving them running blocks ports for teammates."""
     return _tool_stop_service(name)
 
-@lc_tool
+@_register_tool
 def write_code_file(filename: str, content: str) -> str:
     """Write source code to company_output/code/<filename>. Content is the complete file text."""
     return _tool_write_code_file(filename, content)
 
-@lc_tool
+@_register_tool
 def write_file_section(filename: str, section: str, content: str) -> str:
     """Write your code to a specific SECTION of a shared file (like main.py or models.py).
     Use this instead of write_code_file when the file has section-based ownership.
@@ -1477,12 +1849,8 @@ def write_file_section(filename: str, section: str, content: str) -> str:
     code_dir = _get_code_dir()
     path = code_dir / filename
     path.parent.mkdir(parents=True, exist_ok=True)
-    with _get_file_lock(path):
-        # Assemble INSIDE the lock so the read+write is atomic.
-        # When this agent acquires the lock, it re-reads all sections including
-        # any written by other agents while this one was waiting.
-        assembled = dashboard.assemble_shared_file(filename)
-        path.write_text(assembled, encoding="utf-8")
+    assembled = dashboard.assemble_shared_file(filename)
+    path.write_text(assembled, encoding="utf-8")
     threading.Thread(target=_bg_index_file, args=(path,), daemon=True, name=f"rag-{filename}").start()
     logger.info(f"[write_file_section] {agent_id} wrote section '{section}' in {filename} ({len(content)}c)")
     return (
@@ -1490,47 +1858,46 @@ def write_file_section(filename: str, section: str, content: str) -> str:
         f"The assembled file is {len(assembled)}c total."
     )
 
-@lc_tool
+@_register_tool
 def write_test_file(filename: str, content: str) -> str:
     """Write a test file to company_output/tests/<filename>. Content is the complete file text."""
     return _tool_write_test_file(filename, content)
 
-@lc_tool
+@_register_tool
 def write_design_file(filename: str, content: str) -> str:
     """Write a design artifact (markdown, spec) to company_output/design/<filename>."""
     return _tool_write_design_file(filename, content)
 
-@lc_tool
+@_register_tool
 def write_config_file(filename: str, content: str) -> str:
     """Write a config or infra file (Dockerfile, YAML, requirements.txt) to company_output/config/<filename>."""
     return _tool_write_config_file(filename, content)
 
-@lc_tool
+@_register_tool
 def read_file(filename: str) -> str:
     """Read an existing file from any company_output/ subdirectory."""
     return _tool_read_file(filename)
 
-@lc_tool
+@_register_tool
 def list_files() -> str:
     """List all source files currently in the project codebase. Call this before writing any file
     to see what already exists. Returns filenames grouped by subdirectory."""
     return _tool_list_files()
 
-@lc_tool
+@_register_tool
 def search_codebase(query: str) -> str:
     """Semantic search over the entire codebase. Returns the most relevant code chunks for your query.
     Use this to find existing implementations before writing new code — e.g. 'authentication middleware',
     'WebSocket handler', 'database models'. Prevents duplicate implementations."""
     return _tool_search_codebase(query)
 
-@lc_tool
+@_register_tool
 def check_dashboard() -> str:
     """MANDATORY FIRST STEP. See current team messages and coordination status.
     Call this to read any incoming messages from teammates."""
     return get_dashboard().get_status()
 
-
-@lc_tool
+@_register_tool
 def message_teammate(teammate_role: str, message: str) -> str:
     """Send an async message to a teammate. They receive it in Round 2.
     Use in Round 1 to ask about interfaces, warn about dependencies, or request clarification.
@@ -1539,13 +1906,13 @@ def message_teammate(teammate_role: str, message: str) -> str:
         _get_agent_id(), teammate_role, message, _get_sprint_num()
     )
 
-@lc_tool
+@_register_tool
 def check_messages() -> str:
     """MANDATORY FIRST STEP IN ROUND 2. Read messages sent to you by teammates in Round 1.
     Contains interface questions and compatibility concerns you must address."""
     return get_dashboard().get_messages(_get_agent_id())
 
-@lc_tool
+@_register_tool
 def broadcast_message(message: str) -> str:
     """Shout a message to ALL teammates at once — use this when you make a breaking change
     that affects everyone (e.g. renamed a function, changed a shared model, moved a file).
@@ -1555,7 +1922,7 @@ def broadcast_message(message: str) -> str:
         _get_agent_id(), message, _get_sprint_num(), ENG_WORKERS
     )
 
-@lc_tool
+@_register_tool
 def request_contract_amendment(file: str, reason: str, proposed_change: str) -> str:
     """Request a mid-flight change to the shared Interface Contract.
     Use this when you discover the original contract is wrong or impossible to implement
@@ -1571,14 +1938,14 @@ def request_contract_amendment(file: str, reason: str, proposed_change: str) -> 
         proposed_change=proposed_change,
     )
 
-@lc_tool
+@_register_tool
 def open_app(url: str) -> str:
     """Open a browser and navigate to a URL to visually verify your feature.
     Acquires one of 3 browser pool slots (waits if all busy). ALWAYS call close_browser() when done.
     url: full URL e.g. 'http://localhost:3000/login' or 'http://localhost:8000/docs'"""
     return get_browser_pool().acquire(url)
 
-@lc_tool
+@_register_tool
 def browser_action(action: str, selector: str, value: str = "") -> str:
     """Interact with the open browser page and see what is on screen.
     action: 'click' | 'type' | 'navigate' | 'screenshot'
@@ -1587,83 +1954,285 @@ def browser_action(action: str, selector: str, value: str = "") -> str:
     Must call open_app() first."""
     return get_browser_pool().action(action, selector, value)
 
-@lc_tool
+@_register_tool
 def close_browser() -> str:
     """Close the browser and release the pool slot so teammates can use it.
     ALWAYS call this when done — not calling it blocks other agents from getting a browser."""
     return get_browser_pool().release()
 
-@lc_tool
+@_register_tool
+def launch_application(command: str) -> str:
+    """Start a desktop program or OS \"open\" command without waiting for it to exit.
+
+    Disabled unless AGENT_LAUNCH_APPS_ENABLED=1 — same shell privileges as your user account.
+
+    *command* uses shell=True. Examples: Windows ``notepad``, ``calc``,
+    ``start msedge https://example.com``; macOS ``open -a TextEdit``; Linux ``xdg-open path``.
+
+    Process is detached; stdout/stderr are not captured. The model cannot see the GUI window;
+    for web pages use open_app() + browser_action().
+    """
+    if not AGENT_LAUNCH_APPS_ENABLED:
+        return (
+            "ERROR: launch_application is disabled. Set AGENT_LAUNCH_APPS_ENABLED=1 in the "
+            "environment (e.g. .env). Warning: agents can run any shell command you can."
+        )
+    cmd = (command or "").strip()
+    if not cmd:
+        return "ERROR: empty command"
+    try:
+        import subprocess
+        home = str(Path.home())
+        if sys.platform == "win32":
+            _detached = getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
+            _newgrp = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
+            proc = subprocess.Popen(
+                cmd,
+                shell=True,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                close_fds=False,
+                cwd=home,
+                creationflags=_detached | _newgrp,
+            )
+        else:
+            proc = subprocess.Popen(
+                cmd,
+                shell=True,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                close_fds=True,
+                cwd=home,
+                start_new_session=True,
+            )
+        logger.info(f"[launch_application] pid={proc.pid} cmd={cmd[:300]!r}")
+        return (
+            f"Started detached process pid={proc.pid}. "
+            f"No output captured; the agent cannot see the app window. "
+            f"For web UIs use open_app + browser_action."
+        )
+    except Exception as e:
+        logger.warning(f"[launch_application] failed: {e}", exc_info=True)
+        return f"ERROR: {e}"
+
+@_register_tool
+def desktop_screenshot() -> str:
+    """Take a full-screen screenshot and return a Gemini vision description of what is visible.
+    Call before and after desktop_mouse/desktop_keyboard actions to verify the result.
+    Returns: resolution, cursor position, and a natural-language description of the screen.
+    Requires AGENT_DESKTOP_CONTROL_ENABLED=1 in the environment."""
+    if not AGENT_DESKTOP_CONTROL_ENABLED:
+        return (
+            "ERROR: desktop control is disabled. Set AGENT_DESKTOP_CONTROL_ENABLED=1 in the "
+            "environment (e.g. .env). Warning: agents will be able to see and control your screen."
+        )
+    try:
+        import pyautogui
+        import base64, io
+        screen_w, screen_h = pyautogui.size()
+        cx, cy = pyautogui.position()
+        img = pyautogui.screenshot()
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        img_b64 = base64.b64encode(buf.getvalue()).decode()
+        try:
+            resp = get_client().models.generate_content(
+                model=GEMINI_MODEL,
+                contents=[{
+                    "parts": [
+                        {"text": (
+                            "Describe what is visible on this screenshot in detail: "
+                            "list all open windows, visible text, UI elements, and their positions. "
+                            "If you see an application, name it. Be specific and concise."
+                        )},
+                        {"inline_data": {"mime_type": "image/png", "data": img_b64}},
+                    ]
+                }],
+            )
+            vision = resp.text.strip()
+        except Exception as e:
+            vision = f"(vision unavailable: {e})"
+        return (
+            f"Screen: {screen_w}x{screen_h}  Cursor: ({cx},{cy})\n"
+            f"Visible: {vision}"
+        )
+    except ImportError:
+        return (
+            "ERROR: pyautogui is not installed. Run: pip install pyautogui\n"
+            "Linux may also need: sudo apt-get install python3-xlib python3-tk"
+        )
+    except Exception as e:
+        logger.warning(f"[desktop_screenshot] failed: {e}", exc_info=True)
+        return f"ERROR: {e}"
+
+
+@_register_tool
+def desktop_mouse(
+    action: str,
+    x: int = -1,
+    y: int = -1,
+    button: str = "left",
+    clicks: int = 1,
+    scroll_direction: str = "down",
+) -> str:
+    """Control the mouse anywhere on screen.
+    action: 'move' | 'click' | 'double_click' | 'right_click' | 'scroll'
+    x, y: screen coordinates in pixels from the top-left corner (-1 = current cursor position)
+    button: 'left' | 'right' | 'middle'  (for click actions)
+    clicks: number of scroll ticks  (only for 'scroll')
+    scroll_direction: 'up' | 'down'  (only for 'scroll')
+    Call desktop_screenshot() afterwards to see what changed.
+    Requires AGENT_DESKTOP_CONTROL_ENABLED=1."""
+    if not AGENT_DESKTOP_CONTROL_ENABLED:
+        return (
+            "ERROR: desktop control is disabled. Set AGENT_DESKTOP_CONTROL_ENABLED=1 in the "
+            "environment to allow mouse control."
+        )
+    try:
+        import pyautogui, time
+        pyautogui.FAILSAFE = True   # move to corner to abort
+        act = (action or "").strip().lower()
+        # Resolve coordinates — -1 means stay at current position
+        cur_x, cur_y = pyautogui.position()
+        tx = cur_x if x < 0 else x
+        ty = cur_y if y < 0 else y
+
+        if act == "move":
+            pyautogui.moveTo(tx, ty, duration=0.2)
+        elif act == "click":
+            pyautogui.click(tx, ty, button=button)
+        elif act == "double_click":
+            pyautogui.doubleClick(tx, ty)
+        elif act == "right_click":
+            pyautogui.rightClick(tx, ty)
+        elif act == "scroll":
+            pyautogui.moveTo(tx, ty, duration=0.1)
+            amount = clicks if scroll_direction == "up" else -clicks
+            pyautogui.scroll(amount)
+        else:
+            return f"ERROR: unknown action {action!r}. Use: move | click | double_click | right_click | scroll"
+
+        time.sleep(0.35)   # give OS time to render
+        nx, ny = pyautogui.position()
+        logger.info(f"[desktop_mouse] {act} at ({tx},{ty}) button={button}")
+        return f"Done: {act} at ({tx},{ty}). Cursor now at ({nx},{ny}). Call desktop_screenshot() to see the result."
+    except ImportError:
+        return "ERROR: pyautogui is not installed. Run: pip install pyautogui"
+    except Exception as e:
+        logger.warning(f"[desktop_mouse] failed: {e}", exc_info=True)
+        return f"ERROR: {e}"
+
+
+@_register_tool
+def desktop_keyboard(action: str, text: str = "", keys: str = "") -> str:
+    """Type text or press keyboard shortcuts on the currently focused window.
+    action: 'type' | 'hotkey' | 'press'
+      'type'   → types text character by character (use for filling in fields)
+      'hotkey' → holds keys simultaneously, e.g. keys='ctrl,c' for copy, 'ctrl,z' for undo
+      'press'  → taps one or more keys sequentially, e.g. keys='enter' or keys='tab,tab,enter'
+    text: the string to type  (only for 'type')
+    keys: comma-separated key names  (for 'hotkey' and 'press')
+    Key names: enter, tab, space, backspace, delete, escape, up, down, left, right,
+               f1..f12, ctrl, alt, shift, win, a..z, 0..9, etc.
+    Call desktop_screenshot() first to confirm focus on the right field.
+    Requires AGENT_DESKTOP_CONTROL_ENABLED=1."""
+    if not AGENT_DESKTOP_CONTROL_ENABLED:
+        return (
+            "ERROR: desktop control is disabled. Set AGENT_DESKTOP_CONTROL_ENABLED=1 in the "
+            "environment to allow keyboard control."
+        )
+    try:
+        import pyautogui, time
+        act = (action or "").strip().lower()
+        if act == "type":
+            if not text:
+                return "ERROR: 'text' is required for action='type'"
+            pyautogui.write(text, interval=0.03)
+            time.sleep(0.1)
+            logger.info(f"[desktop_keyboard] type {len(text)} chars")
+            return f"Typed {len(text)} characters. Call desktop_screenshot() to verify."
+        elif act == "hotkey":
+            if not keys:
+                return "ERROR: 'keys' is required for action='hotkey' (e.g. 'ctrl,c')"
+            key_list = [k.strip() for k in keys.split(",") if k.strip()]
+            pyautogui.hotkey(*key_list)
+            time.sleep(0.2)
+            logger.info(f"[desktop_keyboard] hotkey {key_list}")
+            return f"Pressed hotkey: {'+'.join(key_list)}. Call desktop_screenshot() to verify."
+        elif act == "press":
+            if not keys:
+                return "ERROR: 'keys' is required for action='press' (e.g. 'enter' or 'tab,tab,enter')"
+            key_list = [k.strip() for k in keys.split(",") if k.strip()]
+            for k in key_list:
+                pyautogui.press(k)
+                time.sleep(0.05)
+            logger.info(f"[desktop_keyboard] press {key_list}")
+            return f"Pressed key(s): {', '.join(key_list)}. Call desktop_screenshot() to verify."
+        else:
+            return f"ERROR: unknown action {action!r}. Use: type | hotkey | press"
+    except ImportError:
+        return "ERROR: pyautogui is not installed. Run: pip install pyautogui"
+    except Exception as e:
+        logger.warning(f"[desktop_keyboard] failed: {e}", exc_info=True)
+        return f"ERROR: {e}"
+
+
+@_register_tool
 def validate_python(code: str) -> str:
     """Check Python code for syntax errors. Returns 'Python syntax OK' or a description of the error."""
     return _tool_validate_python(code)
 
-@lc_tool
+@_register_tool
 def validate_json(content: str) -> str:
     """Validate a JSON string. Returns 'JSON valid' or error details."""
     return _tool_validate_json(content)
 
-@lc_tool
+@_register_tool
 def validate_yaml(content: str) -> str:
     """Validate a YAML string (Dockerfile, CI config, etc.). Returns 'YAML valid' or error details."""
     return _tool_validate_yaml(content)
 
-@lc_tool
+@_register_tool
 def generate_endpoint_table(endpoints: List[Dict]) -> str:
     """Generate a markdown table of API endpoints. Each endpoint needs: method, path, description, auth."""
     return _tool_generate_endpoint_table(json.dumps(endpoints))
 
-@lc_tool
+@_register_tool
 def generate_er_diagram(tables: List[Dict]) -> str:
     """Generate an ASCII ER diagram. Each table needs: name, fields (list of {name, type, pk, fk})."""
     return _tool_generate_er_diagram(json.dumps(tables))
 
-@lc_tool
+@_register_tool
 def create_ascii_diagram(components: List[Dict]) -> str:
     """Generate an ASCII component diagram. Each component needs: name, connects_to (list of names)."""
     return _tool_create_ascii_diagram(json.dumps(components))
 
-@lc_tool
+@_register_tool
 def create_user_flow(steps: List[Dict]) -> str:
     """Generate an ASCII user flow diagram. Each step needs: step (label), action, outcome."""
     return _tool_create_user_flow(json.dumps(steps))
 
-@lc_tool
+@_register_tool
 def create_wireframe(page_name: str, sections: List[Dict]) -> str:
     """Generate an ASCII wireframe for a UI page. Each section needs: name, type, content."""
     return _tool_create_wireframe(page_name, json.dumps(sections))
 
-@lc_tool
+@_register_tool
 def create_style_guide(colors: Dict, fonts: Dict, spacing: Dict) -> str:
     """Generate a formatted style guide. colors/fonts/spacing are dicts of token→value."""
     return _tool_create_style_guide(json.dumps({"colors": colors, "fonts": fonts, "spacing": spacing}))
 
-@lc_tool
+@_register_tool
 def scan_vulnerabilities(code: str) -> str:
     """Scan code for common security vulnerabilities (OWASP patterns). Returns severity-labelled findings."""
     return _tool_scan_vulnerabilities(code)
 
-@lc_tool
+@_register_tool
 def check_owasp(feature: str) -> str:
     """Get relevant OWASP Top 10 risks for a feature. Feature: auth, api, input, session, file_upload, database."""
     return _tool_check_owasp(feature)
-
-
-# ── Role → tool mapping (LangChain tool objects) ─────────────────────────────
-_LC_TOOLS_BY_NAME: Dict[str, object] = {
-    t.name: t for t in [
-        write_code_file, write_file_section, write_test_file, write_design_file, write_config_file,
-        read_file, list_files, search_codebase,
-        run_shell, http_request, start_service, stop_service,
-        check_dashboard, message_teammate, check_messages,
-        broadcast_message, request_contract_amendment,
-        open_app, browser_action, close_browser,
-        validate_python, validate_json, validate_yaml,
-        generate_endpoint_table, generate_er_diagram, create_ascii_diagram,
-        create_user_flow, create_wireframe, create_style_guide,
-        scan_vulnerabilities, check_owasp,
-    ]
-}
 
 # Dashboard tools available to all roles that write or review work
 _DASHBOARD_TOOLS    = ["check_dashboard", "message_teammate", "check_messages",
@@ -1686,107 +2255,238 @@ _ROLE_TOOL_NAMES: Dict[str, List[str]] = {
     "unit_tester":        ["write_test_file", "validate_python", "scan_vulnerabilities",
                            "run_shell", "start_service", "stop_service", "http_request",
                            "read_file", "list_files", "search_codebase",
-                           "open_app", "browser_action", "close_browser"] + _DASHBOARD_RO_TOOLS,
+                           "open_app", "browser_action", "close_browser", "launch_application",
+                           "desktop_screenshot", "desktop_mouse", "desktop_keyboard"] + _DASHBOARD_RO_TOOLS,
     "integration_tester": ["write_test_file", "validate_python", "validate_json", "run_shell",
                            "start_service", "stop_service", "http_request",
                            "read_file", "list_files", "search_codebase",
-                           "open_app", "browser_action", "close_browser"] + _DASHBOARD_RO_TOOLS,
+                           "open_app", "browser_action", "close_browser", "launch_application",
+                           "desktop_screenshot", "desktop_mouse", "desktop_keyboard"] + _DASHBOARD_RO_TOOLS,
     "security_auditor":   ["write_test_file", "scan_vulnerabilities", "check_owasp", "run_shell",
                            "start_service", "stop_service", "http_request",
                            "read_file", "list_files", "search_codebase",
-                           "open_app", "browser_action", "close_browser"] + _DASHBOARD_RO_TOOLS,
+                           "open_app", "browser_action", "close_browser", "launch_application",
+                           "desktop_screenshot", "desktop_mouse", "desktop_keyboard"] + _DASHBOARD_RO_TOOLS,
 }
 _DEV_TOOL_NAMES = ["write_code_file", "write_file_section", "write_test_file",
                    "validate_python", "validate_json",
                    "validate_yaml", "write_config_file", "read_file", "run_shell",
                    "list_files", "search_codebase", "start_service", "stop_service",
-                   "http_request", "open_app", "browser_action", "close_browser"] + _DASHBOARD_TOOLS
+                   "http_request", "open_app", "browser_action", "close_browser", "launch_application",
+                   "desktop_screenshot", "desktop_mouse", "desktop_keyboard",
+                   # Full dashboard / messaging suite — Gemini SDK raises KeyError
+                   # if the model tries to call a function that isn't in the tool list,
+                   # so all known tools must be registered even if prompts de-emphasise them.
+                   "check_dashboard", "check_messages",
+                   "message_teammate", "broadcast_message", "request_contract_amendment"]
+
+# Subset used on retries after a no-write round — read/browse/poll tools stripped
+# so the model has no choice but to write.
+_DEV_WRITE_ONLY_TOOL_NAMES = [
+    "write_code_file", "write_file_section", "write_test_file",
+    "write_config_file", "validate_python", "validate_json", "validate_yaml",
+    "run_shell", "start_service", "stop_service",
+]
+
+def _dev_tools_for_attempt(role_key: str, retry_count: int) -> List[str]:
+    """Return the appropriate tool list for a dev agent.
+    Always returns the full toolset — narrowing to write-only caused the model to
+    attempt calling list_files anyway; Gemini AFC rejects those unknown function
+    calls silently, burning all 25 rounds with 0 Python invocations.
+    Instead, retries inject file content directly into the prompt so the model
+    already has context and doesn't need to call list_files.
+    """
+    if not role_key.startswith("dev_"):
+        return _ROLE_TOOL_NAMES.get(role_key, [])
+    return _DEV_TOOL_NAMES
 
 # Engineering manager gets full file access + service tools for integration pass
 _ENG_MANAGER_TOOL_NAMES = [
     "read_file", "list_files", "search_codebase",
     "write_code_file", "write_config_file",
     "validate_python", "validate_json", "validate_yaml",
-    "run_shell", "start_service", "stop_service", "http_request",
+    "run_shell", "start_service", "stop_service", "http_request", "launch_application",
+    "desktop_screenshot", "desktop_mouse", "desktop_keyboard",
 ] + _DASHBOARD_RO_TOOLS
 
 
-def get_role_lc_tools(role_key: str) -> List:
-    """Return list of LangChain tool objects for this role."""
-    names = _ROLE_TOOL_NAMES.get(role_key, [])
-    missing = [n for n in names if n not in _LC_TOOLS_BY_NAME]
-    if missing:
-        logger.warning(f"[{role_key}] tools not found in registry (skipped): {missing}")
-    return [_LC_TOOLS_BY_NAME[n] for n in names if n in _LC_TOOLS_BY_NAME]
+def get_role_lc_tools(role_key: str) -> List[dict]:
+    """Return list of Anthropic tool definition dicts for this role (alias for get_role_anthropic_tools)."""
+    return get_role_anthropic_tools(role_key)
 
 
-# ── LangGraph worker: runs prompt through ReAct agent, tools called natively ──
+# ── Gemini native function-calling agentic loop ───────────────────────────────
 def _run_with_tools(
     prompt: str,
     role_key: str,
     label: str,
+    retry_count: int = 0,
 ) -> Tuple[str, List[str], float]:
     """
-    Run a prompt through a LangGraph ReAct agent with this role's tools.
+    Run a prompt through Gemini's native automatic function-calling chat session.
+    System instruction is pinned once in chat config and never re-injected.
+    Conversation history is maintained as structured Content objects by the SDK —
+    no string concatenation, no JSON parsing, no regex.
     Returns (final_text, tool_result_strings, perplexity_estimate).
-    Tool calls use native Gemini function calling — no regex, no 0-char files.
     """
-    agent = _get_lc_agent(role_key)
-    logger.info(f"[{label}] ── ReAct agent invoked (role={role_key}, prompt={len(prompt)}c, recursion_limit=16)")
+    from google.genai import types as _gtypes
+    import concurrent.futures as _cf
 
-    try:
-        result = agent.invoke(
-            {"messages": [HumanMessage(content=prompt)]},
-            config={"recursion_limit": 16},
+    _AGENT_TIMEOUT = 240
+    _MAX_AGENT_RETRIES = 3
+    _MAX_TOOL_CALLS = 24 if role_key.startswith("dev_") else 100
+
+    # Thread-safe invocation log shared between the wrapper closures and _run_loop.
+    _tool_invocations: List[str] = []
+    _tool_inv_lock = threading.Lock()
+
+    def _run_loop() -> Tuple[str, List[str]]:
+        names    = _dev_tools_for_attempt(role_key, retry_count)
+        tool_fns = [_TOOL_CALLABLES[n] for n in names if n in _TOOL_CALLABLES]
+        system   = _worker_system(role_key) + "\n\n" + _SYSTEM_AGENT
+
+        # Wrap each tool callable so we can count and log actual invocations.
+        # AFC resolves tool calls internally — the final response has no
+        # function_call parts, so response-inspection always reports 0.
+        _consec_list_files = [0]   # mutable so inner closure can mutate it
+
+        def _make_counted(fn):
+            import typing as _typing_mod
+
+            def _wrapper(*args, **kwargs):
+                arg_repr = str(kwargs or args)[:200]
+                # Registered tools have names like "list_files", "write_code_file" (no _tool_ prefix)
+                is_list = fn.__name__ == "list_files"
+                with _tool_inv_lock:
+                    if is_list:
+                        _consec_list_files[0] += 1
+                        run_n = _consec_list_files[0]
+                    else:
+                        _consec_list_files[0] = 0
+                        run_n = 0
+                if is_list:
+                    logger.warning(
+                        f"  [{label}] list_files called (consecutive #{run_n})"
+                    )
+                try:
+                    result = fn(*args, **kwargs)
+                    entry = f"[TOOL: {fn.__name__}] {arg_repr}"
+                    with _tool_inv_lock:
+                        _tool_invocations.append(entry)
+                    if is_list:
+                        logger.info(
+                            f"  [{label}] list_files result →\n{result}"
+                        )
+                    else:
+                        logger.info(f"  [{label}] tool {fn.__name__}: {arg_repr[:80]}")
+                    return result
+                except Exception as _tool_err:
+                    entry = f"[TOOL ERROR: {fn.__name__}] {arg_repr} → {_tool_err}"
+                    with _tool_inv_lock:
+                        _tool_invocations.append(entry)
+                    logger.error(f"  [{label}] tool {fn.__name__} RAISED: {_tool_err}")
+                    raise
+
+            # Copy identity attributes manually.
+            # IMPORTANT: do NOT use functools.wraps() or set __wrapped__ = fn.
+            # `from __future__ import annotations` (PEP 563) makes all
+            # annotations in this module strings.  In Python 3.14 inspect.signature()
+            # no longer evaluates those strings, so they stay as e.g. `'str'`.
+            # The Gemini AFC code calls isinstance(value, param.annotation) which
+            # then fails with "isinstance() arg 2 must be a type" because 'str'
+            # is a string, not a type.  Setting __wrapped__ would cause
+            # inspect.signature() to follow it and hit the same problem.
+            # Instead we build an explicit __signature__ with fully-evaluated
+            # type objects sourced from typing.get_type_hints().
+            _wrapper.__name__ = fn.__name__
+            _wrapper.__qualname__ = fn.__qualname__
+            _wrapper.__doc__ = fn.__doc__
+            _wrapper.__module__ = fn.__module__
+
+            try:
+                raw_sig = inspect.signature(fn, follow_wrapped=False)
+                try:
+                    hints = _typing_mod.get_type_hints(fn)
+                except Exception:
+                    hints = {}
+                new_params = []
+                for pname, param in raw_sig.parameters.items():
+                    if pname in hints:
+                        param = param.replace(annotation=hints[pname])
+                    new_params.append(param)
+                ret_ann = hints.get("return", inspect.Parameter.empty)
+                _wrapper.__signature__ = raw_sig.replace(
+                    parameters=new_params, return_annotation=ret_ann
+                )
+            except Exception as _sig_err:
+                logger.warning(f"[_make_counted] could not build signature for {fn.__name__}: {_sig_err}")
+
+            return _wrapper
+
+        counted_fns = [_make_counted(fn) for fn in tool_fns]
+
+        cfg_kwargs: dict = dict(
+            system_instruction=system,
+            max_output_tokens=8096,
         )
-    except Exception as e:
-        logger.error(f"[{label}] agent error: {e}")
-        return f"[ERROR: {e}]\nSTANCE: PRAGMATIC", [], 10.0
+        if counted_fns:
+            cfg_kwargs["tools"] = counted_fns
+            cfg_kwargs["automatic_function_calling"] = _gtypes.AutomaticFunctionCallingConfig(
+                maximum_remote_calls=_MAX_TOOL_CALLS + 1,
+            )
 
-    messages = result.get("messages", [])
-    ai_turns   = sum(1 for m in messages if isinstance(m, AIMessage))
-    tool_turns = sum(1 for m in messages if isinstance(m, ToolMessage))
-    logger.info(f"[{label}] agent finished — {len(messages)} messages ({ai_turns} AI turns, {tool_turns} tool calls)")
+        chat = get_client().chats.create(
+            model=GEMINI_MODEL,
+            config=_gtypes.GenerateContentConfig(**cfg_kwargs),
+        )
 
-    # Collect tool results from ToolMessages
+        r = chat.send_message(prompt)
+        _track_tokens(r)
+
+        final_text = (getattr(r, "text", "") or "").strip()
+
+        with _tool_inv_lock:
+            collected = list(_tool_invocations)
+
+        logger.info(f"[{label}] agent finished — {len(collected)} tool invocations")
+        return final_text, collected
+
+    last_err = ""
+    text = ""
     tool_results: List[str] = []
-    for msg in messages:
-        if isinstance(msg, ToolMessage):
-            tool_results.append(f"[TOOL: {msg.name}] {msg.content}")
-            logger.info(f"  Tool {msg.name}: {str(msg.content)[:80]}")
+    logger.info(f"[{label}] ── Gemini native function-calling loop (role={role_key}, prompt={len(prompt)}c)")
 
-    # Final AI response: last AIMessage WITHOUT pending tool_calls (the summary turn)
-    final_ai = next(
-        (m for m in reversed(messages)
-         if isinstance(m, AIMessage) and not getattr(m, "tool_calls", [])),
-        None,
-    )
-    # Normalize: multimodal content may be a list of dicts; join string parts only
-    if final_ai is not None:
-        raw_content = final_ai.content
-        if isinstance(raw_content, str):
-            text = raw_content
-        elif isinstance(raw_content, list):
-            text = "".join(p if isinstance(p, str) else p.get("text", "") for p in raw_content)
-        else:
-            text = ""
+    # Capture the calling thread's ContextVars (agent_id, worktree_manager, sprint_num)
+    # so tool functions invoked by Gemini AFC inside the inner thread see the right values.
+    _ctx = _cv.copy_context()
+
+    for _attempt in range(1, _MAX_AGENT_RETRIES + 1):
+        _ex = _cf.ThreadPoolExecutor(max_workers=1)
+        try:
+            _fut = _ex.submit(_ctx.run, _run_loop)
+            try:
+                text, tool_results = _fut.result(timeout=_AGENT_TIMEOUT)
+                break
+            except _cf.TimeoutError:
+                last_err = f"agent timed out after {_AGENT_TIMEOUT}s"
+                logger.warning(f"[{label}] {last_err} (attempt {_attempt}/{_MAX_AGENT_RETRIES})")
+                _fut.cancel()
+            except Exception as e:
+                last_err = str(e)
+                logger.warning(f"[{label}] agent error: {e} (attempt {_attempt}/{_MAX_AGENT_RETRIES})")
+                # Exponential backoff for rate-limit (429) errors
+                if "429" in last_err or "RESOURCE_EXHAUSTED" in last_err:
+                    _backoff = 5 * (2 ** (_attempt - 1))   # 5s, 10s, 20s …
+                    logger.info(f"[{label}] rate-limited — waiting {_backoff}s before retry")
+                    import time as _time
+                    _time.sleep(_backoff)
+        finally:
+            _ex.shutdown(wait=False)
     else:
-        text = ""
+        logger.error(f"[{label}] all {_MAX_AGENT_RETRIES} attempts failed — {last_err}")
+        return f"[ERROR: {last_err}]\nSTANCE: PRAGMATIC", [], 10.0
 
-    # Token accounting: LangChain's Gemini integration stores usage on the AIMessage
-    # object itself as `usage_metadata` (not inside response_metadata).
-    global _tokens_in, _tokens_out, _call_count
-    for msg in messages:
-        if isinstance(msg, AIMessage):
-            usage = getattr(msg, "usage_metadata", None) or {}
-            t_in  = usage.get("input_tokens", 0) or 0
-            t_out = usage.get("output_tokens", 0) or 0
-            with _token_lock:
-                _call_count += 1
-                _tokens_in  += t_in
-                _tokens_out += t_out
-
-    # Fallback: if the agent produced no meaningful summary, ask the LLM directly
+    # Fallback: if agent produced no meaningful summary, synthesise from tool outputs
     used_fallback = False
     if len(text) < 150 and tool_results:
         tool_summary = "\n".join(tool_results[:6])
@@ -1804,12 +2504,31 @@ def _run_with_tools(
         f"[total: {token_summary()}]: {text[:80]}{'...' if len(text) > 80 else ''}"
     )
 
-    # Perplexity: when fallback was used the original AIMessage is stale — use length heuristic
-    if used_fallback:
-        perplexity = max(1.5, 10.0 - min(len(text) / 500, 1.0) * 7.0)
-    else:
-        perplexity = _perplexity_from_lc(final_ai)
+    perplexity = (
+        max(1.5, 10.0 - min(len(text) / 500, 1.0) * 7.0)
+        if used_fallback
+        else _perplexity_from_content(text)
+    )
     logger.info(f"[{label}] perplexity={perplexity:.2f}  final_text={len(text)}c")
+
+    # ── Save agent trace to markdown ──────────────────────────────────────
+    try:
+        import datetime as _dt
+        logs_dir = OUTPUT_DIR / "logs"
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        md_path = logs_dir / f"{label}.md"
+        lines = [
+            f"# Agent Trace: `{label}`\n",
+            f"**Role:** {role_key}  \n**Time:** {_dt.datetime.now().strftime('%H:%M:%S')}\n\n",
+        ]
+        for tr in tool_results:
+            lines.append(f"**Tool:** {tr[:400]}\n\n")
+        if text.strip():
+            lines.append(f"---\n## Summary\n{text.strip()}\n")
+        md_path.write_text("".join(lines), encoding="utf-8")
+    except Exception:
+        pass  # never let logging break the agent
+
     return text, tool_results, perplexity
 
 
@@ -1844,34 +2563,6 @@ def _perplexity_from_content(text: str) -> float:
     return min(score, 10.0)
 
 
-def _perplexity_from_lc(msg: Optional[AIMessage]) -> float:
-    """Estimate perplexity via verbal confidence elicitation, falling back to content heuristic."""
-    if msg is None:
-        return 8.0
-    content = msg.content if isinstance(msg.content, str) else ""
-    if not content or len(content) < 10:
-        return 8.0
-    # Ask the model to self-rate its confidence in a single token (A/B/C/D)
-    try:
-        elicit_prompt = (
-            f"You just produced this response:\n\"\"\"\n{content[:800]}\n\"\"\"\n\n"
-            "Rate your confidence in this response:\n"
-            "A) Very confident — output is complete, correct, and well-reasoned\n"
-            "B) Confident — minor gaps possible but core is solid\n"
-            "C) Uncertain — notable gaps or assumptions made\n"
-            "D) Very uncertain — significant issues or missing information\n\n"
-            "Reply with only the letter A, B, C, or D."
-        )
-        reply = llm_call(elicit_prompt, label="", get_logprobs=False, system="")
-        letter = reply.strip().upper()[:1].lower()
-        if letter in _CONFIDENCE_MAP:
-            score = _CONFIDENCE_MAP[letter]
-            logger.info(f"  confidence self-rating: {letter.upper()} → perplexity={score:.1f}")
-            return score
-        logger.info(f"  confidence self-rating: unrecognised reply '{reply.strip()[:10]}' — falling back to content heuristic")
-    except Exception as exc:
-        logger.debug(f"  confidence elicitation failed: {exc}")
-    return _perplexity_from_content(content)
 
 
 # ── Role definitions ──────────────────────────────────────────────────────────
@@ -2081,10 +2772,28 @@ _tokens_out: int = 0
 _call_count: int = 0
 _token_lock = threading.Lock()   # guards all three counters against concurrent +=
 
-# ── LLM / agent cache (avoid rebuilding on every call) ───────────────────────
-_lc_llm: Optional["ChatGoogleGenerativeAI"] = None
-_agent_cache: Dict[str, object] = {}
-_agent_cache_lock = threading.Lock()  # guards lazy init of _lc_llm and _agent_cache
+
+def _track_tokens(response_or_usage) -> None:
+    """Thread-safe accumulation of token counters from Anthropic/Gemini responses."""
+    usage = response_or_usage
+    # Gemini SDK response: usage lives under response.usage_metadata
+    if hasattr(response_or_usage, "usage_metadata"):
+        usage = getattr(response_or_usage, "usage_metadata")
+    in_tokens = (
+        getattr(usage, "input_tokens", None)
+        or getattr(usage, "prompt_token_count", None)
+        or 0
+    )
+    out_tokens = (
+        getattr(usage, "output_tokens", None)
+        or getattr(usage, "candidates_token_count", None)
+        or 0
+    )
+    global _tokens_in, _tokens_out, _call_count
+    with _token_lock:
+        _tokens_in  += int(in_tokens or 0)
+        _tokens_out += int(out_tokens or 0)
+        _call_count += 1
 
 # ── System prompts (loaded from prompts/ directory) ───────────────────────────
 def _load_prompt(filename: str) -> str:
@@ -2138,23 +2847,6 @@ def _manager_system(role_key: str) -> str:
     return _ROLE_SYSTEM_PROMPTS.get(role_key, _SYSTEM_MANAGER)
 
 
-def _get_lc_agent(role_key: str):
-    """Return (or create and cache) a LangGraph ReAct agent for this role."""
-    global _lc_llm
-    if role_key not in _agent_cache:
-        with _agent_cache_lock:
-            if role_key not in _agent_cache:   # double-checked
-                if _lc_llm is None:
-                    _lc_llm = ChatGoogleGenerativeAI(
-                        model=GEMINI_MODEL,
-                        google_api_key=os.environ["GEMINI_API_KEY"],
-                    )
-                tools = get_role_lc_tools(role_key)
-                combined_prompt = _worker_system(role_key) + "\n\n" + _SYSTEM_AGENT
-                _agent_cache[role_key] = create_react_agent(
-                    _lc_llm, tools, prompt=combined_prompt
-                )
-    return _agent_cache[role_key]
 
 
 def get_client() -> genai.Client:
@@ -2162,7 +2854,10 @@ def get_client() -> genai.Client:
     if _client is None:
         with _client_lock:
             if _client is None:
-                _client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+                _client = genai.Client(
+                    api_key=os.environ["GEMINI_API_KEY"],
+                    http_options={"api_version": "v1beta"},
+                )
     return _client
 
 
@@ -2172,7 +2867,7 @@ def token_summary() -> str:
         t_in  = _tokens_in
         t_out = _tokens_out
     total = t_in + t_out
-    # Gemini 3.1 Flash-Lite: $0.25 / 1M input, $1.50 / 1M output
+    # gemini-3.1-flash-lite-preview: $0.25/1M input, $1.50/1M output
     cost = (t_in * 0.25 + t_out * 1.50) / 1_000_000
     return (
         f"calls={calls}  "
@@ -2188,57 +2883,76 @@ def llm_call(
     get_logprobs: bool = False,
     system: str = _SYSTEM_WORKER,
 ):
-    try:
-        cfg: Dict = {}
-        if system:
-            cfg["system_instruction"] = system
-        r = get_client().models.generate_content(
+    import concurrent.futures as _cf
+    _LLM_TIMEOUT = 60
+    _LLM_RETRIES = 3
+
+    def _do_call():
+        from google.genai import types as _gtypes
+        cfg = _gtypes.GenerateContentConfig(
+            max_output_tokens=8096,
+            **({"system_instruction": system} if system else {}),
+        )
+        return get_client().models.generate_content(
             model=GEMINI_MODEL,
             contents=prompt,
-            **({"config": cfg} if cfg else {}),
+            config=cfg,
         )
-        text = (r.text or "").strip()
 
-        # Track tokens
-        u = getattr(r, "usage_metadata", None)
-        t_in  = getattr(u, "prompt_token_count",     0) or 0
-        t_out = getattr(u, "candidates_token_count", 0) or 0
-        global _tokens_in, _tokens_out, _call_count
-        with _token_lock:
-            _tokens_in  += t_in
-            _tokens_out += t_out
-            _call_count += 1
-
-        tag = f"[{label}] " if label else ""
-        logger.info(
-            f"{tag}({len(text)}c | in={t_in} out={t_out}) "
-            f"[total: {token_summary()}]: "
-            f"{text[:80]}{'...' if len(text) > 80 else ''}"
-        )
-        if get_logprobs:
-            perplexity = _perplexity_from_content(text)
+    last_err: str = ""
+    for _attempt in range(1, _LLM_RETRIES + 1):
+        try:
+            _llm_ex = _cf.ThreadPoolExecutor(max_workers=1)
+            _llm_fut = _llm_ex.submit(_do_call)
             try:
-                elicit_prompt = (
-                    f"You just produced this response:\n\"\"\"\n{text[:800]}\n\"\"\"\n\n"
-                    "Rate your confidence in this response:\n"
-                    "A) Very confident — output is complete, correct, and well-reasoned\n"
-                    "B) Confident — minor gaps possible but core is solid\n"
-                    "C) Uncertain — notable gaps or assumptions made\n"
-                    "D) Very uncertain — significant issues or missing information\n\n"
-                    "Reply with only the letter A, B, C, or D."
-                )
-                reply = llm_call(elicit_prompt, label="", get_logprobs=False, system="")
-                letter = reply.strip().upper()[:1].lower()
-                if letter in _CONFIDENCE_MAP:
-                    perplexity = _CONFIDENCE_MAP[letter]
-            except Exception:
-                pass
-            return text, perplexity
-        return text
-    except Exception as e:
-        logger.error(f"LLM_ERROR [{label}]: {e}")
-        fallback = f"[ERROR: {e}]\nSTANCE: PRAGMATIC"
-        return (fallback, 10.0) if get_logprobs else fallback
+                r = _llm_fut.result(timeout=_LLM_TIMEOUT)
+                _llm_ex.shutdown(wait=False)
+            except _cf.TimeoutError:
+                _llm_ex.shutdown(wait=False)
+                last_err = f"timed out after {_LLM_TIMEOUT}s"
+                logger.warning(f"LLM_TIMEOUT [{label}] attempt {_attempt}/{_LLM_RETRIES} — retrying...")
+                continue
+
+            text = (getattr(r, "text", "") or "").strip()
+
+            _track_tokens(r)
+            u = getattr(r, "usage_metadata", None)
+            t_in  = getattr(u, "prompt_token_count", 0) or 0
+            t_out = getattr(u, "candidates_token_count", 0) or 0
+
+            tag = f"[{label}] " if label else ""
+            logger.info(
+                f"{tag}({len(text)}c | in={t_in} out={t_out}) "
+                f"[total: {token_summary()}]: "
+                f"{text[:80]}{'...' if len(text) > 80 else ''}"
+            )
+            if get_logprobs:
+                perplexity = _perplexity_from_content(text)
+                try:
+                    elicit_prompt = (
+                        f"You just produced this response:\n\"\"\"\n{text[:800]}\n\"\"\"\n\n"
+                        "Rate your confidence in this response:\n"
+                        "A) Very confident — output is complete, correct, and well-reasoned\n"
+                        "B) Confident — minor gaps possible but core is solid\n"
+                        "C) Uncertain — notable gaps or assumptions made\n"
+                        "D) Very uncertain — significant issues or missing information\n\n"
+                        "Reply with only the letter A, B, C, or D."
+                    )
+                    reply = llm_call(elicit_prompt, label="", get_logprobs=False, system="")
+                    letter = reply.strip().upper()[:1].lower()
+                    if letter in _CONFIDENCE_MAP:
+                        perplexity = _CONFIDENCE_MAP[letter]
+                except Exception:
+                    pass
+                return text, perplexity
+            return text
+        except Exception as e:
+            last_err = str(e)
+            logger.warning(f"LLM_ERROR [{label}] attempt {_attempt}/{_LLM_RETRIES}: {e}")
+
+    logger.error(f"LLM_ERROR [{label}]: all {_LLM_RETRIES} attempts failed — {last_err}")
+    fallback = f"[ERROR: {last_err}]\nSTANCE: PRAGMATIC"
+    return (fallback, 10.0) if get_logprobs else fallback
 
 
 def perplexity_to_similarities(perplexity: float) -> dict:
@@ -3137,13 +3851,11 @@ def _generate_contracts(
     logger.info(f"\n{'─'*55}\nCONTRACT GENERATION: Engineering\n{'─'*55}")
 
     assignment_list = "\n".join(
-        f"  {dev}: {desc}" for dev, desc in dev_assignments.items()
+        f"  {dev}: owns {desc}" for dev, desc in dev_assignments.items()
     )
     if pool:
         pool_list = "\n".join(f"  [Pool] {iid}: {desc}" for iid, desc in pool.items())
         assignment_list += f"\n\nUNASSIGNED BACKLOG POOL:\n{pool_list}"
-
-    assignment_list = "\n".join(f"  {d}: owns {a}" for d, a in dev_assignments.items())
     
     # Inject Architect's intended structure if available
     struct_ctx = ""
@@ -3223,10 +3935,16 @@ def _generate_contracts(
             f"  Files with no dependencies have 'depends_on': []. The entry point depends on ALL other files.\n"
             f"  Test files depend on the files they test.\n"
             f"- 'exports' MUST list the exact symbol names other files need to import from this file\n"
-            f"- 'build_command' is the shell command to run the app or run tests (e.g. 'python server.py',\n"
-            f"  'cargo build', 'npm run build', 'go build ./...')\n"
+            f"- 'build_command' is the shell command to run the app or run tests\n"
             f"- 'build_file' is the config file that lists dependencies (e.g. 'requirements.txt', 'Cargo.toml',\n"
             f"  'package.json', 'go.mod'). Leave empty if not applicable.\n"
+            f"- 'install_command' is the shell command to install dependencies before building\n"
+            f"  (e.g. 'npm install', 'pip install -r requirements.txt', 'cargo fetch', 'go mod download').\n"
+            f"  Leave empty if no install step is needed.\n"
+            f"- 'gitignore_patterns' is a list of patterns for .gitignore based on the build system\n"
+            f"  (e.g. ['node_modules/', 'dist/', 'package-lock.json'] for Node,\n"
+            f"  ['__pycache__/', '*.pyc', 'dist/', 'build/'] for Python,\n"
+            f"  ['target/'] for Rust). Always include build artifacts and dependency directories.\n"
             f"- 'dependencies' lists external libraries needed (e.g. ['fastapi', 'sqlalchemy'])\n"
             f"- 'init_order' lists modules in the order they should be initialized (if ordering matters)\n"
         )
@@ -3317,14 +4035,14 @@ MAX_ENG_ROUNDS = 4   # hard cap per sprint to control cost (legacy, kept for ref
 MAX_SPRINTS    = 5   # safety cap — CEO should ship before this; prevents runaway cost
 
 # ── Async task-completion constants ───────────────────────────────────────────
-MAX_TASKS_PER_AGENT = 4
-MAX_WALL_CLOCK      = 300   # seconds — hard timeout for entire engineering phase
-MAX_RETRIES_PER_TASK = 2
+MAX_TASKS_PER_AGENT = 20
+MAX_WALL_CLOCK      = 600   # seconds — hard timeout for entire engineering phase
+MAX_RETRIES_PER_TASK = 10
 _AGENT_POLL_INTERVAL = 2    # seconds between task queue polls when blocked
 
-# Phase constants for Two-Phase Sprints
+# Phase constants (integration task still uses PHASE_INTEGRATION as a marker)
 PHASE_IMPLEMENTATION = 1   # Coding individual files
-PHASE_INTEGRATION    = 2   # Wiring, Docker, Infrastructure, Final Integration
+PHASE_INTEGRATION    = 2   # Final integration test (manager fix loop)
 
 
 @dataclass
@@ -3337,7 +4055,7 @@ class EngTask:
     assigned_to: Optional[str] = None
     status: str = "pending"       # pending | blocked | in_progress | completed | failed
     retries: int = 0
-    primary_owner: Optional[str] = None  # dev originally assigned to this file
+    primary_owner: Optional[str] = None  # legacy field; ownership is no longer used for claiming
     phase: int = PHASE_IMPLEMENTATION
 
 
@@ -3358,9 +4076,16 @@ class EngTaskQueue:
         self._completed_tasks: set = set()
         pool_tasks = pool_tasks or {}
 
+        def _is_valid_fname(fname: str) -> bool:
+            """Reject wildcard/glob paths the LLM sometimes generates (e.g. migrations/versions/*)."""
+            return not any(c in fname for c in ("*", "?", "<", ">", "|"))
+
         file_to_task_id = {}
         for fname, fc in registry.file_map.items():
             if fname == registry.entry_point:
+                continue
+            if not _is_valid_fname(fname):
+                logger.warning(f"[TaskQueue] skipping invalid filename in contracts: {fname!r}")
                 continue
             tid = f"task_{fname.replace('/', '_').replace('.', '_')}"
             file_to_task_id[fname] = tid
@@ -3368,6 +4093,8 @@ class EngTaskQueue:
         # Phase 1: Implementation (Drafting)
         for fname, fc in registry.file_map.items():
             if fname == registry.entry_point:
+                continue
+            if not _is_valid_fname(fname):
                 continue
             tid = f"task_{fname.replace('/', '_').replace('.', '_')}_p1"
             dep_ids = [
@@ -3383,26 +4110,7 @@ class EngTaskQueue:
             self.tasks[tid] = EngTask(
                 id=tid, file=fname, description=desc,
                 depends_on=dep_ids, status="pending" if not dep_ids else "blocked",
-                primary_owner=fc.owner if fc.owner != "system" else None,
                 phase=PHASE_IMPLEMENTATION
-            )
-
-        # Phase 2: Collaborative Integration (Wiring Specialist)
-        # These tasks depend on ALL Phase 1 tasks being completed and merged.
-        p1_task_ids = [t.id for t in self.tasks.values() if t.phase == PHASE_IMPLEMENTATION]
-        
-        for fname, fc in registry.file_map.items():
-            if fname == registry.entry_point:
-                continue
-            tid = f"task_{fname.replace('/', '_').replace('.', '_')}_p2"
-            desc = f"PHASE 2: Collaborative Integration and Wiring for {fname}. " \
-                   f"Fix imports and ensure it works with the merged codebase."
-            
-            self.tasks[tid] = EngTask(
-                id=tid, file=fname, description=desc,
-                depends_on=p1_task_ids, status="blocked",
-                primary_owner=fc.owner if fc.owner != "system" else None,
-                phase=PHASE_INTEGRATION
             )
 
         integ_tid = "task_integration_test"
@@ -3426,20 +4134,27 @@ class EngTaskQueue:
                         tid = file_to_task_id[pf] + "_p1"
                         if tid in self.tasks:
                             self.tasks[tid].description = f"POOL TASK: {pool_desc}"
-                            self.tasks[tid].primary_owner = None # No one owns it
 
         n_pending = sum(1 for t in self.tasks.values() if t.status == "pending")
         n_blocked = sum(1 for t in self.tasks.values() if t.status == "blocked")
-        logger.info(f"[TaskQueue] initialized {len(self.tasks)} tasks ({n_pending} pending, {n_blocked} blocked) in two phases.")
+        logger.info(f"[TaskQueue] initialized {len(self.tasks)} tasks ({n_pending} pending, {n_blocked} blocked) + final integration.")
         self._load()   # crash recovery: reload persisted state if available
+        # After reload, dependencies that were already satisfied in the persisted state
+        # must be re-evaluated — without this, Phase 2 tasks stay blocked forever on restart.
+        self._unblock_dependents()
         self._persist()
 
-    _PERSIST_PATH = OUTPUT_DIR / "task_queue_state.json"
+    # _PERSIST_PATH must NOT be a class attribute — OUTPUT_DIR may be overridden at
+    # runtime. A frozen class attr would always point at company_output/task_queue_state.json
+    # and load stale task states from a prior full-company run into an engineers-only run.
+    @property
+    def _persist_path(self) -> Path:
+        return OUTPUT_DIR / "task_queue_state.json"
 
     def _persist(self) -> None:
         """Serialize queue state to disk after every mutation."""
         try:
-            self._PERSIST_PATH.parent.mkdir(parents=True, exist_ok=True)
+            self._persist_path.parent.mkdir(parents=True, exist_ok=True)
             state = {
                 "tasks": {
                     tid: {
@@ -3452,16 +4167,16 @@ class EngTaskQueue:
                 },
                 "completed_tasks": list(self._completed_tasks),
             }
-            self._PERSIST_PATH.write_text(json.dumps(state, indent=2), encoding="utf-8")
+            self._persist_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
         except Exception as e:
             logger.warning(f"[TaskQueue] persist failed: {e}")
 
     def _load(self) -> None:
         """Reload queue state from disk if available (crash recovery)."""
-        if not self._PERSIST_PATH.exists():
+        if not self._persist_path.exists():
             return
         try:
-            data = json.loads(self._PERSIST_PATH.read_text(encoding="utf-8"))
+            data = json.loads(self._persist_path.read_text(encoding="utf-8"))
             for tid, td in data.get("tasks", {}).items():
                 if tid in self.tasks:
                     t = self.tasks[tid]
@@ -3469,29 +4184,22 @@ class EngTaskQueue:
                     t.assigned_to = td.get("assigned_to", t.assigned_to)
                     t.retries     = td.get("retries", t.retries)
             self._completed_tasks = set(data.get("completed_tasks", []))
-            logger.info(f"[TaskQueue] crash-recovery: reloaded state from {self._PERSIST_PATH.name}")
+            logger.info(f"[TaskQueue] crash-recovery: reloaded state from {self._persist_path.name}")
         except Exception as e:
             logger.warning(f"[TaskQueue] load failed: {e}")
 
     def claim_next(self, dev_key: str) -> Optional[EngTask]:
-        """Claim the next available pending task. Prefers tasks assigned to this dev."""
+        """Claim the next available pending task from the shared pool."""
         with self._lock:
-            preferred = None
-            fallback = None
             for t in self.tasks.values():
                 if t.status != "pending":
                     continue
-                if t.primary_owner == dev_key and preferred is None:
-                    preferred = t
-                elif fallback is None:
-                    fallback = t
-            chosen = preferred or fallback
-            if chosen:
-                chosen.status = "in_progress"
-                chosen.assigned_to = dev_key
-                logger.info(f"[TaskQueue] {dev_key} claimed task '{chosen.id}' ({chosen.file})")
+                t.status = "in_progress"
+                t.assigned_to = dev_key
+                logger.info(f"[TaskQueue] {dev_key} claimed task '{t.id}' ({t.file})")
                 self._persist()
-            return chosen
+                return t
+            return None
 
     def complete(self, task_id: str) -> None:
         """Mark a task completed and unblock dependents."""
@@ -3503,6 +4211,12 @@ class EngTaskQueue:
                 logger.info(f"[TaskQueue] task '{task_id}' COMPLETED")
                 self._unblock_dependents()
                 self._persist()
+
+    def get_retries(self, task_id: str) -> int:
+        """Return retry count for a task, thread-safely."""
+        with self._lock:
+            task = self.tasks.get(task_id)
+            return task.retries if task else MAX_RETRIES_PER_TASK
 
     def fail(self, task_id: str) -> None:
         """Mark a task failed. It may be retried by another agent."""
@@ -3523,24 +4237,12 @@ class EngTaskQueue:
 
     def _unblock_dependents(self) -> None:
         """Move blocked tasks to pending if all their dependencies are satisfied."""
-        phase_1_all_done = all(
-            t.status in ("completed", "failed")
-            for t in self.tasks.values() if t.phase == PHASE_IMPLEMENTATION
-        )
-
         for t in self.tasks.values():
             if t.status == "blocked":
-                # Regular dependencies check
                 deps_met = all(d in self._completed_tasks for d in t.depends_on)
-                
-                # Phase 2 gate: Only release if Phase 1 is fully completed
-                phase_gate_ok = True
-                if t.phase == PHASE_INTEGRATION:
-                    phase_gate_ok = phase_1_all_done
-
-                if deps_met and phase_gate_ok:
+                if deps_met:
                     t.status = "pending"
-                    logger.info(f"[TaskQueue] unblocked task '{t.id}' ({t.file}) [PHASE {t.phase}]")
+                    logger.info(f"[TaskQueue] unblocked task '{t.id}' ({t.file})")
 
     def all_done(self) -> bool:
         with self._lock:
@@ -3650,6 +4352,12 @@ def emit_skeleton(dev_assignments: Dict[str, str], sprint_num: int = 1) -> None:
         if fname == registry.entry_point:
             continue
 
+        # Skip wildcard/glob paths that the LLM sometimes generates (e.g. "migrations/versions/*")
+        # — these are not valid file paths on any OS.
+        if any(c in fname for c in ("*", "?", "<", ">", "|")):
+            logger.warning(f"  [skeleton] skipping invalid filename (contains wildcard/illegal char): {fname!r}")
+            continue
+
         file_path = code_dir / fname
         if file_path.exists():
             continue
@@ -3733,9 +4441,10 @@ def _run_build_command(registry: InterfaceContractRegistry) -> str:
         result = subprocess.run(
             registry.build_command, shell=True, cwd=str(code_dir),
             capture_output=True, text=True, timeout=60,
+            encoding="utf-8", errors="replace",
         )
         if result.returncode != 0:
-            out = (result.stdout[-2000:] + "\n" + result.stderr[-2000:]).strip()
+            out = ((result.stdout or "")[-2000:] + "\n" + (result.stderr or "")[-2000:]).strip()
             return f"BUILD FAILED (exit {result.returncode}):\n{out}"
     except subprocess.TimeoutExpired:
         return "BUILD TIMEOUT: command took longer than 60s"
@@ -3759,7 +4468,7 @@ def _run_test_gate(code_dir: Path) -> TestGateResult:
     fails on the first non-zero exit.  When empty, fall back to auto-detection
     (pytest or npm).
     Returns TestGateResult. Never raises — all failures are captured in .output.
-    Called only for PHASE_INTEGRATION tasks when TEST_GATE_ENABLED is True.
+    Called by the manager fix loop and by self-verification.
     """
     # ── Configurable hooks path ───────────────────────────────────────────
     if TEST_GATE_HOOKS:
@@ -3769,8 +4478,9 @@ def _run_test_gate(code_dir: Path) -> TestGateResult:
                 result = subprocess.run(
                     hook_cmd, shell=True, capture_output=True, text=True,
                     timeout=60, cwd=str(code_dir),
+                    encoding="utf-8", errors="replace",
                 )
-                raw = (result.stdout + result.stderr)[-4000:]
+                raw = ((result.stdout or "") + (result.stderr or ""))[-4000:]
                 combined_output.append(f"[hook: {hook_cmd}]\n{raw}")
                 if result.returncode != 0:
                     return TestGateResult(
@@ -3805,8 +4515,9 @@ def _run_test_gate(code_dir: Path) -> TestGateResult:
         for d in (tests_dir, code_dir):
             if d.exists():
                 for g in globs:
-                    if any(d.rglob(g)):
-                        return True
+                    for p in d.rglob(g):
+                        if "node_modules" not in p.parts and ".git" not in p.parts:
+                            return True
         return False
 
     def _has_file(*names: str) -> bool:
@@ -3822,8 +4533,10 @@ def _run_test_gate(code_dir: Path) -> TestGateResult:
             return False
 
     # Detection order: most-specific first
+    # Use `python -m pytest` so it works regardless of whether `pytest` is on
+    # the system PATH (common on Windows where the Scripts/ directory may be absent).
     if _has_test_files("test_*.py", "*_test.py"):
-        cmd = f"pytest {str(tests_dir)} --tb=short -q"
+        cmd = f"{sys.executable} -m pytest {str(tests_dir)} --tb=short -q"
     elif _has_file("Cargo.toml"):
         cmd = "cargo test"
     elif _has_file("go.mod"):
@@ -3849,8 +4562,9 @@ def _run_test_gate(code_dir: Path) -> TestGateResult:
         result = subprocess.run(
             cmd, shell=True, capture_output=True, text=True,
             timeout=120, cwd=str(code_dir),
+            encoding="utf-8", errors="replace",
         )
-        raw = (result.stdout + result.stderr)[-4000:]
+        raw = ((result.stdout or "") + (result.stderr or ""))[-4000:]
         return TestGateResult(passed=(result.returncode == 0), skipped=False,
                               output=raw, command=cmd)
     except subprocess.TimeoutExpired:
@@ -3861,9 +4575,104 @@ def _run_test_gate(code_dir: Path) -> TestGateResult:
                               output=f"TEST GATE ERROR: {e}")
 
 
+# ── Per-file self-verification (runs after each agent merges) ────────────────
+
+@dataclass
+class SelfVerifyResult:
+    passed: bool
+    output: str
+    is_own_fault: bool  # True → agent's merge introduced the failure
+
+def _run_self_verify(code_dir: Path, eng_task: "EngTask") -> SelfVerifyResult:
+    """Run lightweight per-file verification after an agent's merge.
+
+    Checks:
+      - Python: ``python -c "import <module>"`` + matching test file
+      - JS/TS: ``node --check <file>``
+      - Dockerfile / YAML / JSON: syntax validation
+    Returns SelfVerifyResult; fault attribution is done by the caller.
+    """
+    fpath = code_dir / eng_task.file
+    if not fpath.exists():
+        return SelfVerifyResult(passed=True, output="(file does not exist — skip)", is_own_fault=False)
+
+    checks: List[str] = []
+    suffix = fpath.suffix.lower()
+
+    if suffix == ".py":
+        mod_path = eng_task.file.replace("/", ".").replace("\\", ".")
+        if mod_path.endswith(".py"):
+            mod_path = mod_path[:-3]
+        checks.append(f"{sys.executable} -c \"import {mod_path}\"")
+        _test_candidates = [
+            code_dir / "tests" / f"test_{fpath.name}",
+            code_dir / "tests" / f"{fpath.stem}_test.py",
+            fpath.parent / f"test_{fpath.name}",
+        ]
+        for tc in _test_candidates:
+            if tc.exists():
+                checks.append(f"{sys.executable} -m pytest {str(tc)} -x -q --tb=short")
+                break
+    elif suffix in (".js", ".mjs", ".cjs"):
+        checks.append(f"node --check {str(fpath)}")
+    elif suffix in (".ts", ".tsx"):
+        npx = "npx.cmd" if sys.platform == "win32" else "npx"
+        checks.append(f"{npx} tsc --noEmit {str(fpath)} 2>&1 || true")
+    elif suffix in (".json",):
+        checks.append(f"{sys.executable} -c \"import json, pathlib; json.loads(pathlib.Path(r'{fpath}').read_text())\"")
+    elif suffix in (".yml", ".yaml"):
+        checks.append(f"{sys.executable} -c \"import yaml, pathlib; yaml.safe_load(pathlib.Path(r'{fpath}').read_text())\"")
+    elif fpath.name == "Dockerfile":
+        checks.append(f"{sys.executable} -c \"p=open(r'{fpath}').read(); assert 'FROM' in p, 'no FROM in Dockerfile'\"")
+
+    if not checks:
+        return SelfVerifyResult(passed=True, output="(no applicable checks)", is_own_fault=False)
+
+    all_output: List[str] = []
+    for cmd in checks:
+        try:
+            proc = subprocess.run(
+                cmd, shell=True, cwd=str(code_dir),
+                capture_output=True, text=True, timeout=30,
+                encoding="utf-8", errors="replace",
+            )
+            combined = ((proc.stdout or "") + (proc.stderr or ""))[-2000:]
+            all_output.append(f"$ {cmd}\n{combined}")
+            if proc.returncode != 0:
+                return SelfVerifyResult(
+                    passed=False,
+                    output="\n".join(all_output),
+                    is_own_fault=False,  # caller will attribute
+                )
+        except subprocess.TimeoutExpired:
+            all_output.append(f"$ {cmd}\nTIMEOUT (30s)")
+            return SelfVerifyResult(passed=False, output="\n".join(all_output), is_own_fault=False)
+        except Exception as e:
+            all_output.append(f"$ {cmd}\nERROR: {e}")
+
+    return SelfVerifyResult(passed=True, output="\n".join(all_output), is_own_fault=False)
+
+
+def _run_self_verify_with_attribution(
+    code_dir: Path, eng_task: "EngTask", pre_merge_result: SelfVerifyResult
+) -> SelfVerifyResult:
+    """Run verification after merge and compare with pre-merge to attribute fault."""
+    post = _run_self_verify(code_dir, eng_task)
+    if post.passed:
+        return post
+    if not pre_merge_result.passed:
+        return SelfVerifyResult(passed=False, output=post.output, is_own_fault=False)
+    return SelfVerifyResult(passed=False, output=post.output, is_own_fault=True)
+
+
 # ── Git Worktree isolation for engineering agents ─────────────────────────────
 
 import shutil as _shutil
+
+# Serialises all git operations that touch the shared code_dir repo state
+# (init, add, commit, worktree add/remove).  Individual agents can still write
+# files concurrently; only the git commands themselves need to be serialised.
+_git_repo_lock = threading.Lock()
 
 _wt_manager_ctx: _cv.ContextVar[Optional["GitWorktreeManager"]] = _cv.ContextVar(
     "wt_manager", default=None,
@@ -3883,7 +4692,18 @@ def _get_code_dir() -> Path:
         agent_dir = wt.get_agent_code_dir(agent_id)
         if agent_dir and agent_dir.exists():
             return agent_dir
+        # Worktree object exists but directory missing — log and fall back
+        logger.warning(
+            f"[_get_code_dir] worktree dir missing for {agent_id!r} "
+            f"(wt root={wt.worktree_root}, exists={wt.worktree_root.exists()}); "
+            f"falling back to shared code dir"
+        )
+    else:
+        if not wt:
+            logger.debug(f"[_get_code_dir] no worktree manager set (agent={agent_id!r}); using shared code dir")
     return OUTPUT_DIR / "code"
+
+
 
 
 class GitWorktreeManager:
@@ -3903,48 +4723,74 @@ class GitWorktreeManager:
         return subprocess.run(
             cmd, cwd=str(cwd or self.code_dir),
             capture_output=True, text=True, timeout=30,
+            encoding="utf-8", errors="replace",
         )
 
     def init_repo(self) -> None:
         """Initialize a git repo in code_dir if one doesn't exist, and create an initial commit."""
         if self._initialized:
             return
-        git_dir = self.code_dir / ".git"
-        if not git_dir.exists():
-            self.code_dir.mkdir(parents=True, exist_ok=True)
-            self._git("init")
-            self._git("checkout", "-b", "main")
-            gitignore = self.code_dir / ".gitignore"
-            if not gitignore.exists():
-                gitignore.write_text("__pycache__/\n*.pyc\n.worktrees/\n", encoding="utf-8")
-            self._git("add", ".")
-            self._git("commit", "-m", "initial skeleton", "--allow-empty")
-            logger.info("[worktree] initialized git repo in code/")
-        else:
-            self._git("add", ".")
-            result = self._git("diff", "--cached", "--quiet")
-            if result.returncode != 0:
-                self._git("commit", "-m", "pre-round snapshot")
-        self._initialized = True
+        with _git_repo_lock:
+            if self._initialized:   # double-checked inside the lock
+                return
+            git_dir = self.code_dir / ".git"
+            if not git_dir.exists():
+                self.code_dir.mkdir(parents=True, exist_ok=True)
+                self._git("init")
+                self._git("checkout", "-b", "main")
+                gitignore = self.code_dir / ".gitignore"
+                if not gitignore.exists():
+                    patterns = get_contracts().gitignore_patterns or []
+                    content = "\n".join([".worktrees/"] + [p for p in patterns if p != ".worktrees/"]) + "\n"
+                    gitignore.write_text(content, encoding="utf-8")
+                self._git("add", ".")
+                self._git("commit", "-m", "initial skeleton", "--allow-empty")
+                logger.info("[worktree] initialized git repo in code/")
+            else:
+                # Patch .gitignore if missing entries for the detected build tool
+                gitignore = self.code_dir / ".gitignore"
+                existing = gitignore.read_text(encoding="utf-8") if gitignore.exists() else ""
+                existing_lines = set(existing.splitlines())
+                patterns = get_contracts().gitignore_patterns or []
+                needed_lines = [".worktrees/"] + [p for p in patterns if p != ".worktrees/"]
+                additions = [l for l in needed_lines if l and l not in existing_lines]
+                if additions:
+                    with open(gitignore, "a", encoding="utf-8") as f:
+                        f.write("\n" + "\n".join(additions) + "\n")
+                    for entry in additions:
+                        self._git("rm", "-r", "--cached", "--ignore-unmatch", entry.rstrip("/"))
+                self._git("add", ".")
+                result = self._git("diff", "--cached", "--quiet")
+                if result.returncode != 0:
+                    self._git("commit", "-m", "pre-round snapshot")
+            self._initialized = True
 
     def create_worktrees(self) -> None:
         """Create an isolated worktree + branch for each agent."""
         self.init_repo()
-        self.worktree_root.mkdir(parents=True, exist_ok=True)
-        for agent_id in self.agent_ids:
-            wt_path = self.worktree_root / agent_id
-            if wt_path.exists():
-                self._git("worktree", "remove", str(wt_path), "--force")
+        with _git_repo_lock:
+            self.worktree_root.mkdir(parents=True, exist_ok=True)
+            for agent_id in self.agent_ids:
+                wt_path = self.worktree_root / agent_id
+                # Use forward slashes for git on Windows
+                wt_path_str = str(wt_path).replace("\\", "/")
                 if wt_path.exists():
-                    _shutil.rmtree(str(wt_path), ignore_errors=True)
-            branch_check = self._git("rev-parse", "--verify", agent_id)
-            if branch_check.returncode == 0:
-                self._git("branch", "-D", agent_id)
-            result = self._git("worktree", "add", str(wt_path), "-b", agent_id)
-            if result.returncode != 0:
-                logger.error(f"[worktree] failed to create worktree for {agent_id}: {result.stderr}")
-            else:
-                logger.info(f"[worktree] created worktree for {agent_id}")
+                    self._git("worktree", "remove", wt_path_str, "--force")
+                    if wt_path.exists():
+                        _shutil.rmtree(str(wt_path), ignore_errors=True)
+                branch_check = self._git("rev-parse", "--verify", agent_id)
+                if branch_check.returncode == 0:
+                    self._git("branch", "-D", agent_id)
+                result = self._git("worktree", "add", wt_path_str, "-b", agent_id)
+                if result.returncode != 0:
+                    logger.error(
+                        f"[worktree] failed to create worktree for {agent_id}: {result.stderr.strip()}\n"
+                        f"  stdout: {result.stdout.strip()}"
+                    )
+                    raise RuntimeError(
+                        f"git worktree add failed for {agent_id}: {result.stderr.strip()}"
+                    )
+                logger.info(f"[worktree] created worktree for {agent_id} at {wt_path}")
 
     def get_agent_code_dir(self, agent_id: str) -> Optional[Path]:
         """Return the worktree path for an agent, or None if worktrees aren't active."""
@@ -3957,37 +4803,46 @@ class GitWorktreeManager:
         """Commit all changes in an agent's worktree. Returns True if there was something to commit."""
         wt_path = self.worktree_root / agent_id
         if not wt_path.exists():
+            logger.warning(f"[worktree] {agent_id}: worktree path missing at commit time: {wt_path}")
             return False
-        self._git("add", ".", cwd=wt_path)
-        diff = self._git("diff", "--cached", "--quiet", cwd=wt_path)
-        if diff.returncode == 0:
-            logger.info(f"[worktree] {agent_id}: no changes to commit")
-            return False
-        result = self._git("commit", "-m", f"round work by {agent_id}", cwd=wt_path)
-        if result.returncode != 0:
-            logger.warning(f"[worktree] {agent_id} commit failed: {result.stderr.strip()}")
-            return False
-        logger.info(f"[worktree] {agent_id}: committed changes")
-        return True
+        # git add/commit within the worktree branch; no lock needed as the worktree
+        # branch is exclusive to this agent, but we still serialise to avoid index
+        # conflicts on the shared object store.
+        with _git_repo_lock:
+            self._git("add", ".", cwd=wt_path)
+            diff = self._git("diff", "--cached", "--quiet", cwd=wt_path)
+            if diff.returncode == 0:
+                logger.info(f"[worktree] {agent_id}: no changes to commit")
+                return False
+            result = self._git("commit", "-m", f"round work by {agent_id}", cwd=wt_path)
+            if result.returncode != 0:
+                logger.warning(f"[worktree] {agent_id} commit failed: {result.stderr.strip()}")
+                return False
+            logger.info(f"[worktree] {agent_id}: committed changes")
+            return True
 
     def merge_all(self) -> List[str]:
         """Merge all agent branches back into main. Returns list of conflict resolutions."""
         resolutions: List[str] = []
-        for agent_id in self.agent_ids:
-            result = self._git("merge", agent_id, "--no-edit")
-            if result.returncode != 0:
-                conflict_files = self._get_conflict_files()
-                if conflict_files:
-                    for cf in conflict_files:
-                        resolved = self._resolve_conflict(cf, agent_id)
-                        resolutions.append(f"  Resolved conflict in {cf} (agent: {agent_id}): {resolved}")
-                    self._git("add", ".")
-                    self._git("commit", "-m", f"merged {agent_id} with conflict resolution")
+        with _git_repo_lock:
+            # Always land on main before merging so we never accidentally merge
+            # into a detached HEAD or a stale agent branch.
+            self._git("checkout", "main")
+            for agent_id in self.agent_ids:
+                result = self._git("merge", agent_id, "--no-edit")
+                if result.returncode != 0:
+                    conflict_files = self._get_conflict_files()
+                    if conflict_files:
+                        for cf in conflict_files:
+                            resolved = self._resolve_conflict(cf, agent_id)
+                            resolutions.append(f"  Resolved conflict in {cf} (agent: {agent_id}): {resolved}")
+                        self._git("add", ".")
+                        self._git("commit", "-m", f"merged {agent_id} with conflict resolution")
+                    else:
+                        self._git("merge", "--abort")
+                        logger.warning(f"[worktree] merge of {agent_id} failed (non-conflict): {result.stderr.strip()}")
                 else:
-                    self._git("merge", "--abort")
-                    logger.warning(f"[worktree] merge of {agent_id} failed (non-conflict): {result.stderr.strip()}")
-            else:
-                logger.info(f"[worktree] merged {agent_id} cleanly")
+                    logger.info(f"[worktree] merged {agent_id} cleanly")
         if resolutions:
             report = "\n".join(resolutions)
             logger.info(f"[worktree] merge conflict resolutions:\n{report}")
@@ -4038,17 +4893,19 @@ class GitWorktreeManager:
 
     def cleanup(self) -> None:
         """Remove this manager's worktrees and branches only (not the shared root)."""
-        for agent_id in self.agent_ids:
-            wt_path = self.worktree_root / agent_id
-            if wt_path.exists():
-                self._git("worktree", "remove", str(wt_path), "--force")
+        with _git_repo_lock:
+            for agent_id in self.agent_ids:
+                wt_path = self.worktree_root / agent_id
+                wt_path_str = str(wt_path).replace("\\", "/")
                 if wt_path.exists():
-                    _shutil.rmtree(str(wt_path), ignore_errors=True)
-            self._git("branch", "-D", agent_id)
-        self._git("worktree", "prune")
-        # Only remove root if no other worktrees remain
-        if self.worktree_root.exists() and not any(self.worktree_root.iterdir()):
-            _shutil.rmtree(str(self.worktree_root), ignore_errors=True)
+                    self._git("worktree", "remove", wt_path_str, "--force")
+                    if wt_path.exists():
+                        _shutil.rmtree(str(wt_path), ignore_errors=True)
+                self._git("branch", "-D", agent_id)
+            self._git("worktree", "prune")
+            # Only remove root if no other worktrees remain
+            if self.worktree_root.exists() and not any(self.worktree_root.iterdir()):
+                _shutil.rmtree(str(self.worktree_root), ignore_errors=True)
         logger.info(f"[worktree] cleaned up worktrees for {self.agent_ids}")
 
 
@@ -4111,10 +4968,16 @@ def _emit_build_scaffold_via_llm(
     """Use LLM to generate build configuration files (package.json, requirements.txt, etc.)."""
     bf_path = code_dir / registry.build_file
     if bf_path.exists():
-        return False
+        # Skip only if it's real content — not a skeleton stub
+        raw = bf_path.read_text(encoding="utf-8", errors="ignore").lstrip()
+        if raw and not raw.startswith("#") and not raw.startswith("# AUTO-GENERATED"):
+            return False
+        # Fall through: file is a skeleton comment — overwrite with real content
 
     existing_files = []
     for p in code_dir.rglob("*"):
+        if "node_modules" in p.parts or ".git" in p.parts:
+            continue
         if p.is_file() and not p.name.startswith("."):
             existing_files.append(str(p.relative_to(code_dir)))
 
@@ -4123,27 +4986,273 @@ def _emit_build_scaffold_via_llm(
         f"PROJECT FILES: {existing_files[:50]}\n"
         f"DEPENDENCIES: {registry.dependencies}\n"
         f"BUILD COMMAND: {registry.build_command}\n\n"
-        f"  1. call check_dashboard() — check for messages from teammates\n"
-        f"  2. call check_messages() — read every message before finalizing\n\n"
         f"Output ONLY the file content, no markdown fences.\n"
     )
-    try:
-        source = llm_call(prompt, label="generate_build_config")
-        if source and "```" in source:
-            m = re.search(r"```\w*\n(.*?)```", source, re.DOTALL)
-            if m:
-                source = m.group(1)
-        if source and source.strip():
+    is_json = registry.build_file.endswith(".json")
+    for attempt in range(3):
+        try:
+            source = llm_call(prompt, label="generate_build_config")
+            if source and "```" in source:
+                m = re.search(r"```\w*\n(.*?)```", source, re.DOTALL)
+                if m:
+                    source = m.group(1)
+            if not source or not source.strip():
+                continue
+            content = source.strip()
+            # Validate JSON files before writing
+            if is_json:
+                # Robustly extract just the outermost {...} block — ignore trailing text
+                _start = content.find('{')
+                _end = content.rfind('}')
+                if _start != -1 and _end != -1 and _end > _start:
+                    content = content[_start:_end + 1]
+                try:
+                    json.loads(content)
+                except json.JSONDecodeError as je:
+                    logger.warning(f"  LLM build-config attempt {attempt+1}: invalid JSON — {je}")
+                    prompt += f"\n\nPREVIOUS ATTEMPT WAS INVALID JSON: {je}\nOutput ONLY valid JSON, no comments, no markdown."
+                    continue
             bf_path.parent.mkdir(parents=True, exist_ok=True)
-            bf_path.write_text(source.strip() + "\n", encoding="utf-8")
+            bf_path.write_text(content + "\n", encoding="utf-8")
             return True
-    except Exception as e:
-        logger.warning(f"  LLM build-config generation failed: {e}")
+        except Exception as e:
+            logger.warning(f"  LLM build-config generation failed: {e}")
     return False
 
 
 
 
+
+
+def _setup_project(code_dir: Path) -> None:
+    """
+    Manager-run project setup: generate build config and install dependencies
+    once before any engineering agent starts. This ensures package.json,
+    node_modules, etc. exist from the start so agents never race to create them.
+    """
+    registry = get_contracts()
+    if not registry.build_file:
+        return
+
+    logger.info(f"[Setup] Manager setting up project ({registry.build_file})...")
+
+    # Generate build config if missing or a skeleton stub
+    bf_path = code_dir / registry.build_file
+    is_stub = (
+        bf_path.exists() and
+        bf_path.read_text(encoding="utf-8", errors="ignore").lstrip().startswith("#")
+    )
+    if not bf_path.exists() or is_stub:
+        _emit_build_scaffold_via_llm(registry, code_dir)
+
+    # Install dependencies if build config now exists
+    bf_path = code_dir / registry.build_file  # re-check after potential generation
+    if not bf_path.exists():
+        logger.warning("[Setup] build config still missing after generation — skipping install")
+        return
+
+    install_cmd = registry.install_command
+    if not install_cmd:
+        return
+
+    logger.info(f"[Setup] running '{install_cmd}'...")
+    try:
+        result = subprocess.run(
+            install_cmd, shell=True, cwd=str(code_dir),
+            capture_output=True, text=True, timeout=180,
+            encoding="utf-8", errors="replace",
+        )
+        if result.returncode == 0:
+            logger.info(f"[Setup] '{install_cmd}' succeeded")
+        else:
+            out = ((result.stdout or "") + (result.stderr or ""))[-1000:]
+            logger.warning(f"[Setup] '{install_cmd}' failed:\n{out}")
+    except subprocess.TimeoutExpired:
+        logger.warning(f"[Setup] '{install_cmd}' timed out after 180s")
+    except Exception as e:
+        logger.warning(f"[Setup] '{install_cmd}' error: {e}")
+
+
+
+
+@dataclass
+class ManagerFixResult:
+    passed: bool
+    rounds_used: int
+    final_output: str
+    app_run_verified: bool = False
+
+
+def _manager_fix_collect_errors(code_dir: Path, registry: "InterfaceContractRegistry") -> List[str]:
+    """Run test gate + build; return a list of error strings (empty if all green)."""
+    errors: List[str] = []
+    gate = _run_test_gate(code_dir)
+    if gate.skipped:
+        logger.info("[ManagerFix] test gate skipped (no tests detected)")
+    elif gate.passed:
+        logger.info(f"[ManagerFix] test gate passed: {gate.command}")
+    else:
+        errors.append(f"TEST FAILURE ({gate.command}):\n{gate.output}")
+    build_out = _run_build_command(registry)
+    if build_out:
+        errors.append(build_out)
+    return errors
+
+
+def _manager_saw_start_service(tool_results: List[str]) -> bool:
+    return any(tr.startswith("[TOOL: start_service]") for tr in (tool_results or []))
+
+
+def _manager_fix_loop(
+    code_dir: Path,
+    task_queue: "EngTaskQueue",
+    rolling_ctxs: Dict[str, "RollingContext"],
+    max_rounds: int = MANAGER_FIX_MAX_ROUNDS,
+) -> ManagerFixResult:
+    """Run tests/build repeatedly; manager must also invoke ``start_service()`` at least once.
+
+    Success requires: (1) test gate + build green, and (2) at least one ``start_service`` tool
+    call in this session (integration manager actually booted the app).
+    """
+    registry = get_contracts()
+    _set_agent_ctx("eng_manager", _get_sprint_num())
+    manager_ran_start_service = False
+    last_error_block = ""
+    build_cmd_hint = registry.build_command or ""
+
+    for round_num in range(1, max_rounds + 1):
+        logger.info(f"[ManagerFix] round {round_num}/{max_rounds} — running verification…")
+
+        errors = _manager_fix_collect_errors(code_dir, registry)
+        if errors:
+            last_error_block = "\n\n".join(errors)[-4000:]
+
+        tests_build_ok = not errors
+        if tests_build_ok and manager_ran_start_service:
+            logger.info(
+                f"[ManagerFix] ALL GREEN + start_service verified after "
+                f"{round_num - 1} manager round(s)"
+            )
+            return ManagerFixResult(
+                passed=True,
+                rounds_used=max(0, round_num - 1),
+                final_output="All tests and build passed; manager invoked start_service at least once.",
+                app_run_verified=True,
+            )
+
+        # Build file listing for the manager
+        file_list: List[str] = []
+        try:
+            for p in sorted(code_dir.rglob("*")):
+                if p.is_file() and ".git" not in p.parts and "node_modules" not in p.parts:
+                    file_list.append(str(p.relative_to(code_dir)).replace("\\", "/"))
+        except Exception:
+            pass
+        files_section = "\n".join(file_list[:200]) if file_list else "(unable to list files)"
+
+        if errors:
+            error_block = "\n\n".join(errors)[-4000:]
+            logger.warning(f"[ManagerFix] round {round_num} errors:\n{error_block[:500]}")
+            prompt = (
+                f"You are the Engineering Manager. The full codebase has been assembled by "
+                f"your team, but verification is failing.\n\n"
+                f"ERRORS (round {round_num}/{max_rounds}):\n"
+                f"```\n{error_block}\n```\n\n"
+                f"PROJECT FILES:\n{files_section}\n\n"
+                f"TASK QUEUE STATUS:\n{task_queue.get_status()}\n\n"
+                f"YOUR JOB: Diagnose and fix the errors.\n"
+                f"  1. Use read_file() to inspect the relevant files.\n"
+                f"  2. Use write_code_file() to fix the code.\n"
+                f"  3. Use run_shell() to re-run specific commands if needed.\n"
+                f"  4. Focus on the FIRST error — fixing it often resolves cascading failures.\n"
+                f"NON-NEGOTIABLE: Before integration is complete you MUST run the real application "
+                f"at least once using start_service(), then http_request() against localhost, "
+                f"then stop_service(). Do not skip this even if tests later pass.\n"
+                f"Do NOT just describe what to do — actually make the changes with tools.\n"
+            )
+        else:
+            logger.warning(
+                f"[ManagerFix] round {round_num} — tests/build green but start_service not "
+                f"invoked yet; forcing mandatory app boot"
+            )
+            prompt = (
+                f"You are the Engineering Manager — MANDATORY APPLICATION BOOT "
+                f"(round {round_num}/{max_rounds}).\n\n"
+                f"Automated tests and the build command currently pass (or there is no failing gate).\n"
+                f"You have NOT yet called start_service() in this manager session. "
+                f"The integration phase is incomplete until you boot the app at least once.\n\n"
+                f"Contract build_command hint: {build_cmd_hint!r}\n\n"
+                f"REQUIRED (use tools, not prose only):\n"
+                f"  1. list_files() / read_file() as needed to find how to run "
+                f"(docker compose, npm start, uvicorn, python -m, etc.).\n"
+                f"  2. start_service(name, command, port) — use a short name like 'app' or 'api'.\n"
+                f"  3. http_request('GET', 'http://localhost:<port>/...') to confirm a response "
+                f"(root, /health, /docs, or similar).\n"
+                f"  4. stop_service(name) when done.\n\n"
+                f"PROJECT FILES:\n{files_section}\n\n"
+                f"TASK QUEUE STATUS:\n{task_queue.get_status()}\n"
+            )
+
+        output, tool_results, _ = _run_with_tools(
+            prompt, "eng_manager", f"mgr_fix_r{round_num}", retry_count=0
+        )
+        if _manager_saw_start_service(tool_results):
+            manager_ran_start_service = True
+        logger.info(
+            f"[ManagerFix] round {round_num} — manager used {len(tool_results)} tool calls, "
+            f"output {len(output)}c, start_service_seen={manager_ran_start_service}"
+        )
+
+        try:
+            wt = GitWorktreeManager(code_dir, ["eng_manager"])
+            wt.create_worktrees()
+            wt.commit_agent("eng_manager")
+            with _git_repo_lock:
+                wt.merge_all()
+            wt.cleanup()
+        except Exception as e:
+            logger.warning(f"[ManagerFix] commit/merge after round {round_num} failed: {e}")
+
+        try:
+            get_rag().update()
+        except Exception:
+            pass
+
+    # Exhausted rounds — final check
+    errors = _manager_fix_collect_errors(code_dir, registry)
+    tests_build_ok = not errors
+    if errors:
+        last_error_block = "\n\n".join(errors)[-4000:]
+    if tests_build_ok and manager_ran_start_service:
+        logger.info("[ManagerFix] green + start_service after final round")
+        return ManagerFixResult(
+            passed=True,
+            rounds_used=max_rounds,
+            final_output="Tests/build passed; manager invoked start_service.",
+            app_run_verified=True,
+        )
+    if tests_build_ok and not manager_ran_start_service:
+        msg = (
+            f"Tests/build passed but the Engineering Manager never called start_service() "
+            f"within {max_rounds} round(s). Integration requires booting the app at least once."
+        )
+        logger.warning(f"[ManagerFix] {msg}")
+        return ManagerFixResult(
+            passed=False,
+            rounds_used=max_rounds,
+            final_output=msg,
+            app_run_verified=False,
+        )
+    logger.warning(f"[ManagerFix] FAILED after {max_rounds} rounds — returning last errors")
+    return ManagerFixResult(
+        passed=False,
+        rounds_used=max_rounds,
+        final_output=(
+            f"Manager fix loop exhausted {max_rounds} rounds.\n"
+            f"{last_error_block[:2000]}"
+        ),
+        app_run_verified=manager_ran_start_service,
+    )
 
 
 def run_engineering_team(
@@ -4170,15 +5279,24 @@ def run_engineering_team(
     _skeleton_wt.init_repo()
     logger.info("[Engineering] git repo initialized with skeleton commit")
 
+    # Index skeleton stubs NOW so list_files() returns real results when agents start.
+    # Without this, the RAG index is empty at t=0 and agents enter a discovery loop.
+    get_rag().update()
+    logger.info(f"[Engineering] RAG pre-indexed {len(get_rag().chunks)} skeleton chunks")
+
+    _setup_project(code_dir)
+
     task_queue = EngTaskQueue(get_contracts(), dev_assignments, pool)
     built: Dict[str, WorkerOutput] = {}
     _tasks_completed_by: Dict[str, int] = {d: 0 for d in ENG_WORKERS}
     _merge_lock = threading.Lock()
+    _built_lock = threading.Lock()  # guards built + _tasks_completed_by
 
     # ── build_feature: adapted for task-based work ────────────────────────
 
-    def build_feature(dev_key: str, eng_task: EngTask) -> WorkerOutput:
+    def build_feature(dev_key: str, eng_task: EngTask, retry_count: int = 0) -> WorkerOutput:
         _set_agent_ctx(dev_key, sprint_num)
+        _set_task_file(eng_task.file)
         dashboard_status = get_dashboard().get_status()
         task_num = _tasks_completed_by[dev_key] + 1
         logger.info(f"[{dev_key}] ▶ Task START — {eng_task.file}: {eng_task.description[:60]}")
@@ -4213,8 +5331,8 @@ def run_engineering_team(
                 "  - TARGETED MESSAGES: If you need something from a specific teammate, use message_teammate().\n"
                 "  - BREAKING BROADCASTS: ONLY use broadcast_message() for team-wide structural changes\n"
                 "    (e.g. changing an API port, a shared data model, or a global config constant).\n"
-                "  - Check your dashboard and messages EVERY TURN to see what's actually relevant to you.\n"
-                "  - Use search_codebase() to see your teammates' work; avoid asking them for status updates.\n"
+                "  - Use search_codebase() to find teammates' work without asking them for status updates.\n"
+                "  - Dashboard contents are already injected into your prompt — no need to poll.\n"
             )
         else:
             integration_rules = (
@@ -4226,55 +5344,50 @@ def run_engineering_team(
             )
 
         is_integration_specialist = (eng_task.file == "__integration__")
-        is_phase_2 = (eng_task.phase == PHASE_INTEGRATION)
         build_cmd = get_contracts().build_command
 
         if is_integration_specialist:
             build_errors = ""
             if build_cmd:
                 try:
+                    logger.info(f"[{dev_key}] running pre-flight '{build_cmd}' (timeout=30s)...")
                     result = subprocess.run(
                         build_cmd, shell=True, cwd=str(code_dir),
                         capture_output=True, text=True, timeout=30,
+                        encoding="utf-8", errors="replace",
                     )
                     if result.returncode != 0:
-                        build_errors = f"\nPHASE 1 BUILD ERRORS (from running '{build_cmd}'):\n{result.stdout[-2000:]}\n{result.stderr[-2000:]}\n"
+                        build_errors = f"\nBUILD ERRORS (from running '{build_cmd}'):\n{(result.stdout or '')[-2000:]}\n{(result.stderr or '')[-2000:]}\n"
+                    logger.info(f"[{dev_key}] pre-flight done (rc={result.returncode})")
                 except Exception as e:
-                    build_errors = f"\nPHASE 1 BUILD FAILED: {e}\n"
+                    build_errors = f"\nBUILD FAILED: {e}\n"
+                    logger.info(f"[{dev_key}] pre-flight failed: {e}")
 
             task_instruction = (
-                f"FINAL INTEGRATION TEST — all components are merged.\n"
+                f"INTEGRATION TEST — all code merged.\n"
                 f"{build_errors}"
-                f"\nYOUR MISSION: Run '{build_cmd}' and perform a final smoke test.\n"
-                f"  1. If any final issues persist, FIX them using the run_shell tool.\n"
-                f"  2. Do NOT finish this task until '{build_cmd}' returns a success code.\n\n"
-                f"{integration_rules}"
-            )
-        elif is_phase_2:
-             task_instruction = (
-                f"PHASE 2: COLLABORATIVE INTEGRATION for file '{eng_task.file}'\n"
-                f"Description: {eng_task.description}\n\n"
-                f"YOUR MISSION: Now that ALL code is merged, fix the wiring for YOUR file ONLY.\n"
-                f"  1. Use search_codebase() to see how your teammates implemented their parts.\n"
-                f"  2. Identify if YOUR file ('{eng_task.file}') uses the correct filenames/symbols from others.\n"
-                f"  3. MANDATORY: Run '{build_cmd}' herself using the run_shell tool.\n"
-                f"  4. READ the error log carefully. THE 'STAY IN YOUR LANE' RULE:\n"
-                f"     - If the error is in YOUR FILE ('{eng_task.file}'), fix it and retry.\n"
-                f"     - If the error is in a DIFFERENT file, DO NOT touch it. Just exit.\n"
-                f"  5. Do NOT finish until YOUR file's role in the build is confirmed.\n\n"
-                f"{integration_rules}"
+                f"Run '{build_cmd or 'the build command'}' with run_shell. Fix any errors with write_code_file.\n"
+                f"Use write_code_file (not write_config_file) for manifests like requirements.txt.\n"
             )
         else:
-            task_instruction = (
-                f"PHASE 1: IMPLEMENTATION for file '{eng_task.file}'\n"
-                f"Description: {eng_task.description}\n\n"
-                f"  1. call check_dashboard() and check_messages() before starting.\n"
-                f"  2. Follow the project goal. You have creative freedom in Agile Mode.\n\n"
-                f"  --- INTEGRATION CHECK ---\n"
-                f"  3. Before completing, try running '{build_cmd}' herself using run_shell.\n"
+            _build_hint = (
+                f"  3. Before completing, try running '{build_cmd}' using run_shell.\n"
                 f"  4. If it fails because of something obvious, fix it. If it's a team-wide issue, broadcast it.\n"
-                f"  5. Use broadcast_message() for any shared interface changes.\n"
-                f"{integration_rules}"
+            ) if build_cmd else (
+                "  3. Verify your file is syntactically correct (e.g. validate_python if applicable).\n"
+            )
+            task_instruction = (
+                f"TASK: Implement '{eng_task.file}'\n"
+                f"Description: {eng_task.description}\n\n"
+                f"STEPS:\n"
+                f"  1. list_files() and read_file() to see existing code from teammates\n"
+                f"  2. write_code_file('{eng_task.file}', <YOUR COMPLETE CODE>)\n"
+                f"     — Make sure imports match what your teammates exported\n"
+                f"     — Follow the interfaces/contracts exactly\n"
+                f"{_build_hint}"
+                f"\nIMPORTANT: After you write your file, the system will automatically\n"
+                f"verify that it integrates correctly (syntax, imports, tests). If your\n"
+                f"code breaks something, you will be asked to fix it. Write carefully.\n"
             )
 
 
@@ -4303,30 +5416,65 @@ def run_engineering_team(
         queue_status = task_queue.get_status()
 
         prompt = (
-            f"{goal_anchor}"
-            f"You are Software Developer #{dev_key.split('_')[1]}.\n"
-            f"Expertise: {ROLES[dev_key]['expertise']}\n\n"
-            f"{rolling_ctxs[dev_key].get()}"
-            f"PROJECT CONTEXT:\n{task[:400]}\n\n"
-            f"TASK QUEUE STATUS:\n{queue_status}\n\n"
-            f"Your teammates are working on:\n"
-            + "\n".join(
-                f"  Dev {other.split('_')[1]}: {dev_assignments[other]}"
-                for other in ENG_WORKERS if other != dev_key
-            )
-            + f"\n\nWORK DASHBOARD:\n{dashboard_status}\n"
-            + contract_section
-            + team_files_section
-            + peer_context
-            + messages_section
-            + f"\n{task_instruction}\n"
-            f"Write actual, working code. Implement exactly what the architecture and design specs say. "
-            f"Fix any bugs listed in QA findings. Run your code with run_shell to verify it works.\n\n"
-            f"{dod_checklist}\n\n"
-            f"End with: STANCE: [MINIMAL|ROBUST|SCALABLE|PRAGMATIC]"
+            f"You are dev_{dev_key.split('_')[1]}. "
+            f"Your task: write file '{eng_task.file}'.\n\n"
+            f"{task_instruction}\n\n"
+            f"PROJECT: {task[:300]}\n\n"
         )
+        # Add contract if available (concise)
+        if contract_section:
+            prompt += f"YOUR CONTRACT:{contract_section}\n"
+        # Add peer context (what's already built)
+        if peer_context:
+            prompt += f"{peer_context}\n"
+        # Add messages from teammates
+        if messages_section:
+            prompt += f"{messages_section}\n"
+        # Rolling context from previous tasks
+        _rolling = rolling_ctxs[dev_key].get()
+        if _rolling and len(_rolling.strip()) > 20:
+            prompt += f"\nPREVIOUS WORK:\n{_rolling[:600]}\n"
+        if retry_count > 0:
+            # Inject existing file content so the model already has context
+            # and doesn't need to call list_files / read_file (removing those
+            # tools caused Gemini AFC to silently reject the unknown calls,
+            # burning all 25 rounds with 0 Python invocations).
+            _existing_content = ""
+            _target_path = code_dir / eng_task.file
+            if _target_path.exists():
+                try:
+                    _existing_content = _target_path.read_text(encoding="utf-8", errors="replace")[:2000]
+                except Exception:
+                    pass
+            _file_context = (
+                f"\nCURRENT FILE CONTENT ({eng_task.file}):\n```\n{_existing_content}\n```\n"
+                if _existing_content
+                else f"\n(File {eng_task.file} does not exist yet — create it from scratch.)\n"
+            )
+            prompt += (
+                f"\n{'='*60}\n"
+                f"RETRY {retry_count} — WRITE IS REQUIRED\n"
+                f"{'='*60}\n"
+                f"Your previous attempt did NOT call write_code_file.\n"
+                f"All tools are still available — do NOT loop on list_files.\n"
+                f"{_file_context}"
+                f"ACTION REQUIRED: Call write_code_file('{eng_task.file}', <complete code>) NOW.\n"
+                f"End with: STANCE: [MINIMAL|ROBUST|SCALABLE|PRAGMATIC]\n"
+            )
+            logger.info(
+                f"[{dev_key}] retry {retry_count} — full toolset kept, "
+                f"injecting {'existing' if _existing_content else 'empty'} file content into prompt"
+            )
+        else:
+            prompt += (
+                f"\nREMINDER: You MUST call write_code_file('{eng_task.file}', <code>) "
+                f"with complete working code. Prose-only = failure.\n"
+                f"End with: STANCE: [MINIMAL|ROBUST|SCALABLE|PRAGMATIC]"
+            )
         logger.info(f"[{dev_key}] prompt built ({len(prompt)}c) — handing off to ReAct agent")
-        output, tool_results, perplexity = _run_with_tools(prompt, dev_key, f"{dev_key}_t{task_num}")
+        output, tool_results, perplexity = _run_with_tools(
+            prompt, dev_key, f"{dev_key}_t{task_num}", retry_count=retry_count
+        )
         sims    = perplexity_to_similarities(perplexity)
         F       = health_states[dev_key].update(sims)
         anomaly = health_states[dev_key].is_anomaly()
@@ -4361,130 +5509,257 @@ def run_engineering_team(
     # ── Agent worker loop ─────────────────────────────────────────────────
 
     def _agent_worker_loop(dev_key: str) -> None:
-        """Long-running worker: pull task → worktree → build → merge → repeat."""
-        while task_queue.has_work_available():
-            if _tasks_completed_by[dev_key] >= MAX_TASKS_PER_AGENT:
-                logger.info(f"[{dev_key}] hit MAX_TASKS_PER_AGENT={MAX_TASKS_PER_AGENT} — stopping")
-                break
-
-            eng_task = task_queue.claim_next(dev_key)
-            if eng_task is None:
-                if task_queue.all_done():
+        """Long-running worker: pull task → worktree → build → merge → repeat.
+        Outer loop retries if a TeammateIdle hook fails (up to TEAMMATE_IDLE_MAX_RETRIES)."""
+        _idle_retries = 0
+        while True:  # outer idle-hook retry loop
+            while task_queue.has_work_available():
+                with _built_lock:
+                    _agent_task_count = _tasks_completed_by[dev_key]
+                if _agent_task_count >= MAX_TASKS_PER_AGENT:
+                    logger.info(f"[{dev_key}] hit MAX_TASKS_PER_AGENT={MAX_TASKS_PER_AGENT} — stopping")
                     break
-                import time as _time
-                _time.sleep(_AGENT_POLL_INTERVAL)
-                continue
 
-            # ── TaskCreated hook: pre-task validator ──────────────────────
-            if TASK_CREATED_HOOKS:
-                _task_rejected = False
-                _hook_outputs: List[str] = []
-                _task_env = {**os.environ, "ENG_TASK_DESCRIPTION": eng_task.description}
-                for _hook_cmd in TASK_CREATED_HOOKS:
-                    try:
-                        _hook_proc = subprocess.run(
-                            _hook_cmd, shell=True, capture_output=True, text=True,
-                            timeout=30, cwd=str(code_dir), env=_task_env,
-                            input=eng_task.description,
-                        )
-                        _hook_out = (_hook_proc.stdout + _hook_proc.stderr)[-1000:]
-                        _hook_outputs.append(f"[task-hook: {_hook_cmd}]\n{_hook_out}")
-                        if _hook_proc.returncode != 0:
+                eng_task = task_queue.claim_next(dev_key)
+                if eng_task is None:
+                    if task_queue.all_done():
+                        break
+                    import time as _time
+                    _time.sleep(_AGENT_POLL_INTERVAL)
+                    continue
+
+                # ── TaskCreated hook: pre-task validator ──────────────────
+                if TASK_CREATED_HOOKS:
+                    _task_rejected = False
+                    _hook_outputs: List[str] = []
+                    _task_env = {**os.environ, "ENG_TASK_DESCRIPTION": eng_task.description}
+                    for _hook_cmd in TASK_CREATED_HOOKS:
+                        try:
+                            _hook_proc = subprocess.run(
+                                _hook_cmd, shell=True, capture_output=True, text=True,
+                                timeout=30, cwd=str(code_dir), env=_task_env,
+                                input=eng_task.description,
+                                encoding="utf-8", errors="replace",
+                            )
+                            _hook_out = ((_hook_proc.stdout or "") + (_hook_proc.stderr or ""))[-1000:]
+                            _hook_outputs.append(f"[task-hook: {_hook_cmd}]\n{_hook_out}")
+                            if _hook_proc.returncode != 0:
+                                _task_rejected = True
+                                break
+                        except Exception as _hook_e:
+                            _hook_outputs.append(f"[task-hook: {_hook_cmd}] ERROR: {_hook_e}")
                             _task_rejected = True
                             break
-                    except Exception as _hook_e:
-                        _hook_outputs.append(f"[task-hook: {_hook_cmd}] ERROR: {_hook_e}")
-                        _task_rejected = True
-                        break
-                if _task_rejected:
-                    _rejection_msg = "\n".join(_hook_outputs)
-                    logger.warning(
-                        f"[{dev_key}] TASK REJECTED by pre-task hook: {eng_task.id}\n"
-                        f"{_rejection_msg[:300]}"
-                    )
-                    task_queue.fail(eng_task.id)
-                    continue
-            # ─────────────────────────────────────────────────────────────
-
-            wt = GitWorktreeManager(code_dir, [dev_key])
-            try:
-                wt.create_worktrees()
-                _set_worktree_manager(wt)
-
-                result = build_feature(dev_key, eng_task)
-                built[dev_key] = result
-
-                wt.commit_agent(dev_key)
-                with _merge_lock:
-                    resolutions = wt.merge_all()
-                    if resolutions:
-                        logger.info(f"[{dev_key}] merge resolutions:\n" + "\n".join(resolutions))
-
-                # ── Test Gate (Anthropic-style hard mechanical gate) ──────
-                if TEST_GATE_ENABLED and eng_task.phase == PHASE_INTEGRATION:
-                    gate = _run_test_gate(OUTPUT_DIR / "code")
-                    if gate.skipped:
-                        logger.info(f"[{dev_key}] TEST GATE skipped — no test files detected")
-                        task_queue.complete(eng_task.id)
-                        _tasks_completed_by[dev_key] += 1
-                    elif gate.passed:
-                        logger.info(f"[{dev_key}] TEST GATE passed — '{gate.command}'")
-                        task_queue.complete(eng_task.id)
-                        _tasks_completed_by[dev_key] += 1
-                    else:
-                        eng_task_obj = task_queue.tasks.get(eng_task.id)
-                        retries_used = eng_task_obj.retries if eng_task_obj else MAX_RETRIES_PER_TASK
-                        if retries_used < MAX_RETRIES_PER_TASK:
-                            logger.warning(
-                                f"[{dev_key}] TEST GATE FAILED "
-                                f"(retry {retries_used + 1}/{MAX_RETRIES_PER_TASK}) "
-                                f"— '{gate.command}'\n{gate.output[:500]}"
-                            )
-                            rolling_ctxs[dev_key].add(
-                                f"TEST GATE FAILED — {eng_task.file}",
-                                f"Command: {gate.command}\nOutput:\n{gate.output}"
-                            )
-                            task_queue.fail(eng_task.id)
-                            # _tasks_completed_by NOT incremented — retry doesn't count
-                        else:
-                            logger.warning(
-                                f"[{dev_key}] TEST GATE FAILED but retries exhausted "
-                                f"— accepting '{eng_task.id}' to avoid deadlock"
-                            )
-                            task_queue.complete(eng_task.id)
-                            _tasks_completed_by[dev_key] += 1
-                else:
-                    task_queue.complete(eng_task.id)
-                    _tasks_completed_by[dev_key] += 1
+                    if _task_rejected:
+                        _rejection_msg = "\n".join(_hook_outputs)
+                        logger.warning(
+                            f"[{dev_key}] TASK REJECTED by pre-task hook: {eng_task.id}\n"
+                            f"{_rejection_msg[:300]}"
+                        )
+                        task_queue.fail(eng_task.id)
+                        continue
                 # ─────────────────────────────────────────────────────────
 
-                # Incremental RAG Update: Index the newly merged file so others can find it
+                # Pre-generate build config before integration task starts
+                if eng_task.file == "__integration__":
+                    registry = get_contracts()
+                    if registry.build_file:
+                        _emit_build_scaffold_via_llm(registry, code_dir)
+
+                wt = GitWorktreeManager(code_dir, [dev_key])
                 try:
-                    get_rag().update()
-                except Exception as e:
-                    logger.warning(f"[{dev_key}] incremental RAG update failed: {e}")
+                    wt.create_worktrees()
+                    _set_worktree_manager(wt)
 
-            except Exception as exc:
-                logger.error(f"[{dev_key}] task {eng_task.id} crashed: {exc}", exc_info=True)
-                task_queue.fail(eng_task.id)
-                built[dev_key] = WorkerOutput(
-                    role=dev_key, title=f"Software Developer (error)",
-                    round=_tasks_completed_by[dev_key] + 1,
-                    output=f"[task crashed: {exc}]",
-                    tool_results=[], stance="pragmatic",
-                    stance_probs=[0.1, 0.1, 0.1, 0.7],
-                    F_health=9.9, anomaly=True,
+                    _retries_before = task_queue.get_retries(eng_task.id)
+                    result = build_feature(dev_key, eng_task, retry_count=_retries_before)
+                    with _built_lock:
+                        built[dev_key] = result
+
+                    # If agent still produced no write tool call, requeue and retry
+                    # with a narrowed toolset (write-only) on the next attempt.
+                    if eng_task.file != "__integration__":
+                        _wrote = any(
+                            ("write_code_file" in tr) or ("write_file_section" in tr)
+                            for tr in (result.tool_results or [])
+                        )
+                        if not _wrote:
+                            retries_used = _retries_before
+                            logger.warning(
+                                f"[{dev_key}] no write tool call for '{eng_task.file}' "
+                                f"(retry {retries_used + 1}/{MAX_RETRIES_PER_TASK}) — "
+                                f"will inject file content into next prompt"
+                            )
+                            rolling_ctxs[dev_key].add(
+                                f"FAILED: no write_code_file call for '{eng_task.file}'",
+                                f"Your previous attempt did NOT call write_code_file() for '{eng_task.file}'. "
+                                f"The task is automatically failed until you do. "
+                                f"REQUIRED: Call write_code_file('{eng_task.file}', <full file content>) "
+                                f"as your FIRST tool call this attempt. "
+                                f"Do NOT use run_shell with printf/echo/cat — those are invisible to the "
+                                f"project tracking system and will count as zero writes. "
+                                f"write_code_file() is the ONLY tool that saves a file to the project."
+                            )
+                            task_queue.fail(eng_task.id)
+                            continue
+
+                    # ── Pre-merge self-verify baseline (for fault attribution) ──
+                    _pre_merge_verify = None
+                    if (
+                        SELF_VERIFY_ENABLED
+                        and eng_task.file != "__integration__"
+                    ):
+                        _pre_merge_verify = _run_self_verify(code_dir, eng_task)
+                        logger.debug(
+                            f"[{dev_key}] pre-merge verify for '{eng_task.file}': "
+                            f"passed={_pre_merge_verify.passed}"
+                        )
+
+                    committed = wt.commit_agent(dev_key)
+                    with _merge_lock:
+                        resolutions = wt.merge_all()
+                        if resolutions:
+                            logger.info(f"[{dev_key}] merge resolutions:\n" + "\n".join(resolutions))
+
+                    # Worktree content is now in main — clear in-memory worktree RAG.
+                    _wt_rag = get_worktree_rag(dev_key)
+                    if _wt_rag is not None:
+                        _wt_rag.clear()
+
+                    # ── Empty-output guard: if agent wrote nothing, retry ──
+                    if not committed and eng_task.file != "__integration__":
+                        target = code_dir / eng_task.file
+                        file_missing = not target.exists()
+                        file_is_stub = (
+                            target.exists() and
+                            target.read_text(encoding="utf-8", errors="ignore").lstrip().startswith("# AUTO-GENERATED SKELETON")
+                        )
+                        if file_missing or file_is_stub:
+                            retries_used = task_queue.get_retries(eng_task.id)
+                            if retries_used < MAX_RETRIES_PER_TASK:
+                                logger.warning(
+                                    f"[{dev_key}] agent wrote nothing for '{eng_task.file}' "
+                                    f"(retry {retries_used + 1}/{MAX_RETRIES_PER_TASK})"
+                                )
+                                rolling_ctxs[dev_key].add(
+                                    f"EMPTY OUTPUT — {eng_task.file}",
+                                    f"You were assigned '{eng_task.file}' but wrote nothing. "
+                                    f"Use write_code_file to actually write the file content."
+                                )
+                                task_queue.fail(eng_task.id)
+                                continue
+                            else:
+                                logger.warning(
+                                    f"[{dev_key}] agent wrote nothing for '{eng_task.file}' "
+                                    f"but retries exhausted — accepting to avoid deadlock"
+                                )
+
+                    # ── Self-verify after merge (per-file) ─────────────────
+                    if (
+                        SELF_VERIFY_ENABLED
+                        and eng_task.file != "__integration__"
+                        and _pre_merge_verify is not None
+                    ):
+                        sv = _run_self_verify_with_attribution(
+                            code_dir, eng_task, _pre_merge_verify
+                        )
+                        if not sv.passed:
+                            if sv.is_own_fault:
+                                retries_used = task_queue.get_retries(eng_task.id)
+                                if retries_used < MAX_RETRIES_PER_TASK:
+                                    logger.warning(
+                                        f"[{dev_key}] SELF-VERIFY FAILED (own fault) for "
+                                        f"'{eng_task.file}' — retry {retries_used + 1}/"
+                                        f"{MAX_RETRIES_PER_TASK}\n{sv.output[:500]}"
+                                    )
+                                    rolling_ctxs[dev_key].add(
+                                        f"SELF-VERIFY FAILED — {eng_task.file}",
+                                        f"Your code broke verification after merge.\n"
+                                        f"Error output:\n{sv.output}\n\n"
+                                        f"Fix the errors in '{eng_task.file}' using write_code_file."
+                                    )
+                                    task_queue.fail(eng_task.id)
+                                    continue
+                                else:
+                                    logger.warning(
+                                        f"[{dev_key}] SELF-VERIFY FAILED (own fault) but "
+                                        f"retries exhausted — accepting '{eng_task.id}'"
+                                    )
+                            else:
+                                logger.info(
+                                    f"[{dev_key}] SELF-VERIFY FAILED (pre-existing) for "
+                                    f"'{eng_task.file}' — completing with warning"
+                                )
+
+                    # ── Sync config/ → code/ ──────────────────────────────
+                    if eng_task.file == "__integration__":
+                        config_dir = OUTPUT_DIR / "config"
+                        if config_dir.exists():
+                            for cf in config_dir.iterdir():
+                                if cf.is_file():
+                                    dest = code_dir / cf.name
+                                    dest_is_stub = dest.exists() and dest.read_text(encoding="utf-8", errors="ignore").lstrip().startswith("#")
+                                    if not dest.exists() or dest_is_stub:
+                                        _shutil.copy2(str(cf), str(dest))
+                                        logger.info(f"[{dev_key}] synced config/{cf.name} → code/{cf.name}")
+
+                    # ── Pre-gate: install deps if needed ──────────────────
+                    if eng_task.file == "__integration__":
+                        _install_cmd = get_contracts().install_command
+                        _build_file_path = code_dir / (get_contracts().build_file or "")
+                        if _install_cmd and _build_file_path.exists():
+                            logger.info(f"[{dev_key}] running '{_install_cmd}' before test gate...")
+                            try:
+                                subprocess.run(
+                                    _install_cmd, shell=True, cwd=str(code_dir),
+                                    capture_output=True, text=True, timeout=180,
+                                    encoding="utf-8", errors="replace",
+                                )
+                            except Exception as e:
+                                logger.warning(f"[{dev_key}] '{_install_cmd}' failed: {e}")
+
+                    # ── Complete the task ──────────────────────────────────
+                    task_queue.complete(eng_task.id)
+                    with _built_lock:
+                        _tasks_completed_by[dev_key] += 1
+                    # ─────────────────────────────────────────────────────
+
+                    try:
+                        get_rag().update()
+                    except Exception as e:
+                        logger.warning(f"[{dev_key}] incremental RAG update failed: {e}")
+
+                except Exception as exc:
+                    # Detect interpreter shutdown — don't requeue, just abort cleanly.
+                    _is_shutdown = (
+                        isinstance(exc, RuntimeError)
+                        and "interpreter shutdown" in str(exc)
+                    ) or isinstance(exc, (KeyboardInterrupt, SystemExit))
+                    if _is_shutdown:
+                        logger.warning(f"[{dev_key}] interpreter shutting down — aborting task loop")
+                        return
+                    logger.error(f"[{dev_key}] task {eng_task.id} crashed: {exc}", exc_info=True)
+                    task_queue.fail(eng_task.id)
+                    with _built_lock:
+                        built[dev_key] = WorkerOutput(
+                            role=dev_key, title=f"Software Developer (error)",
+                            round=_tasks_completed_by[dev_key] + 1,
+                            output=f"[task crashed: {exc}]",
+                            tool_results=[], stance="pragmatic",
+                            stance_probs=[0.1, 0.1, 0.1, 0.7],
+                            F_health=9.9, anomaly=True,
+                        )
+                finally:
+                    wt.cleanup()
+                    _set_worktree_manager(None)
+
+                ActiveInferenceState.interfere_all(
+                    [health_states[d] for d in ENG_WORKERS], alpha=INTERFERENCE_ALPHA
                 )
-            finally:
-                wt.cleanup()
-                _set_worktree_manager(None)
 
-            ActiveInferenceState.interfere_all(
-                [health_states[d] for d in ENG_WORKERS], alpha=INTERFERENCE_ALPHA
-            )
-
-        # ── TeammateIdle hook: runs after agent exhausts all tasks ────────
-        if TEAMMATE_IDLE_HOOKS:
+            # ── TeammateIdle hook with retry loop ─────────────────────────
+            if not TEAMMATE_IDLE_HOOKS or _idle_retries >= TEAMMATE_IDLE_MAX_RETRIES:
+                break  # no hooks configured, or retries exhausted — agent done
             _idle_outputs: List[str] = []
             _idle_all_passed = True
             for _idle_cmd in TEAMMATE_IDLE_HOOKS:
@@ -4492,8 +5767,9 @@ def run_engineering_team(
                     _idle_proc = subprocess.run(
                         _idle_cmd, shell=True, capture_output=True, text=True,
                         timeout=60, cwd=str(code_dir),
+                        encoding="utf-8", errors="replace",
                     )
-                    _idle_out = (_idle_proc.stdout + _idle_proc.stderr)[-2000:]
+                    _idle_out = ((_idle_proc.stdout or "") + (_idle_proc.stderr or ""))[-2000:]
                     _idle_outputs.append(f"[idle-hook: {_idle_cmd}]\n{_idle_out}")
                     if _idle_proc.returncode != 0:
                         _idle_all_passed = False
@@ -4504,11 +5780,19 @@ def run_engineering_team(
                     break
             _idle_combined = "\n".join(_idle_outputs)
             if _idle_all_passed:
-                logger.info(f"[{dev_key}] TEAMMATE IDLE HOOK passed")
-            else:
-                logger.warning(f"[{dev_key}] TEAMMATE IDLE HOOK FAILED\n{_idle_combined[:300]}")
-                rolling_ctxs[dev_key].add("TEAMMATE IDLE HOOK FAILED", _idle_combined)
-        # ─────────────────────────────────────────────────────────────────
+                logger.info(f"[{dev_key}] TEAMMATE IDLE HOOK passed — agent done")
+                break  # exit outer loop cleanly
+            _idle_retries += 1
+            logger.warning(
+                f"[{dev_key}] TEAMMATE IDLE HOOK FAILED "
+                f"(retry {_idle_retries}/{TEAMMATE_IDLE_MAX_RETRIES}) — re-activating agent\n"
+                f"{_idle_combined[:300]}"
+            )
+            rolling_ctxs[dev_key].add(
+                f"TEAMMATE IDLE HOOK FAILED (attempt {_idle_retries})", _idle_combined
+            )
+            # continues outer while True → agent re-enters task loop
+            # ─────────────────────────────────────────────────────────────
 
     # ── Manager monitor ───────────────────────────────────────────────────
 
@@ -4527,15 +5811,21 @@ def run_engineering_team(
             )
             if phase_1_done and not _phase_1_synced:
                 logger.info("\n[Manager Monitor] PHASE 1 COMPLETE — Synchronizing codebase for Phase 2 Integration...")
+                # Always unblock Phase 2 tasks — even if RAG fails
                 try:
-                    # Re-index the RAG so Integrators can 'see' all Phase 1 code
-                    get_rag().update()
-                    # Release the Integration tasks
-                    task_queue._unblock_dependents()
+                    with task_queue._lock:
+                        task_queue._unblock_dependents()
                     _phase_1_synced = True
-                    logger.info("[Manager Monitor] codebase indexed. PHASE 2 (Integration) RELEASED.\n")
+                    logger.info("[Manager Monitor] PHASE 2 (Integration) RELEASED.\n")
                 except Exception as e:
-                    logger.error(f"[Manager Monitor] Sync failed: {e}")
+                    logger.error(f"[Manager Monitor] Failed to unblock Phase 2 tasks: {e}")
+                    _phase_1_synced = True  # don't retry — avoid infinite loop
+                # Re-index the RAG separately so integrators can 'see' all Phase 1 code
+                try:
+                    get_rag().update()
+                    logger.info("[Manager Monitor] codebase indexed for Phase 2.\n")
+                except Exception as e:
+                    logger.warning(f"[Manager Monitor] RAG sync failed (non-fatal): {e}")
 
             if task_queue.all_done():
                 break
@@ -4628,11 +5918,19 @@ def run_engineering_team(
     final_enforce = enforce_integration()
     if final_enforce:
         logger.info(f"\n[FINAL ENFORCEMENT]\n{final_enforce}")
-    final_build = _run_build_command(get_contracts())
-    if final_build:
-        logger.info(f"\n[POST-ENFORCEMENT BUILD]\n{final_build}")
+
+    # ── Manager fix-until-green loop ──────────────────────────────────────
+    fix_result = _manager_fix_loop(code_dir, task_queue, rolling_ctxs)
+    if fix_result.passed:
+        logger.info(
+            f"[Engineering] Manager fix loop PASSED in {fix_result.rounds_used} round(s) "
+            f"(app_run_verified={fix_result.app_run_verified})"
+        )
     else:
-        logger.info("  Post-enforcement build: SUCCESS ✓")
+        logger.warning(
+            f"[Engineering] Manager fix loop FAILED after {fix_result.rounds_used} rounds\n"
+            f"{fix_result.final_output[:500]}"
+        )
 
     # ── Health + consensus ────────────────────────────────────────────────
     ActiveInferenceState.interfere_all(
@@ -4664,10 +5962,21 @@ def run_engineering_team(
         f"(tasks: {_tasks_completed_by[dev]}) ===\n{built[dev].output[:700]}"
         for dev in ENG_WORKERS if dev in built
     )
+    _fix_status = (
+        f"Manager fix loop: PASSED in {fix_result.rounds_used} round(s); "
+        f"app boot via start_service verified={fix_result.app_run_verified}"
+        if fix_result.passed
+        else (
+            f"Manager fix loop: FAILED after {fix_result.rounds_used} rounds; "
+            f"app_run_verified={fix_result.app_run_verified}\n"
+            f"{fix_result.final_output[:300]}"
+        )
+    )
     synthesis = llm_call(
         f"You are the {ROLES['eng_manager']['title']}.\n\n"
         f"Your team completed tasks asynchronously ({elapsed:.0f}s elapsed).\n\n"
         f"TASK QUEUE FINAL STATUS:\n{task_queue.get_status()}\n\n"
+        f"MANAGER FIX LOOP:\n{_fix_status}\n\n"
         f"FINAL OUTPUTS:\n{feature_summaries}\n\n"
         f"H_swarm={H_swarm:.3f}\n\n"
         f"Synthesize into a single coherent implementation guide:\n"

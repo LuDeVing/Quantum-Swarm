@@ -4,7 +4,10 @@ numpy==2.4.3
 scipy==1.17.1
 
 # AI
+anthropic           # native SDK — required for software_company.py agents
 google-genai==1.68.0
+# Previously required (now removed — safe to uninstall):
+#   pip uninstall langchain-anthropic langchain-core langgraph -y
 
 # Web / API
 requests==2.32.5
