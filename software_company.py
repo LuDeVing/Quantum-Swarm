@@ -324,12 +324,13 @@ def _tool_read_file(filename: str) -> str:
 class CodebaseRAG:
     """
     Lightweight RAG over company_output/ code files.
-    Chunks files by function/class boundary, embeds with Gemini embedding-001,
-    stores as a numpy matrix. Queried with cosine similarity at agent time.
-    Index is persisted to disk and rebuilt only when files change.
+    Chunks files by function/class boundary, embeds with Gemini embedding model
+    (gemini-embedding-001), stores as a numpy matrix. Queried with cosine
+    similarity at agent time. Index is persisted to disk and rebuilt only when
+    files change.
     """
 
-    EMBED_MODEL  = "gemini-embedding-001"
+    EMBED_MODEL = "gemini-embedding-001"
     # CACHE_PATH must NOT be a class-level attribute — OUTPUT_DIR can be overridden
     # at runtime (e.g. run_engineers_only.py sets sc.OUTPUT_DIR = "eng_output"), and a
     # frozen class attribute would keep pointing at "company_output/rag_index.pkl",
@@ -777,6 +778,9 @@ class InterfaceContractRegistry:
         self.gitignore_patterns: List[str] = []  # e.g. ["node_modules/", "dist/", "__pycache__/"]
         self.dependencies: List[str] = []  # external deps e.g. ["fastapi", "sqlalchemy"]
         self.init_order: List[str] = []    # ordered module init e.g. ["database", "routes", "server"]
+        # app_type: "web" | "cli" | "gui" | "script" | "library" | "worker"
+        # Drives which verification strategy the manager fix loop uses.
+        self.app_type: str = ""
         self._lock = threading.RLock()
         # ── Amendment queue (mid-flight contract changes proposed by agents) ───
         self._pending_amendments: List[Dict] = []  # [{"file", "proposer", "reason", "change", "ts"}]
@@ -824,6 +828,41 @@ class InterfaceContractRegistry:
             self.gitignore_patterns = parsed.get("gitignore_patterns", [])
             self.dependencies = parsed.get("dependencies", [])
             self.init_order = parsed.get("init_order", [])
+            self.app_type = parsed.get("app_type", "") or self._infer_app_type()
+
+    def _infer_app_type(self) -> str:
+        """Infer app type from contract signals when not explicitly set."""
+        # Has HTTP endpoints → web API/server
+        if self.endpoints:
+            return "web"
+        cmd = (self.build_command or "").lower()
+        deps = [d.lower() for d in self.dependencies]
+        # Explicit server frameworks
+        _web_signals = {"uvicorn", "gunicorn", "flask", "fastapi", "django", "express",
+                        "http.server", "aiohttp", "tornado", "starlette", "bottle",
+                        "rails", "sinatra", "spring", "quarkus", "actix", "axum"}
+        if any(s in cmd or s in " ".join(deps) for s in _web_signals):
+            return "web"
+        # GUI frameworks
+        _gui_signals = {"tkinter", "pyqt", "pyside", "wxpython", "kivy",
+                        "electron", "tauri", "gtk", "qt", "swing", "javafx"}
+        if any(s in cmd or s in " ".join(deps) for s in _gui_signals):
+            return "gui"
+        # CLI runners / argparse-heavy tools
+        _cli_signals = {"click", "typer", "argparse", "docopt", "clap", "cobra", "oclif"}
+        if any(s in " ".join(deps) for s in _cli_signals):
+            return "cli"
+        # Background workers / queues
+        _worker_signals = {"celery", "rq", "dramatiq", "kafka", "rabbitmq", "redis"}
+        if any(s in " ".join(deps) for s in _worker_signals):
+            return "worker"
+        # If build_command is just a compile step, it's a library/script
+        _compile_signals = {"cargo build", "go build", "mvn package", "gradle build",
+                            "npm run build", "tsc", "make"}
+        if any(s in cmd for s in _compile_signals) and "run" not in cmd and "start" not in cmd:
+            return "library"
+        # Default: treat as CLI script (run once, check exit code)
+        return "cli"
 
     def get_contract_for_dev(self, dev_key: str) -> str:
         """Return a prompt-injectable contract summary for a specific developer."""
@@ -1329,6 +1368,19 @@ def _tool_list_files() -> str:
 
     lines = [_strip_code_prefix(p) for p in global_rag_paths]
 
+    def _norm_list_path(s: str) -> str:
+        """Collapse code/foo and foo to the same key (avoids duplicate tests/ paths)."""
+        t = s.replace(" [in-progress]", "").strip().replace("\\", "/")
+        return t[5:] if t.startswith("code/") else t
+
+    # Dedupe: RAG indexes both OUTPUT_DIR/code/tests/… and OUTPUT_DIR/tests/…
+    _seen: Dict[str, str] = {}
+    for disp in lines:
+        key = _norm_list_path(disp)
+        if key not in _seen or ("[in-progress]" in disp and "[in-progress]" not in _seen[key]):
+            _seen[key] = disp
+    lines = list(_seen.values())
+
     logger.info(
         f"{label} OUTPUT_DIR={OUTPUT_DIR.resolve()}  "
         f"global RAG has {len(global_rag_paths)} files"
@@ -1357,6 +1409,15 @@ def _tool_list_files() -> str:
         logger.info(f"{label} worktree dir={wt_dir}  new in-progress files={wt_own}")
     else:
         logger.info(f"{label} no active worktree (agent_id={agent_id!r}, wt={wt})")
+
+    _seen_final: Dict[str, str] = {}
+    for disp in lines:
+        key = _norm_list_path(disp)
+        if key not in _seen_final or (
+            "[in-progress]" in disp and "[in-progress]" not in _seen_final[key]
+        ):
+            _seen_final[key] = disp
+    lines = list(_seen_final.values())
 
     if not lines:
         return "[No files indexed yet]"
@@ -1528,29 +1589,168 @@ def _tool_scan_vulnerabilities(code: str) -> str:
 
 _RUN_SHELL_TIMEOUT = 120   # seconds; raised from 30 so build commands (npm, pip, go) don't get killed
 
+def _normalize_shell_command_for_windows(command: str) -> str:
+    """On Windows, rewrite Unix-style env prefixes to cmd.exe-compatible form.
+    e.g. `PYTHONPATH=. python app/main.py`  →  `set PYTHONPATH=.&& python app/main.py`
+    Also converts `VAR=val cmd` and `VAR1=a VAR2=b cmd` patterns.
+    """
+    import re as _re
+    import sys as _sys
+    if _sys.platform != "win32":
+        return command
+    # Match one or more `KEY=VALUE` pairs at the start of the command (before a non-assignment word)
+    pattern = _re.compile(r'^((?:[A-Za-z_][A-Za-z0-9_]*=[^\s]*\s+)+)(.*)')
+    m = pattern.match(command.strip())
+    if not m:
+        return command
+    env_part = m.group(1).strip()   # e.g. "PYTHONPATH=. FOO=bar"
+    rest     = m.group(2).strip()   # the actual command
+    # Build `set VAR=val` chain
+    sets = " && ".join(f"set {kv}" for kv in env_part.split())
+    return f"{sets} && {rest}"
+
+
+# Per-agent spin detection: tracks (command, output_hash) for the last N shell calls
+_shell_spin_tracker: Dict[str, List[int]] = {}   # agent_id → [hash1, hash2, ...]
+_shell_spin_lock = threading.Lock()
+_SPIN_WINDOW = 4    # how many consecutive identical (cmd+output) to consider a spin
+_SPIN_MAX    = 3    # how many times to allow before injecting a hint
+
+
+def _check_shell_spin(agent: str, command: str, output: str) -> bool:
+    """Return True if this agent is in a spin loop (same cmd+output repeated ≥ _SPIN_MAX times)."""
+    key = hash((command.strip(), output.strip()[:500]))
+    with _shell_spin_lock:
+        history = _shell_spin_tracker.setdefault(agent, [])
+        history.append(key)
+        if len(history) > _SPIN_WINDOW:
+            history.pop(0)
+        # Spin = all entries in the window are identical
+        return len(history) >= _SPIN_MAX and len(set(history)) == 1
+
+
+def _reset_shell_spin(agent: str) -> None:
+    """Reset spin tracker when the agent makes progress (different output)."""
+    with _shell_spin_lock:
+        _shell_spin_tracker.pop(agent, None)
+
+
+def _run_shell_blocks_gui_entrypoint(command: str) -> Optional[str]:
+    """If run_shell would start a Tk/Qt GUI main loop, return an error string (do not run).
+    Those processes block until the window closes and freeze the agent until timeout."""
+    import re
+    c = (command or "").strip()
+    if not c:
+        return None
+    low = c.lower()
+    # Clearly non-blocking patterns — always allow
+    safe_markers = (
+        "--help", "-h ", " -h", "--version", " -v", "-c ", " -c ", " -m ", "py_compile",
+        "pytest", "unittest", "__integration__", "pip ", "npm ", "docker build",
+        "flake8", "mypy", "black ", "ruff ", "echo ", "type ", "dir ", "ls ",
+        "chmod ", "git ", "curl ", "wget ",
+    )
+    if any(m in low for m in safe_markers):
+        return None
+    # Allow `python main.py -h` / trailing --help (safe_markers miss EOL `-h`)
+    if re.search(r"(?:^|[\s;|&])-h(?:\s|$)", low) or re.search(
+        r"(?:^|[\s;|&])--help(?:\s|$)", low
+    ):
+        return None
+    # python[w] script.py  (possibly after && or ;)
+    m = re.search(
+        r"(?:^|[;&|]\s*)(?:pythonw?\d?|py(?:thon)?3?)\s+([\w./\\-]+\.py)\b",
+        c,
+        re.IGNORECASE,
+    )
+    if not m:
+        return None
+    raw = m.group(1).replace("\\", "/")
+    base = raw.split("/")[-1].lower()
+    entry_like = {"main.py", "run.py", "app.py", "gui.py", "__main__.py"}
+    if not (base.endswith("_gui.py") or base in entry_like):
+        return None
+    return (
+        "ERROR: run_shell cannot run the full GUI entrypoint — it starts an event loop and "
+        f"blocks until you close the window (then times out after {_RUN_SHELL_TIMEOUT}s), "
+        "freezing this agent thread.\n\n"
+        "Use instead:\n"
+        "  • Smoke-check without UI: run_shell('python run.py --help') or unit tests / "
+        "python -c \"import tkinter; print('ok')\"\n"
+        "  • Real GUI session (manager / integration with desktop tools): "
+        "start_service('gui', 'python run.py'), then desktop_screenshot(), "
+        "desktop_mouse(), desktop_keyboard(), then stop_service('gui').\n"
+    )
+
+
 def _tool_run_shell(command: str) -> str:
     """Run a shell command in the output directory and return stdout + stderr (last 3000 chars)."""
     import subprocess
+    agent = _get_agent_id() or "unknown_agent"
+    cwd = _get_code_dir()
+    command = _normalize_shell_command_for_windows(command)
+    _block = _run_shell_blocks_gui_entrypoint(command)
+    if _block:
+        logger.warning(f"[run_shell:{agent}] blocked GUI-blocking command: {command[:120]!r}")
+        return _block
+    logger.info(f"[run_shell:{agent}] ▶ {command} (cwd={cwd})")
     try:
+        # So `from app...` works in flat layouts (app/ next to tests/) without the
+        # model remembering PYTHONPATH=. on every command.
+        import os
+        _cwd_resolved = str(Path(cwd).resolve())
+        _env = os.environ.copy()
+        _sep = os.pathsep
+        _existing_pp = _env.get("PYTHONPATH", "").strip()
+        if _existing_pp:
+            _parts = [p for p in _existing_pp.split(_sep) if p]
+            if _cwd_resolved not in _parts:
+                _env["PYTHONPATH"] = _cwd_resolved + _sep + _existing_pp
+            else:
+                _env["PYTHONPATH"] = _existing_pp
+        else:
+            _env["PYTHONPATH"] = _cwd_resolved
         result = subprocess.run(
             command,
             shell=True,
             capture_output=True,
             text=True,
             timeout=_RUN_SHELL_TIMEOUT,
-            cwd=str(_get_code_dir()),
+            cwd=str(cwd),
+            env=_env,
             encoding="utf-8",
             errors="replace",
         )
         out = (result.stdout or "") + (result.stderr or "")
+        preview = out[-500:] if len(out) > 500 else out
+        logger.info(
+            f"[run_shell:{agent}] exit={result.returncode} output_preview=\n"
+            f"{preview if preview else '(no output)'}"
+        )
         out = out[-3000:] if len(out) > 3000 else out
-        return out or "(no output)"
+        final_out = out or "(no output)"
+        if result.returncode != 0 and _check_shell_spin(agent, command, final_out):
+            logger.warning(
+                f"[run_shell:{agent}] SPIN DETECTED — same failing command repeated "
+                f"{_SPIN_MAX}+ times. Injecting hint to try a different approach."
+            )
+            return (
+                final_out + "\n\n"
+                "[SPIN GUARD] You have run this exact command multiple times with the same "
+                "failure. Running it again will not help. Read the actual source files involved, "
+                "understand the root cause, fix the code, then re-run."
+            )
+        if result.returncode == 0:
+            _reset_shell_spin(agent)
+        return final_out
     except subprocess.TimeoutExpired:
+        logger.warning(f"[run_shell:{agent}] TIMEOUT after {_RUN_SHELL_TIMEOUT}s: {command}")
         return (
             f"ERROR: command timed out after {_RUN_SHELL_TIMEOUT}s. "
             "To start a long-running server use start_service(), not run_shell()."
         )
     except Exception as e:
+        logger.warning(f"[run_shell:{agent}] ERROR: {e}")
         return f"ERROR: {e}"
 
 
@@ -1598,12 +1798,30 @@ def _kill_proc_tree(proc) -> None:
         proc.kill()
 
 
+def _wait_for_port(port: int, timeout: float = 6.0) -> bool:
+    """Poll until localhost:port accepts a TCP connection or timeout expires."""
+    import socket, time as _t
+    deadline = _t.time() + timeout
+    while _t.time() < deadline:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                return True
+        except OSError:
+            _t.sleep(0.3)
+    return False
+
+
 def _tool_start_service(name: str, command: str) -> str:
-    """Start a long-running process (server/worker) in the background. Returns startup output."""
+    """Start a long-running process (server/worker) in the background.
+    Returns a startup summary including early output, port readiness, and any crash details."""
     import subprocess, time, queue, threading as _th
+    # Normalize Windows env-prefix syntax (PYTHONPATH=. cmd → set PYTHONPATH=. && cmd)
+    command = _normalize_shell_command_for_windows(command)
+
     with _services_lock:
-        if name in _services and _services[name].poll() is None:
-            return f"[{name}] already running (pid={_services[name].pid})"
+        existing = _services.get(name)
+        if existing is not None and existing.poll() is None:
+            return f"[{name}] already running (pid={existing.pid}) — call stop_service('{name}') first if you want to restart it"
         # Check port conflict
         port = _extract_port(command)
         if port:
@@ -1611,7 +1829,7 @@ def _tool_start_service(name: str, command: str) -> str:
                 if svc_port == port and svc_name in _services and _services[svc_name].poll() is None:
                     return (
                         f"PORT CONFLICT: port {port} is already used by service '{svc_name}'. "
-                        f"Choose a different port or stop '{svc_name}' first with stop_service('{svc_name}')."
+                        f"Stop it first with stop_service('{svc_name}') or choose a different port."
                     )
     try:
         proc = subprocess.Popen(
@@ -1621,9 +1839,11 @@ def _tool_start_service(name: str, command: str) -> str:
             stderr=subprocess.STDOUT,
             text=True,
             cwd=str(OUTPUT_DIR / "code"),
+            encoding="utf-8",
+            errors="replace",
         )
-        time.sleep(2)   # let the process boot
-        # Collect early output non-blocking via a drain thread (works on all platforms)
+
+        # Start drain thread immediately so we capture crash output even on fast exits
         output_lines: list = []
         q: queue.Queue = queue.Queue()
 
@@ -1632,19 +1852,65 @@ def _tool_start_service(name: str, command: str) -> str:
                 q.put(line.rstrip())
 
         _th.Thread(target=_drain, daemon=True).start()
-        deadline = time.time() + 1.5
-        while time.time() < deadline:
+
+        # Give the process up to 4 seconds to either crash or start accepting connections
+        boot_deadline = time.time() + 4.0
+        while time.time() < boot_deadline:
+            try:
+                output_lines.append(q.get(timeout=0.1))
+            except queue.Empty:
+                pass
+            if proc.poll() is not None:
+                break   # process already exited — collect remaining output
+
+        # Drain any remaining buffered lines
+        flush_deadline = time.time() + 0.5
+        while time.time() < flush_deadline:
             try:
                 output_lines.append(q.get_nowait())
             except queue.Empty:
-                time.sleep(0.05)
+                break
+
         with _services_lock:
             _services[name] = proc
             if port:
-                _services_ports[name] = port   # populate so port-conflict detection works
-        status = "running" if proc.poll() is None else f"exited (rc={proc.returncode})"
-        early = "\n".join(output_lines[-20:]) if output_lines else "(no output yet)"
-        return f"[{name}] started (pid={proc.pid}, port={port}, status={status})\n{early}"
+                _services_ports[name] = port
+
+        rc = proc.poll()
+        early = "\n".join(output_lines[-30:]) if output_lines else "(no output captured)"
+
+        if rc is not None:
+            # Process crashed — return full diagnostics so manager knows exactly why
+            return (
+                f"[{name}] CRASHED immediately (exit rc={rc}) — the app cannot start.\n"
+                f"Command: {command}\n"
+                f"Output:\n{early}\n\n"
+                f"ACTION REQUIRED: Read the error above, fix the import/config issue in the "
+                f"relevant source file(s) with write_code_file(), then call start_service() again."
+            )
+
+        # Process is running — check if the port is actually accepting connections
+        port_ready = False
+        if port:
+            port_ready = _wait_for_port(port, timeout=5.0)
+            # Collect any additional startup lines while waiting
+            for _ in range(20):
+                try:
+                    output_lines.append(q.get_nowait())
+                except queue.Empty:
+                    break
+
+        early = "\n".join(output_lines[-30:]) if output_lines else "(no output yet)"
+        port_status = ""
+        if port:
+            port_status = (
+                f"\nPort {port}: {'✓ accepting connections' if port_ready else '⚠ not yet responding (app may still be starting)'}"
+            )
+
+        return (
+            f"[{name}] started (pid={proc.pid}){port_status}\n"
+            f"Startup output:\n{early}"
+        )
     except Exception as e:
         return f"ERROR starting service '{name}': {e}"
 
@@ -2456,11 +2722,11 @@ def _run_with_tools(
     tool_results: List[str] = []
     logger.info(f"[{label}] ── Gemini native function-calling loop (role={role_key}, prompt={len(prompt)}c)")
 
-    # Capture the calling thread's ContextVars (agent_id, worktree_manager, sprint_num)
-    # so tool functions invoked by Gemini AFC inside the inner thread see the right values.
-    _ctx = _cv.copy_context()
-
     for _attempt in range(1, _MAX_AGENT_RETRIES + 1):
+        # Fresh context copy per attempt — a Context can only be entered once at a time.
+        # After a timeout the abandoned thread still holds the old context, so reusing
+        # the same copy would raise "context is already entered".
+        _ctx = _cv.copy_context()
         _ex = _cf.ThreadPoolExecutor(max_workers=1)
         try:
             _fut = _ex.submit(_ctx.run, _run_loop)
@@ -3922,7 +4188,8 @@ def _generate_contracts(
             f'"exports": ["create_item"], "depends_on": ["models.py"], "description": "API routes"}}\n'
             f'  ],\n'
             f'  "entry_point": "server.py",\n'
-            f'  "entry_imports": ["routes", "database"]\n'
+            f'  "entry_imports": ["routes", "database"],\n'
+            f'  "app_type": "web"\n'
             f'}}\n\n'
             f"RULES:\n"
             f"- Every dev must own at least one file\n"
@@ -3947,6 +4214,10 @@ def _generate_contracts(
             f"  ['target/'] for Rust). Always include build artifacts and dependency directories.\n"
             f"- 'dependencies' lists external libraries needed (e.g. ['fastapi', 'sqlalchemy'])\n"
             f"- 'init_order' lists modules in the order they should be initialized (if ordering matters)\n"
+            f"- 'app_type' MUST be one of: 'web' (HTTP server/API), 'cli' (command-line tool that runs and exits),\n"
+            f"  'gui' (desktop window app), 'script' (one-shot script, no stdin loop), 'worker' (background daemon),\n"
+            f"  'library' (no runnable entry point — only importable modules).\n"
+            f"  Choose based on the PROJECT description. This controls how the manager verifies the app.\n"
         )
 
     contract_output = llm_call(
@@ -4039,10 +4310,76 @@ MAX_TASKS_PER_AGENT = 20
 MAX_WALL_CLOCK      = 600   # seconds — hard timeout for entire engineering phase
 MAX_RETRIES_PER_TASK = 10
 _AGENT_POLL_INTERVAL = 2    # seconds between task queue polls when blocked
+GIT_CMD_TIMEOUT = int(os.getenv("GIT_CMD_TIMEOUT", "120"))  # git add on Windows can exceed 30s
 
 # Phase constants (integration task still uses PHASE_INTEGRATION as a marker)
 PHASE_IMPLEMENTATION = 1   # Coding individual files
 PHASE_INTEGRATION    = 2   # Final integration test (manager fix loop)
+
+
+@dataclass
+class SprintBlocker:
+    """A dependency blocker recorded during the integration phase for cross-sprint planning."""
+    agent: str
+    task_file: str
+    blocker_description: str
+    waiting_for_files: List[str]
+    timestamp: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.timestamp:
+            import datetime
+            self.timestamp = datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z"
+
+
+# Thread-safe sprint-blocker registry (cleared at the start of each engineering sprint)
+_sprint_blockers: List[SprintBlocker] = []
+_sprint_blockers_lock = threading.Lock()
+
+
+def _record_sprint_blocker(blocker: SprintBlocker) -> None:
+    with _sprint_blockers_lock:
+        _sprint_blockers.append(blocker)
+    logger.warning(
+        f"[Blocker] {blocker.agent} blocked on {blocker.task_file!r}: {blocker.blocker_description[:120]}"
+    )
+
+
+def _get_sprint_blockers() -> List[SprintBlocker]:
+    with _sprint_blockers_lock:
+        return list(_sprint_blockers)
+
+
+def _clear_sprint_blockers() -> None:
+    with _sprint_blockers_lock:
+        _sprint_blockers.clear()
+
+
+def _looks_like_dependency_error(output: str) -> bool:
+    """Heuristic: does the error output look like a missing-dependency / not-yet-written file?"""
+    lowered = output.lower()
+    dependency_signals = [
+        "modulenotfounderror",
+        "cannot import name",
+        "importerror",
+        "no module named",
+        "no such file or directory",
+        "enoent",
+        "cannot find module",
+        "module not found",
+        "failed to resolve",
+        "not yet implemented",
+        "connection refused",
+        "address already in use",  # service not ready yet
+    ]
+    return any(sig in lowered for sig in dependency_signals)
+
+
+@dataclass
+class MergeResult:
+    """Result of merge_all — tracks conflict resolutions and agents whose branches couldn't be merged."""
+    resolutions: List[str] = field(default_factory=list)
+    failed_agents: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -4053,10 +4390,11 @@ class EngTask:
     description: str
     depends_on: List[str]
     assigned_to: Optional[str] = None
-    status: str = "pending"       # pending | blocked | in_progress | completed | failed
+    status: str = "pending"       # pending | blocked | in_progress | completed | failed | waiting
     retries: int = 0
     primary_owner: Optional[str] = None  # legacy field; ownership is no longer used for claiming
     phase: int = PHASE_IMPLEMENTATION
+    waiting_for: List[str] = field(default_factory=list)  # files blocking this task during integration
 
 
 class EngTaskQueue:
@@ -4162,6 +4500,7 @@ class EngTaskQueue:
                         "depends_on": t.depends_on, "assigned_to": t.assigned_to,
                         "status": t.status, "retries": t.retries,
                         "primary_owner": t.primary_owner, "phase": t.phase,
+                        "waiting_for": t.waiting_for,
                     }
                     for tid, t in self.tasks.items()
                 },
@@ -4183,6 +4522,7 @@ class EngTaskQueue:
                     t.status      = td.get("status", t.status)
                     t.assigned_to = td.get("assigned_to", t.assigned_to)
                     t.retries     = td.get("retries", t.retries)
+                    t.waiting_for = td.get("waiting_for", [])
             self._completed_tasks = set(data.get("completed_tasks", []))
             logger.info(f"[TaskQueue] crash-recovery: reloaded state from {self._persist_path.name}")
         except Exception as e:
@@ -4202,10 +4542,14 @@ class EngTaskQueue:
             return None
 
     def complete(self, task_id: str) -> None:
-        """Mark a task completed and unblock dependents."""
+        """Mark a task completed and unblock dependents.
+        No-op if the task is already in a terminal state (completed/failed)."""
         with self._lock:
             task = self.tasks.get(task_id)
             if task:
+                if task.status in ("completed", "failed"):
+                    logger.debug(f"[TaskQueue] complete('{task_id}') ignored — already {task.status}")
+                    return
                 task.status = "completed"
                 self._completed_tasks.add(task_id)
                 logger.info(f"[TaskQueue] task '{task_id}' COMPLETED")
@@ -4236,13 +4580,61 @@ class EngTaskQueue:
                 self._persist()
 
     def _unblock_dependents(self) -> None:
-        """Move blocked tasks to pending if all their dependencies are satisfied."""
+        """Move blocked/waiting tasks to pending if all their dependencies are satisfied."""
         for t in self.tasks.values():
-            if t.status == "blocked":
+            if t.status in ("blocked", "waiting"):
                 deps_met = all(d in self._completed_tasks for d in t.depends_on)
-                if deps_met:
+                if t.status == "waiting":
+                    # Also check that the specific files this task is waiting for are now done
+                    wait_met = all(
+                        any(ct.file == wf and ct.status == "completed" for ct in self.tasks.values())
+                        for wf in (t.waiting_for or [])
+                    )
+                    if deps_met and wait_met:
+                        t.status = "pending"
+                        t.waiting_for = []
+                        logger.info(f"[TaskQueue] wait-unblocked task '{t.id}' ({t.file}) — dependencies arrived")
+                elif deps_met:
                     t.status = "pending"
                     logger.info(f"[TaskQueue] unblocked task '{t.id}' ({t.file})")
+
+    def set_waiting(self, task_id: str, waiting_for_files: List[str]) -> None:
+        """Put a task into 'waiting' state until specific dependency files complete."""
+        with self._lock:
+            task = self.tasks.get(task_id)
+            if task:
+                task.status = "waiting"
+                task.waiting_for = list(waiting_for_files)
+                self._persist()
+                logger.info(
+                    f"[TaskQueue] task '{task_id}' is WAITING for: {waiting_for_files}"
+                )
+
+    def requeue_after_wait(self, task_id: str) -> None:
+        """Re-queue a task after it was woken from WAITING — does NOT increment retries."""
+        with self._lock:
+            task = self.tasks.get(task_id)
+            if task:
+                task.status = "pending"
+                task.assigned_to = None
+                task.waiting_for = []
+                self._persist()
+                logger.info(f"[TaskQueue] task '{task_id}' requeued after wait (retries unchanged at {task.retries})")
+
+    def is_deadlocked(self) -> bool:
+        """Return True when active tasks are stalled — nothing can make progress.
+        Covers: all-waiting, all-blocked, or mixed blocked+waiting with no pending/in_progress."""
+        with self._lock:
+            active = [t for t in self.tasks.values() if t.status not in ("completed", "failed")]
+            if not active:
+                return False
+            if any(t.status in ("pending", "in_progress") for t in active):
+                return False
+            return all(t.status in ("blocked", "waiting") for t in active)
+
+    def get_waiting_tasks(self) -> List["EngTask"]:
+        with self._lock:
+            return [t for t in self.tasks.values() if t.status == "waiting"]
 
     def all_done(self) -> bool:
         with self._lock:
@@ -4251,22 +4643,27 @@ class EngTaskQueue:
     def has_work_available(self) -> bool:
         """True if there are pending tasks or in-progress tasks that might unblock others."""
         with self._lock:
-            return any(t.status in ("pending", "in_progress", "blocked") for t in self.tasks.values())
+            return any(t.status in ("pending", "in_progress", "blocked", "waiting") for t in self.tasks.values())
 
     def get_status(self) -> str:
         with self._lock:
-            counts = {"pending": 0, "blocked": 0, "in_progress": 0, "completed": 0, "failed": 0}
+            counts: Dict[str, int] = {}
             for t in self.tasks.values():
                 counts[t.status] = counts.get(t.status, 0) + 1
             lines = [f"Tasks: {len(self.tasks)} total"]
-            for status, count in counts.items():
-                if count:
-                    lines.append(f"  {status}: {count}")
+            for status in ("pending", "blocked", "waiting", "in_progress", "completed", "failed"):
+                if counts.get(status):
+                    lines.append(f"  {status}: {counts[status]}")
             in_prog = [t for t in self.tasks.values() if t.status == "in_progress"]
             if in_prog:
                 lines.append("  Active:")
                 for t in in_prog:
                     lines.append(f"    {t.assigned_to} → {t.file}")
+            waiting = [t for t in self.tasks.values() if t.status == "waiting"]
+            if waiting:
+                lines.append("  Waiting:")
+                for t in waiting:
+                    lines.append(f"    {t.assigned_to} → {t.file} (needs: {t.waiting_for})")
             return "\n".join(lines)
 
     def get_completed_files(self) -> List[str]:
@@ -4278,18 +4675,20 @@ class EngTaskQueue:
         """Mark all non-terminal tasks as failed (used by wall-clock timeout)."""
         with self._lock:
             for t in self.tasks.values():
-                if t.status in ("pending", "blocked", "in_progress"):
+                if t.status in ("pending", "blocked", "in_progress", "waiting"):
                     t.status = "failed"
             self._completed_tasks.update(t.id for t in self.tasks.values() if t.status == "failed")
+            self._persist()
 
     def cancel_all(self) -> None:
-        """Immediately cancel all pending/blocked/in-progress tasks.
+        """Immediately cancel all pending/blocked/in-progress/waiting tasks.
         Used by the token budget kill-switch to stop the swarm cleanly."""
         with self._lock:
             for t in self.tasks.values():
                 if t.status not in ("completed", "failed"):
                     t.status = "failed"
             self._completed_tasks.update(t.id for t in self.tasks.values())
+            self._persist()
         logger.critical("[TaskQueue] ALL TASKS CANCELLED — token budget kill-switch triggered")
 
 
@@ -4430,9 +4829,39 @@ def enforce_integration() -> str:
     return ""
 
 
+_SERVER_CMD_PATTERNS = [
+    "uvicorn ", "gunicorn ", "flask run", "python server", "python app",
+    "python main", "python -m uvicorn", "python -m flask", "python -m http.server",
+    "npm start", "npm run dev", "npm run start", "node server", "node index",
+    "node app", "daphne ", "hypercorn ", "php artisan serve", "rails server",
+    "rails s", "django", "manage.py runserver",
+]
+
+
+def _is_server_command(cmd: str) -> bool:
+    """Detect build_command that is actually a long-running server start."""
+    lowered = cmd.lower().strip()
+    return any(lowered.startswith(p) or p in lowered for p in _SERVER_CMD_PATTERNS)
+
+
 def _run_build_command(registry: InterfaceContractRegistry) -> str:
-    """Run the build command and return its output (empty if success)."""
+    """Run the build command and return its output (empty if success).
+    Skips commands that look like long-running server starts — those are
+    tested via start_service/http_request in the manager fix loop instead."""
     if not registry.build_command:
+        return ""
+    if _is_server_command(registry.build_command):
+        logger.info(
+            f"[build] skipping server-style build_command '{registry.build_command}' "
+            f"— app boot is verified via start_service() instead"
+        )
+        return ""
+    _norm_build = _normalize_shell_command_for_windows(registry.build_command)
+    if _run_shell_blocks_gui_entrypoint(_norm_build):
+        logger.info(
+            f"[build] skipping GUI entrypoint build_command {registry.build_command!r} "
+            f"— would block; verify via start_service / desktop tools instead"
+        )
         return ""
     code_dir = OUTPUT_DIR / "code"
     if not code_dir.exists():
@@ -4535,8 +4964,14 @@ def _run_test_gate(code_dir: Path) -> TestGateResult:
     # Detection order: most-specific first
     # Use `python -m pytest` so it works regardless of whether `pytest` is on
     # the system PATH (common on Windows where the Scripts/ directory may be absent).
-    if _has_test_files("test_*.py", "*_test.py"):
-        cmd = f"{sys.executable} -m pytest {str(tests_dir)} --tb=short -q"
+    if _has_test_files("test_*.py", "*_test.py", "*_tests.py", "tests_*.py"):
+        # Important: run from cwd=code_dir with RELATIVE targets, because OUTPUT_DIR
+        # can be relative (e.g., "eng_output") and absolute-looking relative paths
+        # like "eng_output\\code\\tests" become invalid from inside code_dir.
+        if tests_dir.exists():
+            cmd = f"{sys.executable} -m pytest tests --tb=short -q"
+        else:
+            cmd = f"{sys.executable} -m pytest . --tb=short -q"
     elif _has_file("Cargo.toml"):
         cmd = "cargo test"
     elif _has_file("go.mod"):
@@ -4722,7 +5157,7 @@ class GitWorktreeManager:
         cmd = ["git"] + list(args)
         return subprocess.run(
             cmd, cwd=str(cwd or self.code_dir),
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, timeout=GIT_CMD_TIMEOUT,
             encoding="utf-8", errors="replace",
         )
 
@@ -4741,7 +5176,10 @@ class GitWorktreeManager:
                 gitignore = self.code_dir / ".gitignore"
                 if not gitignore.exists():
                     patterns = get_contracts().gitignore_patterns or []
-                    content = "\n".join([".worktrees/"] + [p for p in patterns if p != ".worktrees/"]) + "\n"
+                    content = "\n".join(
+                        [".worktrees/", "__pycache__/", "**/__pycache__/", "*.pyc"]
+                        + [p for p in patterns if p not in (".worktrees/", "__pycache__/", "**/__pycache__/", "*.pyc")]
+                    ) + "\n"
                     gitignore.write_text(content, encoding="utf-8")
                 self._git("add", ".")
                 self._git("commit", "-m", "initial skeleton", "--allow-empty")
@@ -4752,7 +5190,17 @@ class GitWorktreeManager:
                 existing = gitignore.read_text(encoding="utf-8") if gitignore.exists() else ""
                 existing_lines = set(existing.splitlines())
                 patterns = get_contracts().gitignore_patterns or []
-                needed_lines = [".worktrees/"] + [p for p in patterns if p != ".worktrees/"]
+                # Always ignore dependency trees; letting them into git status makes
+                # `git add` extremely slow and causes task retries/timeouts on Windows.
+                needed_lines = [
+                    ".worktrees/",
+                    "__pycache__/",
+                    "**/__pycache__/",
+                    "*.pyc",
+                    "node_modules/",
+                    "**/node_modules/",
+                    "frontend/node_modules/",
+                ] + [p for p in patterns if p != ".worktrees/"]
                 additions = [l for l in needed_lines if l and l not in existing_lines]
                 if additions:
                     with open(gitignore, "a", encoding="utf-8") as f:
@@ -4809,7 +5257,29 @@ class GitWorktreeManager:
         # branch is exclusive to this agent, but we still serialise to avoid index
         # conflicts on the shared object store.
         with _git_repo_lock:
-            self._git("add", ".", cwd=wt_path)
+            # Stage tracked edits quickly.
+            self._git("add", "-u", cwd=wt_path)
+
+            # Stage the current task file directly (fast path for normal dev tasks).
+            task_file = (_get_task_file() or "").strip().replace("\\", "/")
+            if task_file and task_file != "__integration__":
+                self._git("add", "--", task_file, cwd=wt_path)
+            else:
+                # Integration/fallback path: stage only changed paths from porcelain status,
+                # while skipping heavy dependency folders.
+                st = self._git("status", "--porcelain", cwd=wt_path)
+                if st.returncode == 0 and st.stdout:
+                    for line in st.stdout.splitlines():
+                        if len(line) < 4:
+                            continue
+                        raw = line[3:].strip()
+                        path = raw.split("->")[-1].strip().replace("\\", "/")
+                        if not path:
+                            continue
+                        if "node_modules/" in path or "/.git/" in path or path.startswith(".git/"):
+                            continue
+                        self._git("add", "--", path, cwd=wt_path)
+
             diff = self._git("diff", "--cached", "--quiet", cwd=wt_path)
             if diff.returncode == 0:
                 logger.info(f"[worktree] {agent_id}: no changes to commit")
@@ -4821,12 +5291,12 @@ class GitWorktreeManager:
             logger.info(f"[worktree] {agent_id}: committed changes")
             return True
 
-    def merge_all(self) -> List[str]:
-        """Merge all agent branches back into main. Returns list of conflict resolutions."""
+    def merge_all(self) -> "MergeResult":
+        """Merge all agent branches back into main.
+        Returns a MergeResult with conflict resolutions and failed agents."""
         resolutions: List[str] = []
+        failed_agents: List[str] = []
         with _git_repo_lock:
-            # Always land on main before merging so we never accidentally merge
-            # into a detached HEAD or a stale agent branch.
             self._git("checkout", "main")
             for agent_id in self.agent_ids:
                 result = self._git("merge", agent_id, "--no-edit")
@@ -4840,13 +5310,14 @@ class GitWorktreeManager:
                         self._git("commit", "-m", f"merged {agent_id} with conflict resolution")
                     else:
                         self._git("merge", "--abort")
+                        failed_agents.append(agent_id)
                         logger.warning(f"[worktree] merge of {agent_id} failed (non-conflict): {result.stderr.strip()}")
                 else:
                     logger.info(f"[worktree] merged {agent_id} cleanly")
         if resolutions:
             report = "\n".join(resolutions)
             logger.info(f"[worktree] merge conflict resolutions:\n{report}")
-        return resolutions
+        return MergeResult(resolutions=resolutions, failed_agents=failed_agents)
 
     def _get_conflict_files(self) -> List[str]:
         result = self._git("diff", "--name-only", "--diff-filter=U")
@@ -5103,22 +5574,108 @@ def _manager_saw_start_service(tool_results: List[str]) -> bool:
     return any(tr.startswith("[TOOL: start_service]") for tr in (tool_results or []))
 
 
+def _manager_saw_desktop_interaction(tool_results: List[str]) -> bool:
+    """True if manager actually interacted with the GUI (mouse/keyboard).
+    Screenshot-only does not count as interaction."""
+    trs = tool_results or []
+    return any(
+        tr.startswith("[TOOL: desktop_mouse]")
+        or tr.startswith("[TOOL: desktop_keyboard]")
+        for tr in trs
+    )
+
+
+def _count_desktop_screenshots(tool_results: List[str]) -> int:
+    return sum(1 for tr in (tool_results or []) if tr.startswith("[TOOL: desktop_screenshot]"))
+
+
+def _manager_saw_http_request(tool_results: List[str]) -> bool:
+    return any(tr.startswith("[TOOL: http_request]") for tr in (tool_results or []))
+
+
+def _load_agent_test_hints() -> str:
+    """Load the agent-contributed test hints from design/agent_test_hints.md."""
+    hints_path = OUTPUT_DIR / "design" / "agent_test_hints.md"
+    if not hints_path.exists():
+        return ""
+    try:
+        content = hints_path.read_text(encoding="utf-8").strip()
+        return content[:3000] if content else ""
+    except Exception:
+        return ""
+
+
+def _write_sprint_blockers_report() -> Optional[Path]:
+    """Persist all recorded sprint blockers to design/sprint_blockers.md.
+    Returns the path written (or None if there were no blockers)."""
+    blockers = _get_sprint_blockers()
+    if not blockers:
+        return None
+    report_path = OUTPUT_DIR / "design" / "sprint_blockers.md"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    import datetime
+    lines = [
+        "# Sprint Blocker Report",
+        f"_Generated: {datetime.datetime.utcnow().isoformat(timespec='seconds')}Z_",
+        "",
+        "These blockers were detected during the integration phase. They should be",
+        "reviewed in the next sprint planning session / manager/CEO sync.",
+        "",
+    ]
+    for i, b in enumerate(blockers, 1):
+        lines += [
+            f"## Blocker {i}: `{b.task_file}`",
+            f"- **Agent**: {b.agent}",
+            f"- **Timestamp**: {b.timestamp}",
+            f"- **Waiting for**: {', '.join(b.waiting_for_files) or 'unknown'}",
+            f"- **Description**: {b.blocker_description}",
+            "",
+        ]
+    lines += [
+        "---",
+        f"_Total blockers this sprint: {len(blockers)}_",
+    ]
+    report_path.write_text("\n".join(lines), encoding="utf-8")
+    logger.info(f"[SprintBlockers] wrote {len(blockers)} blocker(s) to {report_path}")
+    return report_path
+
+
 def _manager_fix_loop(
     code_dir: Path,
     task_queue: "EngTaskQueue",
     rolling_ctxs: Dict[str, "RollingContext"],
     max_rounds: int = MANAGER_FIX_MAX_ROUNDS,
 ) -> ManagerFixResult:
-    """Run tests/build repeatedly; manager must also invoke ``start_service()`` at least once.
+    """Run tests/build repeatedly; manager must boot the app and prove it responds.
 
-    Success requires: (1) test gate + build green, and (2) at least one ``start_service`` tool
-    call in this session (integration manager actually booted the app).
+    Success requires: (1) test gate + build green, (2) ``start_service()`` at least once,
+    (3) for ``app_type=='web'``, at least one ``http_request()`` toward the running server,
+    (4) for ``app_type=='gui'``, mouse/keyboard plus two ``desktop_screenshot()`` calls.
     """
     registry = get_contracts()
     _set_agent_ctx("eng_manager", _get_sprint_num())
     manager_ran_start_service = False
+    manager_ran_http_request = False
+    manager_ran_desktop_action = False
+    manager_desktop_screenshots = 0
     last_error_block = ""
     build_cmd_hint = registry.build_command or ""
+    app_type = registry.app_type or registry._infer_app_type()
+    logger.info(f"[ManagerFix] app_type={app_type!r}")
+
+    # web/worker → start_service (mandatory); web also needs http_request (mandatory)
+    # gui        → start_service + desktop screenshots + mouse/keyboard (mandatory)
+    # cli/script/library → start_service still required for orchestration tracking
+    _needs_start_service = app_type in ("web", "worker")
+
+    # Load the team's test hints once at the start of the fix loop
+    _agent_test_hints = _load_agent_test_hints()
+    _hints_section = (
+        f"\n\nAGENT TEST CHECKLIST (features to verify in the running app):\n"
+        f"{_agent_test_hints}\n"
+        if _agent_test_hints
+        else ""
+    )
 
     for round_num in range(1, max_rounds + 1):
         logger.info(f"[ManagerFix] round {round_num}/{max_rounds} — running verification…")
@@ -5128,15 +5685,19 @@ def _manager_fix_loop(
             last_error_block = "\n\n".join(errors)[-4000:]
 
         tests_build_ok = not errors
-        if tests_build_ok and manager_ran_start_service:
+        _desktop_ok = (app_type != "gui") or (
+            manager_ran_desktop_action and manager_desktop_screenshots >= 2
+        )
+        _web_ok = (app_type != "web") or manager_ran_http_request
+        if tests_build_ok and manager_ran_start_service and _desktop_ok and _web_ok:
             logger.info(
-                f"[ManagerFix] ALL GREEN + start_service verified after "
+                f"[ManagerFix] ALL GREEN + app verified after "
                 f"{round_num - 1} manager round(s)"
             )
             return ManagerFixResult(
                 passed=True,
                 rounds_used=max(0, round_num - 1),
-                final_output="All tests and build passed; manager invoked start_service at least once.",
+                final_output="All tests and build passed; manager ran mandatory app verification.",
                 app_run_verified=True,
             )
 
@@ -5153,6 +5714,19 @@ def _manager_fix_loop(
         if errors:
             error_block = "\n\n".join(errors)[-4000:]
             logger.warning(f"[ManagerFix] round {round_num} errors:\n{error_block[:500]}")
+            _gui_extra = (
+                "GUI-SPECIFIC REQUIREMENT (applies even during error rounds):\n"
+                "  - Launch the desktop app; call desktop_screenshot() before interaction and again after.\n"
+                "  - Use desktop_mouse() and/or desktop_keyboard() at least once (screenshot-only is not enough).\n"
+                "  - Describe what changed on screen after each interaction.\n"
+                if app_type == "gui" else ""
+            )
+            _web_extra = (
+                "WEB-SPECIFIC REQUIREMENT (applies even during error rounds):\n"
+                "  - After start_service(), call http_request('GET', ...) against a real URL on that server.\n"
+                "  - Integration is not complete until at least one HTTP request succeeds.\n"
+                if app_type == "web" else ""
+            )
             prompt = (
                 f"You are the Engineering Manager. The full codebase has been assembled by "
                 f"your team, but verification is failing.\n\n"
@@ -5166,29 +5740,81 @@ def _manager_fix_loop(
                 f"  3. Use run_shell() to re-run specific commands if needed.\n"
                 f"  4. Focus on the FIRST error — fixing it often resolves cascading failures.\n"
                 f"NON-NEGOTIABLE: Before integration is complete you MUST run the real application "
-                f"at least once using start_service(), then http_request() against localhost, "
-                f"then stop_service(). Do not skip this even if tests later pass.\n"
+                f"at least once (method depends on app_type='{app_type}' — see mandatory boot "
+                f"instructions you will receive once tests are green).\n"
+                f"{_gui_extra}"
+                f"{_web_extra}"
                 f"Do NOT just describe what to do — actually make the changes with tools.\n"
             )
         else:
+            _verb = {
+                "web": "WEB SERVER BOOT",
+                "worker": "WORKER BOOT",
+                "gui": "GUI LAUNCH",
+                "cli": "CLI RUN",
+                "script": "SCRIPT RUN",
+                "library": "IMPORT CHECK",
+            }.get(app_type, "APPLICATION RUN")
             logger.warning(
-                f"[ManagerFix] round {round_num} — tests/build green but start_service not "
-                f"invoked yet; forcing mandatory app boot"
+                f"[ManagerFix] round {round_num} — tests/build green but mandatory "
+                f"{_verb} not done yet"
             )
+            # Build app-type-specific instructions
+            if _needs_start_service:
+                _run_instructions = (
+                    f"REQUIRED (use tools, not prose only):\n"
+                    f"  1. list_files() / read_file('app/main.py') to find the run command.\n"
+                    f"     Common: 'python app/main.py', 'uvicorn app.main:app --port 8000'\n"
+                    f"  2. start_service('app', '<run command>') — starts server in background.\n"
+                    f"     If it returns 'CRASHED immediately', read the traceback and fix the file.\n"
+                    f"  3. http_request('GET', 'http://localhost:<port>/health') — confirm response.\n"
+                    f"  4. Verify EACH item in the test checklist with http_request().\n"
+                    f"  5. stop_service('app') when done.\n"
+                )
+            elif app_type == "gui":
+                _run_instructions = (
+                    f"REQUIRED (use tools, not prose only):\n"
+                    f"  1. read_file() to identify the entry point and run command.\n"
+                    f"  2. launch_application('<run command>') — opens the GUI window.\n"
+                    f"  3. desktop_screenshot() — baseline; then desktop_mouse() / desktop_keyboard().\n"
+                    f"  4. desktop_screenshot() again — proof the UI changed after interaction.\n"
+                    f"     (At least TWO screenshots this session, plus real mouse/keyboard use.)\n"
+                    f"  5. Verify EACH checklist item using further screenshots as needed.\n"
+                    f"  NOTE: call start_service() with the run command too — the orchestrator \n"
+                    f"  tracks this to confirm you booted the app.\n"
+                    f"  Do NOT use run_shell() for the full GUI main script — it blocks until the window closes.\n"
+                )
+            elif app_type in ("cli", "script"):
+                _run_instructions = (
+                    f"REQUIRED (use tools, not prose only):\n"
+                    f"  1. read_file() to find the entry point and understand expected arguments.\n"
+                    f"  2. run_shell('python <entry_point> --help') — confirm it starts without crashing.\n"
+                    f"  3. run_shell('python <entry_point> <args>') — exercise the main functionality.\n"
+                    f"     Exit code 0 = success. Any non-zero or traceback = failure to fix.\n"
+                    f"  4. Verify EACH checklist item by running the CLI with relevant arguments.\n"
+                    f"  NOTE: also call start_service('<entry_point>', 'python <entry_point>') \n"
+                    f"  (it will exit immediately which is fine) so the orchestrator knows you ran it.\n"
+                )
+            else:  # library
+                _run_instructions = (
+                    f"REQUIRED (use tools, not prose only):\n"
+                    f"  1. run_shell('python -c \"import <package>; print(<package>.__version__)\"')\n"
+                    f"     — confirm the library imports without error.\n"
+                    f"  2. run_shell('python -m pytest . --tb=short -q') to run any example/tests.\n"
+                    f"  3. Verify EACH checklist item is importable and callable.\n"
+                    f"  NOTE: call start_service('lib', 'python -c \"import <package>\"') \n"
+                    f"  so the orchestrator records that you verified the library.\n"
+                )
+
             prompt = (
-                f"You are the Engineering Manager — MANDATORY APPLICATION BOOT "
+                f"You are the Engineering Manager — MANDATORY {_verb} "
                 f"(round {round_num}/{max_rounds}).\n\n"
-                f"Automated tests and the build command currently pass (or there is no failing gate).\n"
-                f"You have NOT yet called start_service() in this manager session. "
-                f"The integration phase is incomplete until you boot the app at least once.\n\n"
+                f"app_type: {app_type!r} — use the appropriate verification method below.\n"
+                f"Automated tests currently pass (or there is no failing gate).\n"
+                f"You have NOT yet run the application in this manager session.\n\n"
                 f"Contract build_command hint: {build_cmd_hint!r}\n\n"
-                f"REQUIRED (use tools, not prose only):\n"
-                f"  1. list_files() / read_file() as needed to find how to run "
-                f"(docker compose, npm start, uvicorn, python -m, etc.).\n"
-                f"  2. start_service(name, command, port) — use a short name like 'app' or 'api'.\n"
-                f"  3. http_request('GET', 'http://localhost:<port>/...') to confirm a response "
-                f"(root, /health, /docs, or similar).\n"
-                f"  4. stop_service(name) when done.\n\n"
+                f"{_run_instructions}"
+                f"{_hints_section}\n"
                 f"PROJECT FILES:\n{files_section}\n\n"
                 f"TASK QUEUE STATUS:\n{task_queue.get_status()}\n"
             )
@@ -5198,17 +5824,27 @@ def _manager_fix_loop(
         )
         if _manager_saw_start_service(tool_results):
             manager_ran_start_service = True
+        if _manager_saw_http_request(tool_results):
+            manager_ran_http_request = True
+        if _manager_saw_desktop_interaction(tool_results):
+            manager_ran_desktop_action = True
+        manager_desktop_screenshots += _count_desktop_screenshots(tool_results)
         logger.info(
             f"[ManagerFix] round {round_num} — manager used {len(tool_results)} tool calls, "
-            f"output {len(output)}c, start_service_seen={manager_ran_start_service}"
+            f"output {len(output)}c, app_verified={manager_ran_start_service}, "
+            f"http_verified={manager_ran_http_request}, "
+            f"desktop_verified={manager_ran_desktop_action}, "
+            f"desktop_screenshots_total={manager_desktop_screenshots}"
         )
 
         try:
             wt = GitWorktreeManager(code_dir, ["eng_manager"])
             wt.create_worktrees()
             wt.commit_agent("eng_manager")
-            with _git_repo_lock:
-                wt.merge_all()
+            # merge_all() already takes _git_repo_lock internally.
+            _mr = wt.merge_all()
+            if _mr.failed_agents:
+                logger.warning(f"[ManagerFix] merge failed for agents: {_mr.failed_agents}")
             wt.cleanup()
         except Exception as e:
             logger.warning(f"[ManagerFix] commit/merge after round {round_num} failed: {e}")
@@ -5223,7 +5859,11 @@ def _manager_fix_loop(
     tests_build_ok = not errors
     if errors:
         last_error_block = "\n\n".join(errors)[-4000:]
-    if tests_build_ok and manager_ran_start_service:
+    _desktop_ok = (app_type != "gui") or (
+        manager_ran_desktop_action and manager_desktop_screenshots >= 2
+    )
+    _web_ok = (app_type != "web") or manager_ran_http_request
+    if tests_build_ok and manager_ran_start_service and _desktop_ok and _web_ok:
         logger.info("[ManagerFix] green + start_service after final round")
         return ManagerFixResult(
             passed=True,
@@ -5242,6 +5882,31 @@ def _manager_fix_loop(
             rounds_used=max_rounds,
             final_output=msg,
             app_run_verified=False,
+        )
+    if tests_build_ok and manager_ran_start_service and app_type == "gui" and not _desktop_ok:
+        msg = (
+            "Tests/build passed and start_service was used, but GUI verification is incomplete: "
+            "the manager must call desktop_mouse() or desktop_keyboard() at least once and "
+            "desktop_screenshot() at least twice (before and after interaction)."
+        )
+        logger.warning(f"[ManagerFix] {msg}")
+        return ManagerFixResult(
+            passed=False,
+            rounds_used=max_rounds,
+            final_output=msg,
+            app_run_verified=True,
+        )
+    if tests_build_ok and manager_ran_start_service and app_type == "web" and not _web_ok:
+        msg = (
+            "Tests/build passed and start_service was used, but web verification is incomplete: "
+            "the manager must call http_request() at least once against the running server."
+        )
+        logger.warning(f"[ManagerFix] {msg}")
+        return ManagerFixResult(
+            passed=False,
+            rounds_used=max_rounds,
+            final_output=msg,
+            app_run_verified=True,
         )
     logger.warning(f"[ManagerFix] FAILED after {max_rounds} rounds — returning last errors")
     return ManagerFixResult(
@@ -5344,29 +6009,51 @@ def run_engineering_team(
             )
 
         is_integration_specialist = (eng_task.file == "__integration__")
-        build_cmd = get_contracts().build_command
+        _contracts_for_task = get_contracts()
+        build_cmd = _contracts_for_task.build_command
+        _int_app_type = _contracts_for_task.app_type or _contracts_for_task._infer_app_type()
 
         if is_integration_specialist:
             build_errors = ""
             if build_cmd:
-                try:
-                    logger.info(f"[{dev_key}] running pre-flight '{build_cmd}' (timeout=30s)...")
-                    result = subprocess.run(
-                        build_cmd, shell=True, cwd=str(code_dir),
-                        capture_output=True, text=True, timeout=30,
-                        encoding="utf-8", errors="replace",
+                _norm_build = _normalize_shell_command_for_windows(build_cmd)
+                if _run_shell_blocks_gui_entrypoint(_norm_build):
+                    build_errors = (
+                        f"\nPRE-FLIGHT SKIPPED: build_command {build_cmd!r} would start a blocking GUI "
+                        f"main loop — use pytest / --help / compile checks instead.\n"
                     )
-                    if result.returncode != 0:
-                        build_errors = f"\nBUILD ERRORS (from running '{build_cmd}'):\n{(result.stdout or '')[-2000:]}\n{(result.stderr or '')[-2000:]}\n"
-                    logger.info(f"[{dev_key}] pre-flight done (rc={result.returncode})")
-                except Exception as e:
-                    build_errors = f"\nBUILD FAILED: {e}\n"
-                    logger.info(f"[{dev_key}] pre-flight failed: {e}")
+                    logger.info(f"[{dev_key}] skipped pre-flight (blocking GUI build_command)")
+                else:
+                    try:
+                        logger.info(f"[{dev_key}] running pre-flight '{build_cmd}' (timeout=30s)...")
+                        result = subprocess.run(
+                            build_cmd, shell=True, cwd=str(code_dir),
+                            capture_output=True, text=True, timeout=30,
+                            encoding="utf-8", errors="replace",
+                        )
+                        if result.returncode != 0:
+                            build_errors = f"\nBUILD ERRORS (from running '{build_cmd}'):\n{(result.stdout or '')[-2000:]}\n{(result.stderr or '')[-2000:]}\n"
+                        logger.info(f"[{dev_key}] pre-flight done (rc={result.returncode})")
+                    except Exception as e:
+                        build_errors = f"\nBUILD FAILED: {e}\n"
+                        logger.info(f"[{dev_key}] pre-flight failed: {e}")
 
+            _gui_integ = ""
+            if _int_app_type == "gui":
+                _gui_integ = (
+                    "GUI PROJECT: Never use run_shell() to start the full app (main.py / run.py / Tk or Qt "
+                    "main loop). That blocks until the window closes and will freeze or time out this agent.\n"
+                    "Use run_shell only for commands that exit on their own: pytest, linters, "
+                    "python -m py_compile, or python <entry> --help. Live GUI verification is the manager's job "
+                    "(launch_application, desktop_screenshot, desktop_mouse / desktop_keyboard).\n\n"
+                )
             task_instruction = (
                 f"INTEGRATION TEST — all code merged.\n"
                 f"{build_errors}"
-                f"Run '{build_cmd or 'the build command'}' with run_shell. Fix any errors with write_code_file.\n"
+                f"{_gui_integ}"
+                f"Verify with run_shell using only non-blocking commands (tests, --help, compile checks). "
+                f"Contract build_command hint: {(build_cmd or 'none')!r} — if it would launch a long-running "
+                f"GUI or server, do not run it via run_shell here; rely on tests and code fixes instead.\n"
                 f"Use write_code_file (not write_config_file) for manifests like requirements.txt.\n"
             )
         else:
@@ -5506,6 +6193,79 @@ def run_engineering_team(
             F_health=F, anomaly=anomaly,
         )
 
+    # ── Task-completion broadcast + test-hint writer ──────────────────────
+
+    def _broadcast_task_completion(
+        dev_key: str,
+        eng_task: "EngTask",
+        code_dir: Path,
+        sprint_num: int,
+        task_queue: "EngTaskQueue",
+    ) -> None:
+        """After a task completes:
+        1. Broadcast a short 'what I implemented' message so teammates who were
+           waiting on this file can retry their integration.
+        2. Append a structured test-hint to design/agent_test_hints.md so the
+           engineering manager has a concrete checklist to verify during the fix loop.
+        """
+        registry = get_contracts()
+        file_entry = registry.file_map.get(eng_task.file, {})
+        exports = file_entry.get("exports", []) if isinstance(file_entry, dict) else []
+
+        # --- Build a brief 'how to test' hint from the task description + exports ---
+        hint_prompt = (
+            f"You are {dev_key}. You just finished '{eng_task.file}'.\n"
+            f"Task: {eng_task.description[:400]}\n"
+            f"Exports: {exports}\n\n"
+            f"Write ONE concise sentence (≤120 chars) describing a single observable "
+            f"test that the engineering manager can perform on the running application "
+            f"to verify this feature works (e.g. 'GET /api/users returns a JSON list'). "
+            f"No explanations — just the test sentence."
+        )
+        try:
+            hint_sentence = llm_call(hint_prompt, label=f"{dev_key}_test_hint").strip()
+            if len(hint_sentence) > 200:
+                hint_sentence = hint_sentence[:197] + "..."
+        except Exception:
+            hint_sentence = f"Verify that {eng_task.file} functions correctly."
+
+        # --- Append hint to design/agent_test_hints.md ---
+        hints_path = OUTPUT_DIR / "design" / "agent_test_hints.md"
+        hints_path.parent.mkdir(parents=True, exist_ok=True)
+        with _sprint_blockers_lock:  # reuse a handy lock; the file is small
+            with open(hints_path, "a", encoding="utf-8") as _hf:
+                _hf.write(
+                    f"- [{dev_key}] **{eng_task.file}**: {hint_sentence}\n"
+                )
+        logger.info(f"[{dev_key}] test hint recorded: {hint_sentence[:100]}")
+
+        # --- Broadcast to teammates so waiting agents are triggered ---
+        completion_msg = (
+            f"COMPLETED: {dev_key} finished '{eng_task.file}'. "
+            f"Exports: {exports or '(see file)'}. "
+            f"Test hint: {hint_sentence}"
+        )
+        try:
+            get_dashboard().broadcast(dev_key, completion_msg, sprint_num, ENG_WORKERS)
+        except Exception as e:
+            logger.warning(f"[{dev_key}] completion broadcast failed (non-fatal): {e}")
+
+        # --- Trigger waiting tasks that listed this file as a dependency ---
+        _any_unblocked = False
+        with task_queue._lock:
+            for t in task_queue.tasks.values():
+                if t.status == "waiting" and eng_task.file in (t.waiting_for or []):
+                    t.waiting_for = [f for f in t.waiting_for if f != eng_task.file]
+                    if not t.waiting_for:
+                        t.status = "pending"
+                        _any_unblocked = True
+                        logger.info(
+                            f"[TaskQueue] '{t.id}' unblocked from waiting — "
+                            f"'{eng_task.file}' is now complete"
+                        )
+            if _any_unblocked:
+                task_queue._persist()
+
     # ── Agent worker loop ─────────────────────────────────────────────────
 
     def _agent_worker_loop(dev_key: str) -> None:
@@ -5617,9 +6377,15 @@ def run_engineering_team(
 
                     committed = wt.commit_agent(dev_key)
                     with _merge_lock:
-                        resolutions = wt.merge_all()
-                        if resolutions:
-                            logger.info(f"[{dev_key}] merge resolutions:\n" + "\n".join(resolutions))
+                        merge_result = wt.merge_all()
+                        if merge_result.resolutions:
+                            logger.info(f"[{dev_key}] merge resolutions:\n" + "\n".join(merge_result.resolutions))
+                        if dev_key in merge_result.failed_agents:
+                            logger.error(
+                                f"[{dev_key}] OWN BRANCH FAILED TO MERGE for '{eng_task.file}' — retrying"
+                            )
+                            task_queue.fail(eng_task.id)
+                            continue
 
                     # Worktree content is now in main — clear in-memory worktree RAG.
                     _wt_rag = get_worktree_rag(dev_key)
@@ -5686,10 +6452,76 @@ def run_engineering_team(
                                         f"retries exhausted — accepting '{eng_task.id}'"
                                     )
                             else:
-                                logger.info(
-                                    f"[{dev_key}] SELF-VERIFY FAILED (pre-existing) for "
-                                    f"'{eng_task.file}' — completing with warning"
-                                )
+                                # Not own fault — check if it looks like a missing dependency
+                                if _looks_like_dependency_error(sv.output):
+                                    # depends_on stores task IDs — find which are incomplete
+                                    _incomplete_dep_ids = [
+                                        dep_id for dep_id in eng_task.depends_on
+                                        if dep_id not in task_queue._completed_tasks
+                                    ]
+                                    # Convert task IDs → file paths for waiting_for
+                                    _incomplete_files = [
+                                        task_queue.tasks[dep_id].file
+                                        for dep_id in _incomplete_dep_ids
+                                        if dep_id in task_queue.tasks
+                                    ]
+                                    if not _incomplete_files:
+                                        # No unresolved teammate deps — likely env/setup issue, not
+                                        # teammate-integration readiness. Complete with warning.
+                                        logger.info(
+                                            f"[{dev_key}] dependency-like verify error for '{eng_task.file}' "
+                                            f"but no unresolved file dependencies were found; "
+                                            f"completing with warning instead of WAIT"
+                                        )
+                                        rolling_ctxs[dev_key].add(
+                                            f"VERIFY WARNING — {eng_task.file}",
+                                            f"Verification looked dependency-related, but no pending "
+                                            f"teammate file dependency was detected.\n"
+                                            f"Error output:\n{sv.output[:500]}"
+                                        )
+                                        # Fall through to task completion below
+                                    elif task_queue.get_retries(eng_task.id) < MAX_RETRIES_PER_TASK:
+                                        logger.info(
+                                            f"[{dev_key}] SELF-VERIFY FAILED (dependency not ready) for "
+                                            f"'{eng_task.file}' — entering WAIT for: {_incomplete_files}"
+                                        )
+                                        rolling_ctxs[dev_key].add(
+                                            f"WAITING — {eng_task.file}",
+                                            f"Verification failed because a dependency is not yet ready.\n"
+                                            f"Error:\n{sv.output[:400]}\n\n"
+                                            f"Waiting for: {_incomplete_files}\n"
+                                            f"You will be automatically re-activated when those files complete."
+                                        )
+                                        task_queue.set_waiting(eng_task.id, _incomplete_files)
+                                        # Sleep until a teammate wakes us (check every poll interval)
+                                        import time as _wait_time
+                                        _wait_deadline = _wait_time.time() + MAX_WALL_CLOCK
+                                        while task_queue.tasks[eng_task.id].status == "waiting":
+                                            if _wait_time.time() > _wait_deadline:
+                                                logger.warning(
+                                                    f"[{dev_key}] wait-deadline exceeded for "
+                                                    f"'{eng_task.id}' — giving up"
+                                                )
+                                                task_queue.fail(eng_task.id)
+                                                break
+                                            _wait_time.sleep(_AGENT_POLL_INTERVAL * 3)
+                                        # After wake-up, loop back to retry the task
+                                        if task_queue.tasks[eng_task.id].status == "pending":
+                                            logger.info(
+                                                f"[{dev_key}] woken from wait for '{eng_task.id}' — retrying"
+                                            )
+                                            task_queue.requeue_after_wait(eng_task.id)
+                                        continue
+                                    else:
+                                        logger.warning(
+                                            f"[{dev_key}] SELF-VERIFY FAILED (dependency) but "
+                                            f"retries exhausted — accepting '{eng_task.id}'"
+                                        )
+                                else:
+                                    logger.info(
+                                        f"[{dev_key}] SELF-VERIFY FAILED (pre-existing) for "
+                                        f"'{eng_task.file}' — completing with warning"
+                                    )
 
                     # ── Sync config/ → code/ ──────────────────────────────
                     if eng_task.file == "__integration__":
@@ -5722,6 +6554,13 @@ def run_engineering_team(
                     task_queue.complete(eng_task.id)
                     with _built_lock:
                         _tasks_completed_by[dev_key] += 1
+                    # ─────────────────────────────────────────────────────
+
+                    # ── Broadcast completion + write test hint ─────────────
+                    if eng_task.file != "__integration__":
+                        _broadcast_task_completion(
+                            dev_key, eng_task, code_dir, sprint_num, task_queue
+                        )
                     # ─────────────────────────────────────────────────────
 
                     try:
@@ -5830,6 +6669,42 @@ def run_engineering_team(
             if task_queue.all_done():
                 break
 
+            # ── Deadlock detection ────────────────────────────────────────
+            if task_queue.is_deadlocked():
+                with task_queue._lock:
+                    _stalled = [t for t in task_queue.tasks.values()
+                                if t.status in ("blocked", "waiting")]
+                logger.critical(
+                    f"[Manager Monitor] DEADLOCK DETECTED — "
+                    f"{len(_stalled)} remaining tasks are stalled (blocked/waiting)"
+                )
+                for _wt in _stalled:
+                    blocker = SprintBlocker(
+                        agent=_wt.assigned_to or "unknown",
+                        task_file=_wt.file,
+                        blocker_description=(
+                            f"Deadlock: task '{_wt.file}' is {_wt.status}"
+                            + (f" for {_wt.waiting_for}" if _wt.waiting_for else "")
+                            + ". No other agent is making progress."
+                        ),
+                        waiting_for_files=list(_wt.waiting_for),
+                    )
+                    _record_sprint_blocker(blocker)
+                    if _wt.assigned_to:
+                        get_dashboard().send_message(
+                            "eng_manager", _wt.assigned_to,
+                            f"DEADLOCK DETECTED: your task '{_wt.file}' is {_wt.status} "
+                            f"and no progress is being made. "
+                            f"This has been recorded as a sprint blocker for the next planning session.",
+                            sprint_num,
+                        )
+                with task_queue._lock:
+                    for _wt in _stalled:
+                        _wt.status = "failed"
+                        task_queue._completed_tasks.add(_wt.id)
+                    task_queue._persist()
+                break  # deadlock — stop monitoring
+
             H_swarm = sum(health_states[d].free_energy() for d in ENG_WORKERS)
             stable_threshold = 1.5 * n
             status = task_queue.get_status()
@@ -5931,6 +6806,15 @@ def run_engineering_team(
             f"[Engineering] Manager fix loop FAILED after {fix_result.rounds_used} rounds\n"
             f"{fix_result.final_output[:500]}"
         )
+
+    # ── Persist sprint blockers report ────────────────────────────────────
+    _blockers_report_path = _write_sprint_blockers_report()
+    if _blockers_report_path:
+        logger.warning(
+            f"[Engineering] {len(_get_sprint_blockers())} sprint blocker(s) recorded — "
+            f"see {_blockers_report_path} for next sprint planning"
+        )
+    _clear_sprint_blockers()  # reset for potential next sprint
 
     # ── Health + consensus ────────────────────────────────────────────────
     ActiveInferenceState.interfere_all(

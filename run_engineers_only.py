@@ -119,7 +119,14 @@ def main():
     # ── What was written ──────────────────────────────────────────────────────
     print("\n── Files written ──────────────────────────────────────────")
     all_files = list(sc.OUTPUT_DIR.rglob("*"))
-    written = [f for f in all_files if f.is_file() and f.name != "WORK_DASHBOARD.json"]
+    written = [
+        f for f in all_files
+        if f.is_file()
+        and f.name != "WORK_DASHBOARD.json"
+        and ".git" not in f.parts
+        and "__pycache__" not in f.parts
+        and not f.suffix == ".pyc"
+    ]
     if written:
         for f in sorted(written):
             rel = str(f.relative_to(sc.OUTPUT_DIR))   # str() required for format spec on Windows

@@ -1,0 +1,265 @@
+{
+  "messages": {
+    "dev_2": [
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'requirements.txt'. Exports: (see file). Test hint: Run `pip install -r requirements.txt && python -c \"import PyQt6, yaml, dotenv; print('Dependencies validated')\"`",
+        "sprint": 1
+      },
+      {
+        "from": "dev_8",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_8 finished 'app/models/database.py'. Exports: (see file). Test hint: Run `pytest tests/test_logic.py` and verify that `test_add_and_retrieve_task` completes successfully without errors.\n\n---\n\n### CHANGES\n- `app/models/database.py`: Initialized SQLite schema with `ta...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_6",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_6 finished 'app/views/components.py'. Exports: (see file). Test hint: Launch the application and verify that clicking the custom 'QuantumButton' triggers the configured console signal output.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_7",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_7 finished 'app/views/main_window.py'. Exports: (see file). Test hint: Verify the window launches with a visible sidebar, a functional toolbar, and an active status bar at the bottom.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'app/services/task_manager.py'. Exports: (see file). Test hint: Run `python3 -m pytest tests/test_logic.py` to confirm all task creation, retrieval, and deletion operations pass.\n\n### CHANGES\n- `app/models/database.py`: Created SQLite schema and connection hand...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_8",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_8 finished 'app/controllers/app_controller.py'. Exports: (see file). Test hint: Invoke `POST /api/events` with a valid payload and verify the response status code is 200 and business logic is triggered.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_6",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_6 finished 'tests/test_logic.py'. Exports: (see file). Test hint: Run `pytest tests/test_logic.py` and confirm that calling `TaskManager.create_task` followed by `get_all_tasks` returns the object.\n\n### CHANGES\n- `app/models/database.py`: Defined `Task` schema an...",
+        "sprint": 1
+      }
+    ],
+    "dev_3": [
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'requirements.txt'. Exports: (see file). Test hint: Run `pip install -r requirements.txt && python -c \"import PyQt6, yaml, dotenv; print('Dependencies validated')\"`",
+        "sprint": 1
+      },
+      {
+        "from": "dev_8",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_8 finished 'app/models/database.py'. Exports: (see file). Test hint: Run `pytest tests/test_logic.py` and verify that `test_add_and_retrieve_task` completes successfully without errors.\n\n---\n\n### CHANGES\n- `app/models/database.py`: Initialized SQLite schema with `ta...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_6",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_6 finished 'app/views/components.py'. Exports: (see file). Test hint: Launch the application and verify that clicking the custom 'QuantumButton' triggers the configured console signal output.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_7",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_7 finished 'app/views/main_window.py'. Exports: (see file). Test hint: Verify the window launches with a visible sidebar, a functional toolbar, and an active status bar at the bottom.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'app/services/task_manager.py'. Exports: (see file). Test hint: Run `python3 -m pytest tests/test_logic.py` to confirm all task creation, retrieval, and deletion operations pass.\n\n### CHANGES\n- `app/models/database.py`: Created SQLite schema and connection hand...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_8",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_8 finished 'app/controllers/app_controller.py'. Exports: (see file). Test hint: Invoke `POST /api/events` with a valid payload and verify the response status code is 200 and business logic is triggered.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_6",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_6 finished 'tests/test_logic.py'. Exports: (see file). Test hint: Run `pytest tests/test_logic.py` and confirm that calling `TaskManager.create_task` followed by `get_all_tasks` returns the object.\n\n### CHANGES\n- `app/models/database.py`: Defined `Task` schema an...",
+        "sprint": 1
+      }
+    ],
+    "dev_4": [
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'requirements.txt'. Exports: (see file). Test hint: Run `pip install -r requirements.txt && python -c \"import PyQt6, yaml, dotenv; print('Dependencies validated')\"`",
+        "sprint": 1
+      },
+      {
+        "from": "dev_8",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_8 finished 'app/models/database.py'. Exports: (see file). Test hint: Run `pytest tests/test_logic.py` and verify that `test_add_and_retrieve_task` completes successfully without errors.\n\n---\n\n### CHANGES\n- `app/models/database.py`: Initialized SQLite schema with `ta...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_6",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_6 finished 'app/views/components.py'. Exports: (see file). Test hint: Launch the application and verify that clicking the custom 'QuantumButton' triggers the configured console signal output.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_7",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_7 finished 'app/views/main_window.py'. Exports: (see file). Test hint: Verify the window launches with a visible sidebar, a functional toolbar, and an active status bar at the bottom.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'app/services/task_manager.py'. Exports: (see file). Test hint: Run `python3 -m pytest tests/test_logic.py` to confirm all task creation, retrieval, and deletion operations pass.\n\n### CHANGES\n- `app/models/database.py`: Created SQLite schema and connection hand...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_8",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_8 finished 'app/controllers/app_controller.py'. Exports: (see file). Test hint: Invoke `POST /api/events` with a valid payload and verify the response status code is 200 and business logic is triggered.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_6",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_6 finished 'tests/test_logic.py'. Exports: (see file). Test hint: Run `pytest tests/test_logic.py` and confirm that calling `TaskManager.create_task` followed by `get_all_tasks` returns the object.\n\n### CHANGES\n- `app/models/database.py`: Defined `Task` schema an...",
+        "sprint": 1
+      }
+    ],
+    "dev_5": [
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'requirements.txt'. Exports: (see file). Test hint: Run `pip install -r requirements.txt && python -c \"import PyQt6, yaml, dotenv; print('Dependencies validated')\"`",
+        "sprint": 1
+      },
+      {
+        "from": "dev_8",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_8 finished 'app/models/database.py'. Exports: (see file). Test hint: Run `pytest tests/test_logic.py` and verify that `test_add_and_retrieve_task` completes successfully without errors.\n\n---\n\n### CHANGES\n- `app/models/database.py`: Initialized SQLite schema with `ta...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_6",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_6 finished 'app/views/components.py'. Exports: (see file). Test hint: Launch the application and verify that clicking the custom 'QuantumButton' triggers the configured console signal output.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_7",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_7 finished 'app/views/main_window.py'. Exports: (see file). Test hint: Verify the window launches with a visible sidebar, a functional toolbar, and an active status bar at the bottom.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'app/services/task_manager.py'. Exports: (see file). Test hint: Run `python3 -m pytest tests/test_logic.py` to confirm all task creation, retrieval, and deletion operations pass.\n\n### CHANGES\n- `app/models/database.py`: Created SQLite schema and connection hand...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_8",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_8 finished 'app/controllers/app_controller.py'. Exports: (see file). Test hint: Invoke `POST /api/events` with a valid payload and verify the response status code is 200 and business logic is triggered.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_6",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_6 finished 'tests/test_logic.py'. Exports: (see file). Test hint: Run `pytest tests/test_logic.py` and confirm that calling `TaskManager.create_task` followed by `get_all_tasks` returns the object.\n\n### CHANGES\n- `app/models/database.py`: Defined `Task` schema an...",
+        "sprint": 1
+      }
+    ],
+    "dev_6": [
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'requirements.txt'. Exports: (see file). Test hint: Run `pip install -r requirements.txt && python -c \"import PyQt6, yaml, dotenv; print('Dependencies validated')\"`",
+        "sprint": 1
+      },
+      {
+        "from": "dev_8",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_8 finished 'app/models/database.py'. Exports: (see file). Test hint: Run `pytest tests/test_logic.py` and verify that `test_add_and_retrieve_task` completes successfully without errors.\n\n---\n\n### CHANGES\n- `app/models/database.py`: Initialized SQLite schema with `ta...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_7",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_7 finished 'app/views/main_window.py'. Exports: (see file). Test hint: Verify the window launches with a visible sidebar, a functional toolbar, and an active status bar at the bottom.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'app/services/task_manager.py'. Exports: (see file). Test hint: Run `python3 -m pytest tests/test_logic.py` to confirm all task creation, retrieval, and deletion operations pass.\n\n### CHANGES\n- `app/models/database.py`: Created SQLite schema and connection hand...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_8",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_8 finished 'app/controllers/app_controller.py'. Exports: (see file). Test hint: Invoke `POST /api/events` with a valid payload and verify the response status code is 200 and business logic is triggered.",
+        "sprint": 1
+      }
+    ],
+    "dev_7": [
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'requirements.txt'. Exports: (see file). Test hint: Run `pip install -r requirements.txt && python -c \"import PyQt6, yaml, dotenv; print('Dependencies validated')\"`",
+        "sprint": 1
+      },
+      {
+        "from": "dev_8",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_8 finished 'app/models/database.py'. Exports: (see file). Test hint: Run `pytest tests/test_logic.py` and verify that `test_add_and_retrieve_task` completes successfully without errors.\n\n---\n\n### CHANGES\n- `app/models/database.py`: Initialized SQLite schema with `ta...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_6",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_6 finished 'app/views/components.py'. Exports: (see file). Test hint: Launch the application and verify that clicking the custom 'QuantumButton' triggers the configured console signal output.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'app/services/task_manager.py'. Exports: (see file). Test hint: Run `python3 -m pytest tests/test_logic.py` to confirm all task creation, retrieval, and deletion operations pass.\n\n### CHANGES\n- `app/models/database.py`: Created SQLite schema and connection hand...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_8",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_8 finished 'app/controllers/app_controller.py'. Exports: (see file). Test hint: Invoke `POST /api/events` with a valid payload and verify the response status code is 200 and business logic is triggered.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_6",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_6 finished 'tests/test_logic.py'. Exports: (see file). Test hint: Run `pytest tests/test_logic.py` and confirm that calling `TaskManager.create_task` followed by `get_all_tasks` returns the object.\n\n### CHANGES\n- `app/models/database.py`: Defined `Task` schema an...",
+        "sprint": 1
+      }
+    ],
+    "dev_8": [
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'requirements.txt'. Exports: (see file). Test hint: Run `pip install -r requirements.txt && python -c \"import PyQt6, yaml, dotenv; print('Dependencies validated')\"`",
+        "sprint": 1
+      },
+      {
+        "from": "dev_6",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_6 finished 'app/views/components.py'. Exports: (see file). Test hint: Launch the application and verify that clicking the custom 'QuantumButton' triggers the configured console signal output.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_7",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_7 finished 'app/views/main_window.py'. Exports: (see file). Test hint: Verify the window launches with a visible sidebar, a functional toolbar, and an active status bar at the bottom.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'app/services/task_manager.py'. Exports: (see file). Test hint: Run `python3 -m pytest tests/test_logic.py` to confirm all task creation, retrieval, and deletion operations pass.\n\n### CHANGES\n- `app/models/database.py`: Created SQLite schema and connection hand...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_6",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_6 finished 'tests/test_logic.py'. Exports: (see file). Test hint: Run `pytest tests/test_logic.py` and confirm that calling `TaskManager.create_task` followed by `get_all_tasks` returns the object.\n\n### CHANGES\n- `app/models/database.py`: Defined `Task` schema an...",
+        "sprint": 1
+      }
+    ],
+    "dev_1": [
+      {
+        "from": "dev_8",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_8 finished 'app/models/database.py'. Exports: (see file). Test hint: Run `pytest tests/test_logic.py` and verify that `test_add_and_retrieve_task` completes successfully without errors.\n\n---\n\n### CHANGES\n- `app/models/database.py`: Initialized SQLite schema with `ta...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_6",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_6 finished 'app/views/components.py'. Exports: (see file). Test hint: Launch the application and verify that clicking the custom 'QuantumButton' triggers the configured console signal output.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_7",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_7 finished 'app/views/main_window.py'. Exports: (see file). Test hint: Verify the window launches with a visible sidebar, a functional toolbar, and an active status bar at the bottom.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_8",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_8 finished 'app/controllers/app_controller.py'. Exports: (see file). Test hint: Invoke `POST /api/events` with a valid payload and verify the response status code is 200 and business logic is triggered.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_6",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_6 finished 'tests/test_logic.py'. Exports: (see file). Test hint: Run `pytest tests/test_logic.py` and confirm that calling `TaskManager.create_task` followed by `get_all_tasks` returns the object.\n\n### CHANGES\n- `app/models/database.py`: Defined `Task` schema an...",
+        "sprint": 1
+      }
+    ]
+  }
+}

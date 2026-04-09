@@ -1,507 +1,131 @@
 {
   "tasks": {
-    "task_backend_app_models_py_p1": {
-      "id": "task_backend_app_models_py_p1",
-      "file": "backend/app/models.py",
-      "description": "PHASE 1: Task item_1: Define SQLAlchemy project and task models for persistence. [backend/app/models.py]\n\nTask item_2: Configure database connection engine and Base class. [backend/app/database.py]\n\nTask item_9: Implement FastAPI app initialization, health checks, and middleware. [backend/app/main.py]",
+    "task_requirements_txt_p1": {
+      "id": "task_requirements_txt_p1",
+      "file": "requirements.txt",
+      "description": "PHASE 1: Task item_7: Define configuration and dependency requirements for the desktop environment. [requirements.txt]",
       "depends_on": [],
       "assigned_to": "dev_1",
       "status": "completed",
-      "retries": 0,
+      "retries": 6,
       "primary_owner": null,
-      "phase": 1
+      "phase": 1,
+      "waiting_for": []
     },
-    "task_backend_app_database_py_p1": {
-      "id": "task_backend_app_database_py_p1",
-      "file": "backend/app/database.py",
-      "description": "PHASE 1: Task item_1: Define SQLAlchemy project and task models for persistence. [backend/app/models.py]\n\nTask item_2: Configure database connection engine and Base class. [backend/app/database.py]\n\nTask item_9: Implement FastAPI app initialization, health checks, and middleware. [backend/app/main.py]",
-      "depends_on": [],
-      "assigned_to": "dev_2",
-      "status": "completed",
-      "retries": 0,
-      "primary_owner": null,
-      "phase": 1
-    },
-    "task_backend_app_schemas_py_p1": {
-      "id": "task_backend_app_schemas_py_p1",
-      "file": "backend/app/schemas.py",
-      "description": "PHASE 1: Task item_4: Establish shared Pydantic schemas for request/response validation. [backend/app/schemas.py]",
+    "task_app_models_database_py_p1": {
+      "id": "task_app_models_database_py_p1",
+      "file": "app/models/database.py",
+      "description": "PHASE 1: Task item_1: Create database schema definition and SQLite interface layer. [app/models/database.py]\n\nTask item_2: Implement the core productivity data business logic and CRUD operations. [app/services/task_manager.py]\n\nTask item_6: Write unit tests for core task management logic. [tests/test_logic.py]",
       "depends_on": [
-        "task_backend_app_models_py_p1"
-      ],
-      "assigned_to": "dev_1",
-      "status": "completed",
-      "retries": 0,
-      "primary_owner": null,
-      "phase": 1
-    },
-    "task_docker-compose_yml_p1": {
-      "id": "task_docker-compose_yml_p1",
-      "file": "docker-compose.yml",
-      "description": "PHASE 1: Task item_3: Setup Docker Compose and Dockerfile environment for multi-container orchestration. [docker-compose.yml, backend/Dockerfile, frontend/Dockerfile]",
-      "depends_on": [],
-      "assigned_to": "dev_6",
-      "status": "completed",
-      "retries": 0,
-      "primary_owner": null,
-      "phase": 1
-    },
-    "task_backend_app_auth_py_p1": {
-      "id": "task_backend_app_auth_py_p1",
-      "file": "backend/app/auth.py",
-      "description": "PHASE 1: Task item_5: Implement JWT authentication and user management endpoints. [backend/app/auth.py]",
-      "depends_on": [
-        "task_backend_app_models_py_p1",
-        "task_backend_app_database_py_p1"
-      ],
-      "assigned_to": "dev_3",
-      "status": "completed",
-      "retries": 0,
-      "primary_owner": null,
-      "phase": 1
-    },
-    "task_backend_app_services_py_p1": {
-      "id": "task_backend_app_services_py_p1",
-      "file": "backend/app/services.py",
-      "description": "PHASE 1: Task item_6: Develop CRUD service layer for project and task management. [backend/app/services.py]",
-      "depends_on": [
-        "task_backend_app_models_py_p1",
-        "task_backend_app_database_py_p1"
-      ],
-      "assigned_to": "dev_7",
-      "status": "completed",
-      "retries": 0,
-      "primary_owner": null,
-      "phase": 1
-    },
-    "task_backend_app_routes_py_p1": {
-      "id": "task_backend_app_routes_py_p1",
-      "file": "backend/app/routes.py",
-      "description": "PHASE 1: Task item_7: Implement REST API routes for projects and tasks. [backend/app/routes.py]",
-      "depends_on": [
-        "task_backend_app_services_py_p1",
-        "task_backend_app_schemas_py_p1",
-        "task_backend_app_auth_py_p1"
-      ],
-      "assigned_to": "dev_7",
-      "status": "completed",
-      "retries": 0,
-      "primary_owner": null,
-      "phase": 1
-    },
-    "task_backend_app_websocket_py_p1": {
-      "id": "task_backend_app_websocket_py_p1",
-      "file": "backend/app/websocket.py",
-      "description": "PHASE 1: Task item_8: Setup WebSocket handler for real-time task status broadcasts. [backend/app/websocket.py]",
-      "depends_on": [
-        "task_backend_app_auth_py_p1"
-      ],
-      "assigned_to": "dev_4",
-      "status": "completed",
-      "retries": 0,
-      "primary_owner": null,
-      "phase": 1
-    },
-    "task_frontend_src_App_js_p1": {
-      "id": "task_frontend_src_App_js_p1",
-      "file": "frontend/src/App.js",
-      "description": "PHASE 1: Task item_10: Create React project management UI with axios integration. [frontend/src/App.js]",
-      "depends_on": [
-        "task_backend_app_routes_py_p1"
+        "task_requirements_txt_p1"
       ],
       "assigned_to": "dev_8",
       "status": "completed",
       "retries": 0,
       "primary_owner": null,
-      "phase": 1
+      "phase": 1,
+      "waiting_for": []
     },
-    "task_frontend_src_socket_js_p1": {
-      "id": "task_frontend_src_socket_js_p1",
-      "file": "frontend/src/socket.js",
-      "description": "POOL TASK: Implement WebSocket client service for real-time UI updates. [frontend/src/socket.js]",
+    "task_app_services_task_manager_py_p1": {
+      "id": "task_app_services_task_manager_py_p1",
+      "file": "app/services/task_manager.py",
+      "description": "PHASE 1: Task item_1: Create database schema definition and SQLite interface layer. [app/models/database.py]\n\nTask item_2: Implement the core productivity data business logic and CRUD operations. [app/services/task_manager.py]\n\nTask item_6: Write unit tests for core task management logic. [tests/test_logic.py]",
       "depends_on": [
-        "task_backend_app_websocket_py_p1"
-      ],
-      "assigned_to": "dev_5",
-      "status": "completed",
-      "retries": 0,
-      "primary_owner": null,
-      "phase": 1
-    },
-    "task_backend_tests_test_api_py_p1": {
-      "id": "task_backend_tests_test_api_py_p1",
-      "file": "backend/tests/test_api.py",
-      "description": "POOL TASK: Build automated backend integration tests using pytest. [backend/tests/test_api.py]",
-      "depends_on": [],
-      "assigned_to": "dev_4",
-      "status": "completed",
-      "retries": 0,
-      "primary_owner": null,
-      "phase": 1
-    },
-    "task_frontend_src_App_test_js_p1": {
-      "id": "task_frontend_src_App_test_js_p1",
-      "file": "frontend/src/App.test.js",
-      "description": "POOL TASK: Develop basic frontend unit tests. [frontend/src/App.test.js]",
-      "depends_on": [
-        "task_frontend_src_App_js_p1"
-      ],
-      "assigned_to": "dev_2",
-      "status": "completed",
-      "retries": 0,
-      "primary_owner": null,
-      "phase": 1
-    },
-    "task_backend_app_models_py_p2": {
-      "id": "task_backend_app_models_py_p2",
-      "file": "backend/app/models.py",
-      "description": "PHASE 2: Collaborative Integration and Wiring for backend/app/models.py. Fix imports and ensure it works with the merged codebase.",
-      "depends_on": [
-        "task_backend_app_models_py_p1",
-        "task_backend_app_database_py_p1",
-        "task_backend_app_schemas_py_p1",
-        "task_docker-compose_yml_p1",
-        "task_backend_app_auth_py_p1",
-        "task_backend_app_services_py_p1",
-        "task_backend_app_routes_py_p1",
-        "task_backend_app_websocket_py_p1",
-        "task_frontend_src_App_js_p1",
-        "task_frontend_src_socket_js_p1",
-        "task_backend_tests_test_api_py_p1",
-        "task_frontend_src_App_test_js_p1"
+        "task_app_models_database_py_p1"
       ],
       "assigned_to": "dev_1",
       "status": "completed",
       "retries": 0,
       "primary_owner": null,
-      "phase": 2
+      "phase": 1,
+      "waiting_for": []
     },
-    "task_backend_app_database_py_p2": {
-      "id": "task_backend_app_database_py_p2",
-      "file": "backend/app/database.py",
-      "description": "PHASE 2: Collaborative Integration and Wiring for backend/app/database.py. Fix imports and ensure it works with the merged codebase.",
+    "task_app_views_components_py_p1": {
+      "id": "task_app_views_components_py_p1",
+      "file": "app/views/components.py",
+      "description": "PHASE 1: Task item_4: Create custom PySide6 widgets for consistent UI styling and form inputs. [app/views/components.py]",
       "depends_on": [
-        "task_backend_app_models_py_p1",
-        "task_backend_app_database_py_p1",
-        "task_backend_app_schemas_py_p1",
-        "task_docker-compose_yml_p1",
-        "task_backend_app_auth_py_p1",
-        "task_backend_app_services_py_p1",
-        "task_backend_app_routes_py_p1",
-        "task_backend_app_websocket_py_p1",
-        "task_frontend_src_App_js_p1",
-        "task_frontend_src_socket_js_p1",
-        "task_backend_tests_test_api_py_p1",
-        "task_frontend_src_App_test_js_p1"
-      ],
-      "assigned_to": "dev_4",
-      "status": "completed",
-      "retries": 0,
-      "primary_owner": null,
-      "phase": 2
-    },
-    "task_backend_app_schemas_py_p2": {
-      "id": "task_backend_app_schemas_py_p2",
-      "file": "backend/app/schemas.py",
-      "description": "PHASE 2: Collaborative Integration and Wiring for backend/app/schemas.py. Fix imports and ensure it works with the merged codebase.",
-      "depends_on": [
-        "task_backend_app_models_py_p1",
-        "task_backend_app_database_py_p1",
-        "task_backend_app_schemas_py_p1",
-        "task_docker-compose_yml_p1",
-        "task_backend_app_auth_py_p1",
-        "task_backend_app_services_py_p1",
-        "task_backend_app_routes_py_p1",
-        "task_backend_app_websocket_py_p1",
-        "task_frontend_src_App_js_p1",
-        "task_frontend_src_socket_js_p1",
-        "task_backend_tests_test_api_py_p1",
-        "task_frontend_src_App_test_js_p1"
-      ],
-      "assigned_to": "dev_2",
-      "status": "completed",
-      "retries": 0,
-      "primary_owner": null,
-      "phase": 2
-    },
-    "task_docker-compose_yml_p2": {
-      "id": "task_docker-compose_yml_p2",
-      "file": "docker-compose.yml",
-      "description": "PHASE 2: Collaborative Integration and Wiring for docker-compose.yml. Fix imports and ensure it works with the merged codebase.",
-      "depends_on": [
-        "task_backend_app_models_py_p1",
-        "task_backend_app_database_py_p1",
-        "task_backend_app_schemas_py_p1",
-        "task_docker-compose_yml_p1",
-        "task_backend_app_auth_py_p1",
-        "task_backend_app_services_py_p1",
-        "task_backend_app_routes_py_p1",
-        "task_backend_app_websocket_py_p1",
-        "task_frontend_src_App_js_p1",
-        "task_frontend_src_socket_js_p1",
-        "task_backend_tests_test_api_py_p1",
-        "task_frontend_src_App_test_js_p1"
-      ],
-      "assigned_to": "dev_7",
-      "status": "completed",
-      "retries": 0,
-      "primary_owner": null,
-      "phase": 2
-    },
-    "task_backend_app_auth_py_p2": {
-      "id": "task_backend_app_auth_py_p2",
-      "file": "backend/app/auth.py",
-      "description": "PHASE 2: Collaborative Integration and Wiring for backend/app/auth.py. Fix imports and ensure it works with the merged codebase.",
-      "depends_on": [
-        "task_backend_app_models_py_p1",
-        "task_backend_app_database_py_p1",
-        "task_backend_app_schemas_py_p1",
-        "task_docker-compose_yml_p1",
-        "task_backend_app_auth_py_p1",
-        "task_backend_app_services_py_p1",
-        "task_backend_app_routes_py_p1",
-        "task_backend_app_websocket_py_p1",
-        "task_frontend_src_App_js_p1",
-        "task_frontend_src_socket_js_p1",
-        "task_backend_tests_test_api_py_p1",
-        "task_frontend_src_App_test_js_p1"
+        "task_requirements_txt_p1"
       ],
       "assigned_to": "dev_6",
       "status": "completed",
       "retries": 0,
       "primary_owner": null,
-      "phase": 2
+      "phase": 1,
+      "waiting_for": []
     },
-    "task_backend_app_services_py_p2": {
-      "id": "task_backend_app_services_py_p2",
-      "file": "backend/app/services.py",
-      "description": "PHASE 2: Collaborative Integration and Wiring for backend/app/services.py. Fix imports and ensure it works with the merged codebase.",
+    "task_app_views_main_window_py_p1": {
+      "id": "task_app_views_main_window_py_p1",
+      "file": "app/views/main_window.py",
+      "description": "PHASE 1: Task item_3: Develop the main window layout with sidebar, toolbar, and status bar integration. [app/views/main_window.py]",
       "depends_on": [
-        "task_backend_app_models_py_p1",
-        "task_backend_app_database_py_p1",
-        "task_backend_app_schemas_py_p1",
-        "task_docker-compose_yml_p1",
-        "task_backend_app_auth_py_p1",
-        "task_backend_app_services_py_p1",
-        "task_backend_app_routes_py_p1",
-        "task_backend_app_websocket_py_p1",
-        "task_frontend_src_App_js_p1",
-        "task_frontend_src_socket_js_p1",
-        "task_backend_tests_test_api_py_p1",
-        "task_frontend_src_App_test_js_p1"
-      ],
-      "assigned_to": "dev_3",
-      "status": "completed",
-      "retries": 0,
-      "primary_owner": null,
-      "phase": 2
-    },
-    "task_backend_app_routes_py_p2": {
-      "id": "task_backend_app_routes_py_p2",
-      "file": "backend/app/routes.py",
-      "description": "PHASE 2: Collaborative Integration and Wiring for backend/app/routes.py. Fix imports and ensure it works with the merged codebase.",
-      "depends_on": [
-        "task_backend_app_models_py_p1",
-        "task_backend_app_database_py_p1",
-        "task_backend_app_schemas_py_p1",
-        "task_docker-compose_yml_p1",
-        "task_backend_app_auth_py_p1",
-        "task_backend_app_services_py_p1",
-        "task_backend_app_routes_py_p1",
-        "task_backend_app_websocket_py_p1",
-        "task_frontend_src_App_js_p1",
-        "task_frontend_src_socket_js_p1",
-        "task_backend_tests_test_api_py_p1",
-        "task_frontend_src_App_test_js_p1"
-      ],
-      "assigned_to": "dev_8",
-      "status": "completed",
-      "retries": 0,
-      "primary_owner": null,
-      "phase": 2
-    },
-    "task_backend_app_websocket_py_p2": {
-      "id": "task_backend_app_websocket_py_p2",
-      "file": "backend/app/websocket.py",
-      "description": "PHASE 2: Collaborative Integration and Wiring for backend/app/websocket.py. Fix imports and ensure it works with the merged codebase.",
-      "depends_on": [
-        "task_backend_app_models_py_p1",
-        "task_backend_app_database_py_p1",
-        "task_backend_app_schemas_py_p1",
-        "task_docker-compose_yml_p1",
-        "task_backend_app_auth_py_p1",
-        "task_backend_app_services_py_p1",
-        "task_backend_app_routes_py_p1",
-        "task_backend_app_websocket_py_p1",
-        "task_frontend_src_App_js_p1",
-        "task_frontend_src_socket_js_p1",
-        "task_backend_tests_test_api_py_p1",
-        "task_frontend_src_App_test_js_p1"
-      ],
-      "assigned_to": "dev_5",
-      "status": "completed",
-      "retries": 0,
-      "primary_owner": null,
-      "phase": 2
-    },
-    "task_frontend_src_App_js_p2": {
-      "id": "task_frontend_src_App_js_p2",
-      "file": "frontend/src/App.js",
-      "description": "PHASE 2: Collaborative Integration and Wiring for frontend/src/App.js. Fix imports and ensure it works with the merged codebase.",
-      "depends_on": [
-        "task_backend_app_models_py_p1",
-        "task_backend_app_database_py_p1",
-        "task_backend_app_schemas_py_p1",
-        "task_docker-compose_yml_p1",
-        "task_backend_app_auth_py_p1",
-        "task_backend_app_services_py_p1",
-        "task_backend_app_routes_py_p1",
-        "task_backend_app_websocket_py_p1",
-        "task_frontend_src_App_js_p1",
-        "task_frontend_src_socket_js_p1",
-        "task_backend_tests_test_api_py_p1",
-        "task_frontend_src_App_test_js_p1"
-      ],
-      "assigned_to": "dev_4",
-      "status": "completed",
-      "retries": 0,
-      "primary_owner": null,
-      "phase": 2
-    },
-    "task_frontend_src_socket_js_p2": {
-      "id": "task_frontend_src_socket_js_p2",
-      "file": "frontend/src/socket.js",
-      "description": "PHASE 2: Collaborative Integration and Wiring for frontend/src/socket.js. Fix imports and ensure it works with the merged codebase.",
-      "depends_on": [
-        "task_backend_app_models_py_p1",
-        "task_backend_app_database_py_p1",
-        "task_backend_app_schemas_py_p1",
-        "task_docker-compose_yml_p1",
-        "task_backend_app_auth_py_p1",
-        "task_backend_app_services_py_p1",
-        "task_backend_app_routes_py_p1",
-        "task_backend_app_websocket_py_p1",
-        "task_frontend_src_App_js_p1",
-        "task_frontend_src_socket_js_p1",
-        "task_backend_tests_test_api_py_p1",
-        "task_frontend_src_App_test_js_p1"
-      ],
-      "assigned_to": "dev_1",
-      "status": "completed",
-      "retries": 0,
-      "primary_owner": null,
-      "phase": 2
-    },
-    "task_backend_tests_test_api_py_p2": {
-      "id": "task_backend_tests_test_api_py_p2",
-      "file": "backend/tests/test_api.py",
-      "description": "PHASE 2: Collaborative Integration and Wiring for backend/tests/test_api.py. Fix imports and ensure it works with the merged codebase.",
-      "depends_on": [
-        "task_backend_app_models_py_p1",
-        "task_backend_app_database_py_p1",
-        "task_backend_app_schemas_py_p1",
-        "task_docker-compose_yml_p1",
-        "task_backend_app_auth_py_p1",
-        "task_backend_app_services_py_p1",
-        "task_backend_app_routes_py_p1",
-        "task_backend_app_websocket_py_p1",
-        "task_frontend_src_App_js_p1",
-        "task_frontend_src_socket_js_p1",
-        "task_backend_tests_test_api_py_p1",
-        "task_frontend_src_App_test_js_p1"
+        "task_app_views_components_py_p1"
       ],
       "assigned_to": "dev_7",
       "status": "completed",
       "retries": 0,
       "primary_owner": null,
-      "phase": 2
+      "phase": 1,
+      "waiting_for": []
     },
-    "task_frontend_src_App_test_js_p2": {
-      "id": "task_frontend_src_App_test_js_p2",
-      "file": "frontend/src/App.test.js",
-      "description": "PHASE 2: Collaborative Integration and Wiring for frontend/src/App.test.js. Fix imports and ensure it works with the merged codebase.",
+    "task_app_controllers_app_controller_py_p1": {
+      "id": "task_app_controllers_app_controller_py_p1",
+      "file": "app/controllers/app_controller.py",
+      "description": "PHASE 1: Task item_5: Develop the application controller to bridge UI events and business logic. [app/controllers/app_controller.py]",
       "depends_on": [
-        "task_backend_app_models_py_p1",
-        "task_backend_app_database_py_p1",
-        "task_backend_app_schemas_py_p1",
-        "task_docker-compose_yml_p1",
-        "task_backend_app_auth_py_p1",
-        "task_backend_app_services_py_p1",
-        "task_backend_app_routes_py_p1",
-        "task_backend_app_websocket_py_p1",
-        "task_frontend_src_App_js_p1",
-        "task_frontend_src_socket_js_p1",
-        "task_backend_tests_test_api_py_p1",
-        "task_frontend_src_App_test_js_p1"
+        "task_app_services_task_manager_py_p1",
+        "task_app_views_main_window_py_p1"
       ],
-      "assigned_to": "dev_2",
+      "assigned_to": "dev_8",
       "status": "completed",
       "retries": 0,
       "primary_owner": null,
-      "phase": 2
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_tests_test_logic_py_p1": {
+      "id": "task_tests_test_logic_py_p1",
+      "file": "tests/test_logic.py",
+      "description": "PHASE 1: Task item_1: Create database schema definition and SQLite interface layer. [app/models/database.py]\n\nTask item_2: Implement the core productivity data business logic and CRUD operations. [app/services/task_manager.py]\n\nTask item_6: Write unit tests for core task management logic. [tests/test_logic.py]",
+      "depends_on": [
+        "task_app_services_task_manager_py_p1"
+      ],
+      "assigned_to": "dev_6",
+      "status": "completed",
+      "retries": 0,
+      "primary_owner": null,
+      "phase": 1,
+      "waiting_for": []
     },
     "task_integration_test": {
       "id": "task_integration_test",
       "file": "__integration__",
       "description": "Final integration: final build check and smoke tests",
       "depends_on": [
-        "task_backend_app_models_py_p1",
-        "task_backend_app_database_py_p1",
-        "task_backend_app_schemas_py_p1",
-        "task_docker-compose_yml_p1",
-        "task_backend_app_auth_py_p1",
-        "task_backend_app_services_py_p1",
-        "task_backend_app_routes_py_p1",
-        "task_backend_app_websocket_py_p1",
-        "task_frontend_src_App_js_p1",
-        "task_frontend_src_socket_js_p1",
-        "task_backend_tests_test_api_py_p1",
-        "task_frontend_src_App_test_js_p1",
-        "task_backend_app_models_py_p2",
-        "task_backend_app_database_py_p2",
-        "task_backend_app_schemas_py_p2",
-        "task_docker-compose_yml_p2",
-        "task_backend_app_auth_py_p2",
-        "task_backend_app_services_py_p2",
-        "task_backend_app_routes_py_p2",
-        "task_backend_app_websocket_py_p2",
-        "task_frontend_src_App_js_p2",
-        "task_frontend_src_socket_js_p2",
-        "task_backend_tests_test_api_py_p2",
-        "task_frontend_src_App_test_js_p2"
+        "task_requirements_txt_p1",
+        "task_app_models_database_py_p1",
+        "task_app_services_task_manager_py_p1",
+        "task_app_views_components_py_p1",
+        "task_app_views_main_window_py_p1",
+        "task_app_controllers_app_controller_py_p1",
+        "task_tests_test_logic_py_p1"
       ],
-      "assigned_to": "dev_5",
-      "status": "failed",
-      "retries": 10,
+      "assigned_to": "dev_8",
+      "status": "completed",
+      "retries": 0,
       "primary_owner": null,
-      "phase": 2
+      "phase": 2,
+      "waiting_for": []
     }
   },
   "completed_tasks": [
-    "task_backend_tests_test_api_py_p2",
-    "task_backend_app_database_py_p2",
-    "task_backend_app_routes_py_p2",
-    "task_backend_app_models_py_p2",
-    "task_backend_app_services_py_p1",
-    "task_frontend_src_socket_js_p2",
-    "task_backend_app_websocket_py_p2",
-    "task_backend_app_auth_py_p1",
-    "task_frontend_src_socket_js_p1",
-    "task_docker-compose_yml_p1",
-    "task_frontend_src_App_js_p2",
-    "task_backend_app_routes_py_p1",
-    "task_backend_app_websocket_py_p1",
-    "task_backend_app_auth_py_p2",
-    "task_docker-compose_yml_p2",
-    "task_frontend_src_App_js_p1",
-    "task_backend_app_schemas_py_p2",
-    "task_frontend_src_App_test_js_p1",
-    "task_backend_app_database_py_p1",
     "task_integration_test",
-    "task_backend_app_models_py_p1",
-    "task_backend_app_services_py_p2",
-    "task_frontend_src_App_test_js_p2",
-    "task_backend_tests_test_api_py_p1",
-    "task_backend_app_schemas_py_p1"
+    "task_app_views_components_py_p1",
+    "task_app_controllers_app_controller_py_p1",
+    "task_app_models_database_py_p1",
+    "task_tests_test_logic_py_p1",
+    "task_requirements_txt_p1",
+    "task_app_views_main_window_py_p1",
+    "task_app_services_task_manager_py_p1"
   ]
 }
