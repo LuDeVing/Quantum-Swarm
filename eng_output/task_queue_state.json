@@ -1,95 +1,48 @@
 {
   "tasks": {
-    "task_requirements_txt_p1": {
-      "id": "task_requirements_txt_p1",
-      "file": "requirements.txt",
-      "description": "PHASE 1: Task item_7: Define configuration and dependency requirements for the desktop environment. [requirements.txt]",
+    "task_app_gui_py_p1": {
+      "id": "task_app_gui_py_p1",
+      "file": "app/gui.py",
+      "description": "PHASE 1: Task item_1: Create the main tkinter application window logic with title and layout [app/gui.py]\n\nTask item_2: Create the application entry point to initialize the window [main.py]\n\nTask item_3: Create unit test to verify GUI class instantiation without displaying window [tests/test_gui.py]",
       "depends_on": [],
       "assigned_to": "dev_1",
       "status": "completed",
-      "retries": 6,
+      "retries": 0,
       "primary_owner": null,
       "phase": 1,
       "waiting_for": []
     },
-    "task_app_models_database_py_p1": {
-      "id": "task_app_models_database_py_p1",
-      "file": "app/models/database.py",
-      "description": "PHASE 1: Task item_1: Create database schema definition and SQLite interface layer. [app/models/database.py]\n\nTask item_2: Implement the core productivity data business logic and CRUD operations. [app/services/task_manager.py]\n\nTask item_6: Write unit tests for core task management logic. [tests/test_logic.py]",
+    "task_tests_test_gui_py_p1": {
+      "id": "task_tests_test_gui_py_p1",
+      "file": "tests/test_gui.py",
+      "description": "PHASE 1: Task item_1: Create the main tkinter application window logic with title and layout [app/gui.py]\n\nTask item_2: Create the application entry point to initialize the window [main.py]\n\nTask item_3: Create unit test to verify GUI class instantiation without displaying window [tests/test_gui.py]",
       "depends_on": [
-        "task_requirements_txt_p1"
+        "task_app_gui_py_p1"
       ],
-      "assigned_to": "dev_8",
+      "assigned_to": "dev_2",
       "status": "completed",
       "retries": 0,
       "primary_owner": null,
       "phase": 1,
       "waiting_for": []
     },
-    "task_app_services_task_manager_py_p1": {
-      "id": "task_app_services_task_manager_py_p1",
-      "file": "app/services/task_manager.py",
-      "description": "PHASE 1: Task item_1: Create database schema definition and SQLite interface layer. [app/models/database.py]\n\nTask item_2: Implement the core productivity data business logic and CRUD operations. [app/services/task_manager.py]\n\nTask item_6: Write unit tests for core task management logic. [tests/test_logic.py]",
-      "depends_on": [
-        "task_app_models_database_py_p1"
-      ],
-      "assigned_to": "dev_1",
+    "task_requirements_txt_p1": {
+      "id": "task_requirements_txt_p1",
+      "file": "requirements.txt",
+      "description": "PHASE 1: Task item_5: Create system configuration file specifying no external dependencies [requirements.txt]",
+      "depends_on": [],
+      "assigned_to": "dev_2",
       "status": "completed",
       "retries": 0,
       "primary_owner": null,
       "phase": 1,
       "waiting_for": []
     },
-    "task_app_views_components_py_p1": {
-      "id": "task_app_views_components_py_p1",
-      "file": "app/views/components.py",
-      "description": "PHASE 1: Task item_4: Create custom PySide6 widgets for consistent UI styling and form inputs. [app/views/components.py]",
-      "depends_on": [
-        "task_requirements_txt_p1"
-      ],
-      "assigned_to": "dev_6",
-      "status": "completed",
-      "retries": 0,
-      "primary_owner": null,
-      "phase": 1,
-      "waiting_for": []
-    },
-    "task_app_views_main_window_py_p1": {
-      "id": "task_app_views_main_window_py_p1",
-      "file": "app/views/main_window.py",
-      "description": "PHASE 1: Task item_3: Develop the main window layout with sidebar, toolbar, and status bar integration. [app/views/main_window.py]",
-      "depends_on": [
-        "task_app_views_components_py_p1"
-      ],
-      "assigned_to": "dev_7",
-      "status": "completed",
-      "retries": 0,
-      "primary_owner": null,
-      "phase": 1,
-      "waiting_for": []
-    },
-    "task_app_controllers_app_controller_py_p1": {
-      "id": "task_app_controllers_app_controller_py_p1",
-      "file": "app/controllers/app_controller.py",
-      "description": "PHASE 1: Task item_5: Develop the application controller to bridge UI events and business logic. [app/controllers/app_controller.py]",
-      "depends_on": [
-        "task_app_services_task_manager_py_p1",
-        "task_app_views_main_window_py_p1"
-      ],
-      "assigned_to": "dev_8",
-      "status": "completed",
-      "retries": 0,
-      "primary_owner": null,
-      "phase": 1,
-      "waiting_for": []
-    },
-    "task_tests_test_logic_py_p1": {
-      "id": "task_tests_test_logic_py_p1",
-      "file": "tests/test_logic.py",
-      "description": "PHASE 1: Task item_1: Create database schema definition and SQLite interface layer. [app/models/database.py]\n\nTask item_2: Implement the core productivity data business logic and CRUD operations. [app/services/task_manager.py]\n\nTask item_6: Write unit tests for core task management logic. [tests/test_logic.py]",
-      "depends_on": [
-        "task_app_services_task_manager_py_p1"
-      ],
+    "task_docs_testing_md_p1": {
+      "id": "task_docs_testing_md_p1",
+      "file": "docs/testing.md",
+      "description": "PHASE 1: Task item_4: Create documentation for manual GUI verification [docs/testing.md]",
+      "depends_on": [],
       "assigned_to": "dev_6",
       "status": "completed",
       "retries": 0,
@@ -102,15 +55,12 @@
       "file": "__integration__",
       "description": "Final integration: final build check and smoke tests",
       "depends_on": [
+        "task_app_gui_py_p1",
+        "task_tests_test_gui_py_p1",
         "task_requirements_txt_p1",
-        "task_app_models_database_py_p1",
-        "task_app_services_task_manager_py_p1",
-        "task_app_views_components_py_p1",
-        "task_app_views_main_window_py_p1",
-        "task_app_controllers_app_controller_py_p1",
-        "task_tests_test_logic_py_p1"
+        "task_docs_testing_md_p1"
       ],
-      "assigned_to": "dev_8",
+      "assigned_to": "dev_1",
       "status": "completed",
       "retries": 0,
       "primary_owner": null,
@@ -119,13 +69,10 @@
     }
   },
   "completed_tasks": [
-    "task_integration_test",
-    "task_app_views_components_py_p1",
-    "task_app_controllers_app_controller_py_p1",
-    "task_app_models_database_py_p1",
-    "task_tests_test_logic_py_p1",
+    "task_app_gui_py_p1",
     "task_requirements_txt_p1",
-    "task_app_views_main_window_py_p1",
-    "task_app_services_task_manager_py_p1"
+    "task_docs_testing_md_p1",
+    "task_tests_test_gui_py_p1",
+    "task_integration_test"
   ]
 }

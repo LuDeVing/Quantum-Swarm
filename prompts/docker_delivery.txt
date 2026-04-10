@@ -1,0 +1,46 @@
+DOCKER DELIVERY — canonical requirements (paste into CEO / Architecture / sprint briefs)
+══════════════════════════════════════════════════════════════════════════════════
+
+PURPOSE
+  Ship every deployable system (web API, worker, multi-service app, DB-backed product) as
+  reproducible containers. Host-local installs alone are not sufficient for “done.”
+
+SCOPE — when this applies
+  REQUIRED for: app_type web, worker, or any stack with HTTP server, job worker, or database.
+  OPTIONAL for: pure CLI tools, single-file scripts, or desktop-only GUI with no deployment target.
+  If unsure, include Docker anyway.
+
+ARTIFACTS (tracked via write_config_file → company_output/config/)
+  • Dockerfile
+      - One per buildable image, OR one multi-stage file with named stages (builder, runtime).
+      - Pin base image digest or use major.minor tags (not bare “latest” for production paths).
+      - Non-root USER where practical; set WORKDIR; COPY only what the runtime needs.
+      - CMD or ENTRYPOINT runs the process in the foreground (PID 1).
+  • docker-compose.yml (Compose specification v2+)
+      - Declares every service: app, database, cache, reverse proxy, etc.
+      - Explicit ports, environment variables (or env_file:), networks, named volumes for data.
+      - depends_on reflects startup order; use healthcheck + condition where supported.
+  • .dockerignore
+      - Exclude: .git, .venv, node_modules, __pycache__, *.pyc, dist, build, .env (secrets),
+        IDE folders, large fixtures not needed for image build.
+
+RUN CONTRACT (single command)
+  • From the project root that contains the compose file:
+      docker compose up --build
+    (or docker-compose on older CLI). Document any required env vars in comments or design notes.
+  • The engineering manager must be able to smoke-test with start_service / http_request against
+    the mapped host port after compose is up.
+
+VALIDATION
+  • validate_yaml() on docker-compose.yml after edits.
+  • run_shell("docker compose config") when Docker is installed — must exit 0 (validates graph).
+  • run_shell("docker compose build") when feasible — images must build.
+
+INTEGRATION WITH QUANTUM SWARM
+  • Contracts: set build_file / install_command / build_command so they align with Docker
+    (e.g. install_command mentions docker compose build if images are pre-built).
+  • Do not use run_shell to write Dockerfiles — use write_config_file only.
+
+EXCEPTIONS
+  • If Docker cannot run in the current environment, still deliver the files; validation is best-effort.
+  • Games / pygame desktop-only: Dockerfile optional unless the sprint explicitly targets deployment.

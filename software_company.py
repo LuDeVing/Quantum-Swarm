@@ -211,6 +211,23 @@ def _strip_stance(content: str) -> str:
         lines.pop()
     return '\n'.join(lines) + '\n'
 
+
+_LLM_EP_PROSE_LINE_RE = re.compile(
+    r"^\s*(CHANGES|VALIDATION|NEXT\s+RISK|HANDOFF|STANCE|PERPLEXITY|OUTPUT):\s*",
+    re.IGNORECASE,
+)
+
+
+def _strip_llm_summary_lines(content: str) -> str:
+    """Drop agent-style summary lines (CHANGES:, VALIDATION:, etc.) from LLM-generated text files."""
+    out: List[str] = []
+    for line in content.splitlines():
+        if _LLM_EP_PROSE_LINE_RE.match(line):
+            continue
+        out.append(line)
+    return "\n".join(out).rstrip() + "\n"
+
+
 def _tool_write_code_file(filename: str, content: str) -> str:
     try:
         filename = _strip_subdir_prefix(filename, "code")
@@ -263,7 +280,9 @@ def _tool_write_test_file(filename: str, content: str) -> str:
         filename = _strip_subdir_prefix(filename, "tests")
         if not filename or any(c in filename for c in ("*", "?", "<", ">", "|")):
             return f"ERROR: invalid filename {filename!r}"
-        path = OUTPUT_DIR / "tests" / filename
+        # Must live under code/tests/ (same tree as write_code_file / run_shell cwd), not OUTPUT_DIR/tests/.
+        code_dir = _get_code_dir()
+        path = code_dir / "tests" / filename
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(_strip_stance(content), encoding="utf-8")
         threading.Thread(target=_bg_index_file, args=(path,), daemon=True, name=f"rag-{filename}").start()
@@ -319,6 +338,113 @@ def _tool_read_file(filename: str) -> str:
     return f"[FILE NOT FOUND: {filename}]"
 
 
+def _dev_tree_path(root: str, relative_path: str) -> Tuple[Optional[Path], Optional[str]]:
+    """Resolve a path under code/ (worktree-aware), tests/, config/, or design/. Returns (path, error)."""
+    root = (root or "code").strip().lower()
+    if root not in ("code", "tests", "config", "design"):
+        return None, "ERROR: root must be one of: code, tests, config, design"
+    rel = relative_path.replace("\\", "/").strip().strip("/")
+    if not rel:
+        return None, "ERROR: empty path"
+    rel = _strip_subdir_prefix(rel, root)
+    if not rel:
+        return None, "ERROR: invalid path"
+    if any(c in rel for c in ("*", "?", "<", ">", "|")):
+        return None, f"ERROR: invalid path {relative_path!r}"
+    if ".." in Path(rel).parts:
+        return None, "ERROR: path must not contain '..'"
+    if ".git" in Path(rel).parts:
+        return None, "ERROR: paths under .git are not allowed"
+    if root == "code":
+        base = _get_code_dir()
+    elif root == "tests":
+        base = _get_code_dir() / "tests"
+    else:
+        base = OUTPUT_DIR / root
+    try:
+        base = base.resolve()
+    except OSError as e:
+        return None, f"ERROR: {e}"
+    path = (base / rel).resolve()
+    try:
+        path.relative_to(base)
+    except ValueError:
+        return None, "ERROR: path escapes project directory"
+    return path, None
+
+
+def _bg_rag_refresh_after_tree_change() -> None:
+    try:
+        get_rag().update()
+    except Exception as e:
+        logger.warning(f"[RAG] refresh after tree change failed: {e}")
+
+
+def _tool_create_directory(relative_path: str, root: str = "code") -> str:
+    """Create a directory tree (mkdir -p) under the given project root."""
+    path, err = _dev_tree_path(root, relative_path)
+    if err:
+        return err
+    assert path is not None
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        disp = f"{root}/{_strip_subdir_prefix(relative_path.replace('\\', '/'), root)}"
+        logger.info(f"[create_directory] {disp} → {path}")
+        return f"OK: directory ready at {disp}"
+    except OSError as e:
+        return f"ERROR: {e}"
+
+
+def _tool_delete_file(relative_path: str, root: str = "code") -> str:
+    """Delete a single file (not a directory)."""
+    path, err = _dev_tree_path(root, relative_path)
+    if err:
+        return err
+    assert path is not None
+    if not path.exists():
+        return f"ERROR: file not found: {path}"
+    if path.is_dir():
+        return (
+            "ERROR: path is a directory — delete files inside first, then remove_empty_directory, "
+            "or remove_empty_directory only if the folder is empty"
+        )
+    try:
+        with _get_file_lock(path):
+            path.unlink()
+        threading.Thread(
+            target=_bg_rag_refresh_after_tree_change, daemon=True, name="rag-after-delete"
+        ).start()
+        logger.info(f"[delete_file] removed {path}")
+        rel_disp = _strip_subdir_prefix(relative_path.replace("\\", "/"), root)
+        return f"OK: deleted file {root}/{rel_disp}"
+    except OSError as e:
+        return f"ERROR: {e}"
+
+
+def _tool_remove_empty_directory(relative_path: str, root: str = "code") -> str:
+    """Remove one empty directory (not recursive)."""
+    path, err = _dev_tree_path(root, relative_path)
+    if err:
+        return err
+    assert path is not None
+    if not path.exists():
+        return f"ERROR: path not found: {path}"
+    if not path.is_dir():
+        return "ERROR: path is not a directory — use delete_file for files"
+    try:
+        path.rmdir()
+        threading.Thread(
+            target=_bg_rag_refresh_after_tree_change, daemon=True, name="rag-after-rmdir"
+        ).start()
+        logger.info(f"[remove_empty_directory] removed {path}")
+        return f"OK: removed empty directory {path.name}"
+    except OSError as e:
+        el = str(e).lower()
+        if "not empty" in el or "directory not empty" in el:
+            return "ERROR: directory is not empty — delete files inside first"
+        return f"ERROR: {e}"
+
+
 # ── RAG Index ─────────────────────────────────────────────────────────────────
 
 class CodebaseRAG:
@@ -345,6 +471,12 @@ class CodebaseRAG:
         ".py", ".ts", ".tsx", ".js", ".jsx",
         ".json", ".yaml", ".yml", ".md",
         ".css", ".html",
+        # Native / JVM / other stacks (keep aligned with _rag_split_chunks)
+        ".rs", ".go",
+        ".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx",
+        ".cs", ".java", ".kt", ".kts", ".swift", ".scala",
+        ".rb", ".php", ".ex", ".exs", ".erl", ".hs", ".ml", ".clj",
+        ".toml",  # Cargo, Poetry, etc. (usually small in SUBDIRS)
     }
 
     def __init__(self):
@@ -503,7 +635,7 @@ class CodebaseRAG:
             if not base.exists():
                 continue
             for path in base.rglob("*"):
-                if "node_modules" in path.parts or ".git" in path.parts:
+                if _is_ignored_project_path(path):
                     continue
                 if path.suffix not in self.EXTENSIONS or not path.is_file():
                     continue
@@ -569,8 +701,27 @@ _RAG_EMBED_MODEL = CodebaseRAG.EMBED_MODEL
 _RAG_CHUNK_LINES = CodebaseRAG.CHUNK_LINES
 _RAG_EXTENSIONS  = CodebaseRAG.EXTENSIONS
 
+def _rag_split_at_starts(
+    lines: List[str], starts: Tuple[str, ...], chunk_lines: int, lstrip: bool = True
+) -> List[str]:
+    """Accumulate lines; flush when a new top-level construct begins (prefix match)."""
+    chunks, buf = [], []
+    for line in lines:
+        head = line.lstrip() if lstrip else line
+        if any(head.startswith(s) for s in starts) and buf:
+            chunks.append("\n".join(buf))
+            buf = []
+        buf.append(line)
+        if len(buf) >= chunk_lines:
+            chunks.append("\n".join(buf))
+            buf = []
+    if buf:
+        chunks.append("\n".join(buf))
+    return [c for c in chunks if c.strip()]
+
+
 def _rag_split_chunks(text: str, ext: str, chunk_lines: int = _RAG_CHUNK_LINES) -> List[str]:
-    """Split text by function/class boundary (.py) or fixed line window (everything else)."""
+    """Split text by definition boundaries where we know them; else fixed line windows."""
     lines = text.split("\n")
     if ext == ".py":
         chunks, buf = [], []
@@ -585,6 +736,31 @@ def _rag_split_chunks(text: str, ext: str, chunk_lines: int = _RAG_CHUNK_LINES) 
         if buf:
             chunks.append("\n".join(buf))
         return [c for c in chunks if c.strip()]
+    if ext == ".rs":
+        return _rag_split_at_starts(
+            lines,
+            (
+                "fn ", "pub fn ", "pub async fn ", "pub(crate) fn ", "pub(super) fn ",
+                "impl ", "trait ", "mod ", "pub mod ", "struct ", "enum ",
+            ),
+            chunk_lines,
+        )
+    if ext == ".go":
+        return _rag_split_at_starts(
+            lines, ("func ", "type ", "const ", "var "), chunk_lines
+        )
+    if ext in (".java", ".cs", ".kt", ".kts"):
+        return _rag_split_at_starts(
+            lines,
+            ("class ", "interface ", "record ", "enum ", "namespace ", "public class "),
+            chunk_lines,
+        )
+    if ext in (".cpp", ".cc", ".cxx", ".hpp", ".hh", ".h", ".c"):
+        return _rag_split_at_starts(
+            lines,
+            ("class ", "struct ", "namespace ", "template ", "void ", "static ", "inline "),
+            chunk_lines,
+        )
     return [
         chunk for chunk in (
             "\n".join(lines[i:i + chunk_lines])
@@ -781,6 +957,9 @@ class InterfaceContractRegistry:
         # app_type: "web" | "cli" | "gui" | "script" | "library" | "worker"
         # Drives which verification strategy the manager fix loop uses.
         self.app_type: str = ""
+        # primary_language: stack id from contracts (e.g. python, rust, go, javascript, cpp, mixed).
+        # Used to avoid forcing PYTHONPATH on non-Python projects.
+        self.primary_language: str = ""
         self._lock = threading.RLock()
         # ── Amendment queue (mid-flight contract changes proposed by agents) ───
         self._pending_amendments: List[Dict] = []  # [{"file", "proposer", "reason", "change", "ts"}]
@@ -829,6 +1008,89 @@ class InterfaceContractRegistry:
             self.dependencies = parsed.get("dependencies", [])
             self.init_order = parsed.get("init_order", [])
             self.app_type = parsed.get("app_type", "") or self._infer_app_type()
+            # LLM contracts often label tkinter/Qt/wx apps as "cli"; upgrade so manager must use desktop_mouse/keyboard.
+            if self.app_type in ("cli", "script") and self._file_map_suggests_gui():
+                self.app_type = "gui"
+            _pl = parsed.get("primary_language", "")
+            if isinstance(_pl, str) and _pl.strip():
+                self.primary_language = _pl.strip().lower()
+            else:
+                self.primary_language = self._infer_primary_language_locked()
+
+    def _infer_primary_language_locked(self) -> str:
+        """Infer main stack from build_file / file_map / build_command. Caller must hold self._lock."""
+        bf = (self.build_file or "").replace("\\", "/").lower()
+        if bf.endswith("cargo.toml") or bf == "cargo.toml":
+            return "rust"
+        if bf.endswith("go.mod") or bf == "go.mod":
+            return "go"
+        if bf.endswith("package.json") or bf.endswith("/package.json"):
+            return "javascript"
+        if bf.endswith("pom.xml") or bf == "pom.xml" or "gradle" in bf:
+            return "java"
+        if "cmakelists" in bf or bf.endswith(".cmake"):
+            return "cpp"
+        if bf.endswith("requirements.txt") or bf.endswith("pyproject.toml") or bf.endswith("setup.py"):
+            return "python"
+        exts = {Path(f).suffix.lower() for f in self.file_map}
+        has_py = ".py" in exts
+        has_rs = ".rs" in exts
+        has_go = ".go" in exts
+        has_js = ".js" in exts or ".jsx" in exts
+        has_ts = ".ts" in exts or ".tsx" in exts
+        has_java = ".java" in exts
+        has_cs = ".cs" in exts
+        has_cpp = any(
+            e in exts for e in (".cpp", ".cc", ".cxx", ".hpp", ".hh", ".h")
+        )
+        stacks = sum(
+            bool(x)
+            for x in (
+                has_py, has_rs, has_go, has_js or has_ts, has_java, has_cs, has_cpp
+            )
+        )
+        if stacks > 1:
+            return "mixed"
+        if has_rs:
+            return "rust"
+        if has_go:
+            return "go"
+        if has_java:
+            return "java"
+        if has_cs:
+            return "csharp"
+        if has_cpp:
+            return "cpp"
+        if has_ts or has_js:
+            return "javascript"
+        bc = (self.build_command or "").lower()
+        if "cargo" in bc:
+            return "rust"
+        if "go build" in bc or "go test" in bc or "go run" in bc:
+            return "go"
+        if "npm " in bc or "node " in bc or "npx " in bc or "yarn " in bc or "pnpm " in bc:
+            return "javascript"
+        if "mvn" in bc or "gradle" in bc:
+            return "java"
+        if "dotnet " in bc:
+            return "csharp"
+        if "cmake " in bc or "clang++" in bc or "g++" in bc:
+            return "cpp"
+        return "python"
+
+    def _file_map_suggests_gui(self) -> bool:
+        """True if contract file paths/descriptions indicate a desktop window UI (caller holds _lock)."""
+        _gui_signals = {"tkinter", "pyqt", "pyside", "wxpython", "kivy",
+                        "electron", "tauri", "gtk", "wx.", "javafx", "swing",
+                        "desktop window", "mainwindow", "gui app", "graphical user"}
+        _blob = " ".join(f"{fc.file} {fc.description}" for fc in self.file_map.values()).lower()
+        if any(s in _blob for s in _gui_signals):
+            return True
+        for fc in self.file_map.values():
+            name = Path(fc.file or "").name.lower()
+            if name == "gui.py" or name.endswith("_gui.py"):
+                return True
+        return False
 
     def _infer_app_type(self) -> str:
         """Infer app type from contract signals when not explicitly set."""
@@ -847,6 +1109,8 @@ class InterfaceContractRegistry:
         _gui_signals = {"tkinter", "pyqt", "pyside", "wxpython", "kivy",
                         "electron", "tauri", "gtk", "qt", "swing", "javafx"}
         if any(s in cmd or s in " ".join(deps) for s in _gui_signals):
+            return "gui"
+        if self._file_map_suggests_gui():
             return "gui"
         # CLI runners / argparse-heavy tools
         _cli_signals = {"click", "typer", "argparse", "docopt", "clap", "cobra", "oclif"}
@@ -875,6 +1139,11 @@ class InterfaceContractRegistry:
             lines.append("═══════════════════════════════════════════════════════")
             lines.append("INTERFACE CONTRACTS (you MUST use these exact signatures)")
             lines.append("═══════════════════════════════════════════════════════")
+            _stack = (self.primary_language or "").strip() or self._infer_primary_language_locked()
+            lines.append(
+                f"\nPRIMARY STACK (language / ecosystem): {_stack} — use that stack's tools "
+                f"for validation, tests, and run_shell (not only Python/pytest).\n"
+            )
 
             if self.models:
                 lines.append("\nSHARED DATA MODELS (defined in shared files — import, do NOT redefine):")
@@ -944,6 +1213,8 @@ class InterfaceContractRegistry:
                            "description": f.description} for f in self.file_map.values()],
                 "entry_point": self.entry_point,
                 "entry_imports": self.entry_imports,
+                "primary_language": self.primary_language,
+                "app_type": self.app_type,
             }
 
 
@@ -1397,7 +1668,7 @@ def _tool_list_files() -> str:
         wt_dir = wt.get_agent_code_dir(agent_id)
         if wt_dir and wt_dir.exists():
             for p in wt_dir.rglob("*"):
-                if not p.is_file() or ".git" in p.parts or "node_modules" in p.parts:
+                if not p.is_file() or _is_ignored_project_path(p):
                     continue
                 if p.suffix not in _RAG_EXTENSIONS:
                     continue
@@ -1589,6 +1860,57 @@ def _tool_scan_vulnerabilities(code: str) -> str:
 
 _RUN_SHELL_TIMEOUT = 120   # seconds; raised from 30 so build commands (npm, pip, go) don't get killed
 
+
+def _append_run_shell_footer(
+    output: str,
+    cwd: str,
+    *,
+    exit_code: Optional[int] = None,
+    result: Optional[str] = None,
+) -> str:
+    """Suffix run_shell output with status and cwd so models don't misread truncated text."""
+    body = (output or "").rstrip()
+    cwd_disp = str(Path(cwd).resolve())
+    if result is not None:
+        status = f"run_shell: {result}"
+    elif exit_code is not None:
+        status = f"run_shell: exit_code={exit_code}"
+    else:
+        status = "run_shell: status=unknown"
+    footer = f"\n---\n{status}\nrun_shell: cwd={cwd_disp}"
+    return body + footer
+
+
+def _append_generic_shell_failure_hints(output: str, exit_code: int) -> str:
+    """Language-agnostic hints when a shell command fails (OS/shell level only)."""
+    if exit_code == 0:
+        return output
+    o = output
+    low = o.lower()
+    extra: List[str] = []
+    if any(
+        phrase in low
+        for phrase in (
+            "not recognized",
+            "is not recognized",
+            "command not found",
+            "not found as an internal or external command",
+        )
+    ):
+        extra.append(
+            "[hint] The shell could not run a program name in this command — it may be missing "
+            "from PATH on this machine, or the name may be wrong. Try the full path to the tool, "
+            "or the install path documented for this project."
+        )
+    extra.append(
+        "[hint] Prefer short, single-purpose commands; nested quotes are easy to get wrong in a shell. "
+        "Inspect paths or symbols cited in the output with read_file / search_codebase. "
+        "For opaque errors, web_search the exact message. Long-running servers belong in "
+        "start_service(), not run_shell()."
+    )
+    return o + "\n\n" + "\n".join(extra)
+
+
 def _normalize_shell_command_for_windows(command: str) -> str:
     """On Windows, rewrite Unix-style env prefixes to cmd.exe-compatible form.
     e.g. `PYTHONPATH=. python app/main.py`  →  `set PYTHONPATH=.&& python app/main.py`
@@ -1608,6 +1930,60 @@ def _normalize_shell_command_for_windows(command: str) -> str:
     # Build `set VAR=val` chain
     sets = " && ".join(f"set {kv}" for kv in env_part.split())
     return f"{sets} && {rest}"
+
+
+def _is_ignored_project_path(path: Path) -> bool:
+    """Dependency trees, VCS metadata, and bytecode dirs — exclude from RAG and file walks."""
+    parts = path.parts
+    return (
+        "node_modules" in parts
+        or ".git" in parts
+        or "__pycache__" in parts
+        or "target" in parts  # Rust
+        or "vendor" in parts  # Go / vendored trees
+        or ".gradle" in parts
+    )
+
+
+# Stacks where prepending PYTHONPATH is unnecessary and can confuse native toolchains.
+_NON_PYTHONPATH_LANGS = frozenset({
+    "rust", "go", "golang", "cpp", "cxx", "c++", "c", "csharp", "cs", "c#",
+    "java", "kotlin", "kt", "javascript", "typescript", "js", "ts",
+    "ruby", "rb", "php", "swift", "zig", "scala", "haskell", "hs",
+    "ocaml", "ml", "nim", "dart", "elixir", "ex", "erlang", "erl",
+    "clojure", "clj", "vb", "fsharp", "fs",
+})
+
+
+def _registry_wants_pythonpath() -> bool:
+    """True if subprocess env should prepend code_dir to PYTHONPATH (Python or mixed stacks)."""
+    reg = get_contracts()
+    with reg._lock:
+        lang = (reg.primary_language or "").strip().lower()
+        if not lang:
+            lang = reg._infer_primary_language_locked()
+    if lang in ("mixed", "python"):
+        return True
+    if lang in _NON_PYTHONPATH_LANGS:
+        return False
+    return True
+
+
+def _subprocess_env_for_project(code_dir: Path) -> Dict[str, str]:
+    """Environment for child processes: copy os.environ; optionally prepend *code_dir* to PYTHONPATH."""
+    cwd_s = str(Path(code_dir).resolve())
+    env: Dict[str, str] = dict(os.environ)
+    if not _registry_wants_pythonpath():
+        return env
+    sep = os.pathsep
+    existing = env.get("PYTHONPATH", "").strip()
+    if existing:
+        parts = [p for p in existing.split(sep) if p]
+        if cwd_s not in parts:
+            env["PYTHONPATH"] = cwd_s + sep + existing
+    else:
+        env["PYTHONPATH"] = cwd_s
+    return env
 
 
 # Per-agent spin detection: tracks (command, output_hash) for the last N shell calls
@@ -1635,29 +2011,27 @@ def _reset_shell_spin(agent: str) -> None:
         _shell_spin_tracker.pop(agent, None)
 
 
-def _run_shell_blocks_gui_entrypoint(command: str) -> Optional[str]:
-    """If run_shell would start a Tk/Qt GUI main loop, return an error string (do not run).
-    Those processes block until the window closes and freeze the agent until timeout."""
+def _run_shell_segment_blocks_gui(seg: str) -> Optional[str]:
+    """If a single shell segment would start a blocking GUI main, return error text."""
     import re
-    c = (command or "").strip()
+    c = (seg or "").strip()
     if not c:
         return None
     low = c.lower()
-    # Clearly non-blocking patterns — always allow
     safe_markers = (
         "--help", "-h ", " -h", "--version", " -v", "-c ", " -c ", " -m ", "py_compile",
         "pytest", "unittest", "__integration__", "pip ", "npm ", "docker build",
         "flake8", "mypy", "black ", "ruff ", "echo ", "type ", "dir ", "ls ",
-        "chmod ", "git ", "curl ", "wget ",
+        "chmod ", "git ", "curl ", "wget ", "tasklist", "findstr",
+        "cargo ", "rustc ", "go ", "clang", "gcc ", "g++ ", "make ", "cmake ",
+        "dotnet ", "mvn ", "gradle ", "bundle ", "rspec ",
     )
     if any(m in low for m in safe_markers):
         return None
-    # Allow `python main.py -h` / trailing --help (safe_markers miss EOL `-h`)
     if re.search(r"(?:^|[\s;|&])-h(?:\s|$)", low) or re.search(
         r"(?:^|[\s;|&])--help(?:\s|$)", low
     ):
         return None
-    # python[w] script.py  (possibly after && or ;)
     m = re.search(
         r"(?:^|[;&|]\s*)(?:pythonw?\d?|py(?:thon)?3?)\s+([\w./\\-]+\.py)\b",
         c,
@@ -1683,11 +2057,41 @@ def _run_shell_blocks_gui_entrypoint(command: str) -> Optional[str]:
     )
 
 
+def _run_shell_blocks_gui_entrypoint(command: str) -> Optional[str]:
+    """Block GUI main on any command *segment* — a safe tail must not exempt a GUI head
+    (e.g. ``python main.py &`` + ``python -c ...`` on the next line)."""
+    import re
+    c = (command or "").strip()
+    if not c:
+        return None
+    # Flatten: newlines, && (cmd), & (Windows/cmd chain)
+    segments: List[str] = []
+    for raw_line in re.split(r"[\r\n]+", c):
+        line = raw_line.strip()
+        if not line:
+            continue
+        for chunk in re.split(r"\s*&&\s*", line):
+            chunk = chunk.strip()
+            if not chunk:
+                continue
+            for seg in re.split(r"\s*&\s*", chunk):
+                s = seg.strip()
+                if s:
+                    segments.append(s)
+    for seg in segments:
+        hit = _run_shell_segment_blocks_gui(seg)
+        if hit:
+            return hit
+    return None
+
+
 def _tool_run_shell(command: str) -> str:
     """Run a shell command in the output directory and return stdout + stderr (last 3000 chars)."""
     import subprocess
     agent = _get_agent_id() or "unknown_agent"
     cwd = _get_code_dir()
+    if not (command or "").strip():
+        return "ERROR: run_shell requires a non-empty command."
     command = _normalize_shell_command_for_windows(command)
     _block = _run_shell_blocks_gui_entrypoint(command)
     if _block:
@@ -1695,21 +2099,7 @@ def _tool_run_shell(command: str) -> str:
         return _block
     logger.info(f"[run_shell:{agent}] ▶ {command} (cwd={cwd})")
     try:
-        # So `from app...` works in flat layouts (app/ next to tests/) without the
-        # model remembering PYTHONPATH=. on every command.
-        import os
-        _cwd_resolved = str(Path(cwd).resolve())
-        _env = os.environ.copy()
-        _sep = os.pathsep
-        _existing_pp = _env.get("PYTHONPATH", "").strip()
-        if _existing_pp:
-            _parts = [p for p in _existing_pp.split(_sep) if p]
-            if _cwd_resolved not in _parts:
-                _env["PYTHONPATH"] = _cwd_resolved + _sep + _existing_pp
-            else:
-                _env["PYTHONPATH"] = _existing_pp
-        else:
-            _env["PYTHONPATH"] = _cwd_resolved
+        _env = _subprocess_env_for_project(Path(cwd))
         result = subprocess.run(
             command,
             shell=True,
@@ -1729,29 +2119,35 @@ def _tool_run_shell(command: str) -> str:
         )
         out = out[-3000:] if len(out) > 3000 else out
         final_out = out or "(no output)"
+        if result.returncode != 0:
+            final_out = _append_generic_shell_failure_hints(final_out, result.returncode)
         if result.returncode != 0 and _check_shell_spin(agent, command, final_out):
             logger.warning(
                 f"[run_shell:{agent}] SPIN DETECTED — same failing command repeated "
                 f"{_SPIN_MAX}+ times. Injecting hint to try a different approach."
             )
-            return (
+            return _append_run_shell_footer(
                 final_out + "\n\n"
                 "[SPIN GUARD] You have run this exact command multiple times with the same "
                 "failure. Running it again will not help. Read the actual source files involved, "
-                "understand the root cause, fix the code, then re-run."
+                "understand the root cause, fix the code, then re-run.",
+                cwd,
+                exit_code=result.returncode,
             )
         if result.returncode == 0:
             _reset_shell_spin(agent)
-        return final_out
+        return _append_run_shell_footer(final_out, cwd, exit_code=result.returncode)
     except subprocess.TimeoutExpired:
         logger.warning(f"[run_shell:{agent}] TIMEOUT after {_RUN_SHELL_TIMEOUT}s: {command}")
-        return (
+        return _append_run_shell_footer(
             f"ERROR: command timed out after {_RUN_SHELL_TIMEOUT}s. "
-            "To start a long-running server use start_service(), not run_shell()."
+            "To start a long-running server use start_service(), not run_shell().",
+            cwd,
+            result="timeout",
         )
     except Exception as e:
         logger.warning(f"[run_shell:{agent}] ERROR: {e}")
-        return f"ERROR: {e}"
+        return _append_run_shell_footer(f"ERROR: {e}", cwd, result="subprocess_error")
 
 
 # ── Background service registry (start_service / stop_service) ───────────────
@@ -1832,13 +2228,16 @@ def _tool_start_service(name: str, command: str) -> str:
                         f"Stop it first with stop_service('{svc_name}') or choose a different port."
                     )
     try:
+        _svc_root = OUTPUT_DIR / "code"
+        _svc_env = _subprocess_env_for_project(_svc_root)
         proc = subprocess.Popen(
             command,
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            cwd=str(OUTPUT_DIR / "code"),
+            cwd=str(_svc_root),
+            env=_svc_env,
             encoding="utf-8",
             errors="replace",
         )
@@ -1969,6 +2368,372 @@ def _tool_http_request(method: str, url: str, body: str = "") -> str:
         return f"ERROR: {e}"
 
 
+# ── download_url (HTTPS assets: textures, small binaries) ─────────────────────
+# Env: AGENT_DOWNLOAD_ENABLED (default on), AGENT_DOWNLOAD_MAX_BYTES (default 10MiB),
+#      AGENT_DOWNLOAD_ALLOW_HTTP=1 to permit http:// URLs.
+# Web search: AGENT_WEB_SEARCH_ENABLED (default on), AGENT_WEB_SEARCH_MAX_RESULTS (1–20, default 5).
+# Optional: BRAVE_API_KEY or BRAVE_SEARCH_API_KEY for Brave Search API fallback.
+
+_DOWNLOAD_BINARY_SUFFIXES = frozenset({
+    ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".ico", ".bin", ".zip",
+    ".gz", ".tar", ".7z", ".woff", ".woff2", ".ttf", ".eot", ".pdf", ".mp3", ".ogg",
+})
+_DOWNLOAD_MAX_REDIRECTS = 5
+_DOWNLOAD_CHUNK = 65536
+_DOWNLOAD_UA = "QuantumSwarm-download_url/1.0"
+_WEBSEARCH_UA = "QuantumSwarm-web_search/1.0"
+
+
+def _agent_download_enabled() -> bool:
+    v = os.getenv("AGENT_DOWNLOAD_ENABLED", "1").strip().lower()
+    return v not in ("0", "false", "no", "off")
+
+
+def _agent_download_max_bytes() -> int:
+    try:
+        return max(1024, int(os.getenv("AGENT_DOWNLOAD_MAX_BYTES", str(10 * 1024 * 1024))))
+    except ValueError:
+        return 10 * 1024 * 1024
+
+
+def _agent_download_allow_http() -> bool:
+    v = os.getenv("AGENT_DOWNLOAD_ALLOW_HTTP", "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
+def _download_ip_blocked(ip: "ipaddress._BaseAddress") -> bool:
+    if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast:
+        return True
+    if ip.version == 4:
+        if ip.is_reserved or int(ip) == 0:
+            return True
+    if ip.version == 6:
+        if ip.is_reserved or ip.is_unspecified:
+            return True
+    return False
+
+
+def _download_validate_host(host: str) -> Optional[str]:
+    """Return None if host resolves only to allowed addresses; else error string."""
+    import ipaddress
+    import socket
+
+    if not host or host.strip() != host:
+        return "ERROR: invalid host"
+    try:
+        addr = ipaddress.ip_address(host)
+    except ValueError:
+        addr = None
+    if addr is not None:
+        return "ERROR: URL host resolves to a disallowed address" if _download_ip_blocked(addr) else None
+
+    try:
+        infos = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+    except socket.gaierror as e:
+        return f"ERROR: cannot resolve host: {e}"
+    seen: set = set()
+    for _fam, _typ, _proto, _canon, sockaddr in infos:
+        ip_str = sockaddr[0]
+        if ip_str in seen:
+            continue
+        seen.add(ip_str)
+        try:
+            a = ipaddress.ip_address(ip_str)
+        except ValueError:
+            return "ERROR: invalid resolved address"
+        if _download_ip_blocked(a):
+            return "ERROR: URL host resolves to a disallowed address (private/loopback/link-local)"
+    if not seen:
+        return "ERROR: host resolved to no addresses"
+    return None
+
+
+def _download_validate_url(url: str) -> Optional[str]:
+    """Return None if URL is acceptable for fetch, else error string."""
+    from urllib.parse import urlparse
+
+    try:
+        p = urlparse(url)
+    except Exception as e:
+        return f"ERROR: invalid URL: {e}"
+    if p.scheme not in ("https", "http"):
+        return f"ERROR: scheme {p.scheme!r} not allowed (only http/https)"
+    if p.scheme == "http" and not _agent_download_allow_http():
+        return "ERROR: only https allowed (set AGENT_DOWNLOAD_ALLOW_HTTP=1 for http)"
+    if not p.hostname:
+        return "ERROR: URL missing host"
+    if p.username is not None or p.password is not None:
+        return "ERROR: URL must not contain credentials"
+    return _download_validate_host(p.hostname)
+
+
+def _download_should_skip_rag(path: Path, content_type: str) -> bool:
+    if path.suffix.lower() in _DOWNLOAD_BINARY_SUFFIXES:
+        return True
+    ct = (content_type or "").split(";")[0].strip().lower()
+    if ct.startswith("image/") or ct.startswith("font/"):
+        return True
+    if ct in ("application/octet-stream", "application/font-woff", "application/font-sfnt"):
+        return True
+    return False
+
+
+def _tool_download_url(url: str, dest_path: str) -> str:
+    """Download bytes from a public URL into code/<dest_path>. HTTPS only unless AGENT_DOWNLOAD_ALLOW_HTTP=1.
+    Use for textures, small data files — not for source code (use write_code_file)."""
+    import hashlib
+    from urllib.parse import urljoin, urlparse
+
+    import requests as _requests
+
+    if not _agent_download_enabled():
+        return "ERROR: download_url disabled (AGENT_DOWNLOAD_ENABLED=0)"
+
+    url = (url or "").strip()
+    if not url:
+        return "ERROR: empty url"
+
+    rel = _strip_subdir_prefix((dest_path or "").strip(), "code")
+    if not rel or any(c in rel for c in ("*", "?", "<", ">", "|")):
+        return f"ERROR: invalid dest_path {dest_path!r}"
+    if ".." in Path(rel).parts:
+        return "ERROR: dest_path must not contain '..'"
+
+    code_dir = _get_code_dir().resolve()
+    path = (code_dir / rel).resolve()
+    try:
+        path.relative_to(code_dir)
+    except ValueError:
+        return "ERROR: dest_path escapes code directory"
+
+    err = _download_validate_url(url)
+    if err:
+        return err
+
+    max_bytes = _agent_download_max_bytes()
+    headers = {"User-Agent": _DOWNLOAD_UA, "Accept": "*/*"}
+    current = url
+    resp = None
+
+    try:
+        for _redirect_i in range(_DOWNLOAD_MAX_REDIRECTS + 1):
+            v_err = _download_validate_url(current)
+            if v_err:
+                return v_err
+            r = _requests.get(
+                current,
+                stream=True,
+                timeout=30,
+                allow_redirects=False,
+                headers=headers,
+            )
+            if r.status_code in (301, 302, 303, 307, 308):
+                loc = r.headers.get("Location")
+                r.close()
+                if not loc:
+                    return "ERROR: redirect without Location header"
+                current = urljoin(current, loc)
+                continue
+            resp = r
+            break
+        else:
+            return f"ERROR: too many redirects (max {_DOWNLOAD_MAX_REDIRECTS})"
+
+        if resp is None:
+            return "ERROR: no response"
+
+        if resp.status_code != 200:
+            body_preview = (resp.text or "")[:200]
+            resp.close()
+            return f"ERROR: HTTP {resp.status_code} {body_preview!r}"
+
+        cl = resp.headers.get("Content-Length")
+        if cl is not None:
+            try:
+                if int(cl) > max_bytes:
+                    resp.close()
+                    return f"ERROR: Content-Length {cl} exceeds max {max_bytes}"
+            except ValueError:
+                pass
+
+        ctype = resp.headers.get("Content-Type", "")
+
+        h = hashlib.sha256()
+        total = 0
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "wb") as out:
+            for chunk in resp.iter_content(chunk_size=_DOWNLOAD_CHUNK):
+                if not chunk:
+                    continue
+                total += len(chunk)
+                if total > max_bytes:
+                    resp.close()
+                    try:
+                        path.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+                    return f"ERROR: response exceeds max_bytes={max_bytes}"
+                h.update(chunk)
+                out.write(chunk)
+        resp.close()
+
+        digest = h.hexdigest()[:16]
+        _record_sprint_file(rel)
+        if not _download_should_skip_rag(path, ctype):
+            threading.Thread(
+                target=_bg_index_file, args=(path,), daemon=True, name=f"rag-dl-{path.name}"
+            ).start()
+
+        logger.info(f"[download_url] saved {total} bytes → code/{rel} (sha256~{digest})")
+        return (
+            f"Saved {total} bytes to code/{rel}\n"
+            f"URL: {current}\nContent-Type: {ctype or '(none)'}\nsha256-prefix: {digest}"
+        )
+    except Exception as e:
+        logger.warning(f"[download_url] failed: {e}")
+        try:
+            if path.exists():
+                path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return f"ERROR: {e}"
+
+
+def _agent_web_search_enabled() -> bool:
+    v = os.getenv("AGENT_WEB_SEARCH_ENABLED", "1").strip().lower()
+    return v not in ("0", "false", "no")
+
+
+def _agent_web_search_max_results() -> int:
+    try:
+        return max(1, min(20, int(os.getenv("AGENT_WEB_SEARCH_MAX_RESULTS", "5"))))
+    except ValueError:
+        return 5
+
+
+def _ddg_instant_answer_fallback(query: str) -> str:
+    """Lightweight DuckDuckGo instant-answer JSON (no extra deps). Often sparse for CLI queries."""
+    import requests as _rq
+
+    try:
+        r = _rq.get(
+            "https://api.duckduckgo.com/",
+            params={"q": query, "format": "json", "no_html": "1"},
+            timeout=20,
+            headers={"User-Agent": _WEBSEARCH_UA},
+        )
+        r.raise_for_status()
+        d = r.json()
+    except Exception as e:
+        logger.warning(f"[web_search] DDG instant answer failed: {e}")
+        return ""
+
+    parts: List[str] = []
+    if d.get("AbstractText"):
+        parts.append(f"Abstract: {d['AbstractText']}")
+    if d.get("Answer"):
+        parts.append(f"Answer: {d['Answer']}")
+    for t in d.get("RelatedTopics", [])[:10]:
+        if isinstance(t, dict) and t.get("Text"):
+            parts.append(f"- {t['Text']}")
+        elif isinstance(t, dict) and "Topics" in t:
+            for sub in t.get("Topics", [])[:4]:
+                if isinstance(sub, dict) and sub.get("Text"):
+                    parts.append(f"- {sub['Text']}")
+    return "\n".join(parts)
+
+
+def _brave_web_search(query: str, max_n: int) -> Optional[str]:
+    key = (os.getenv("BRAVE_API_KEY") or os.getenv("BRAVE_SEARCH_API_KEY") or "").strip()
+    if not key:
+        return None
+    import requests as _rq
+
+    try:
+        r = _rq.get(
+            "https://api.search.brave.com/res/v1/web/search",
+            params={"q": query, "count": max_n},
+            headers={"X-Subscription-Token": key, "Accept": "application/json"},
+            timeout=25,
+        )
+        if r.status_code != 200:
+            logger.warning(f"[web_search] Brave HTTP {r.status_code}")
+            return None
+        data = r.json()
+        web = data.get("web", {}).get("results", [])
+        lines: List[str] = []
+        for i, it in enumerate(web[:max_n], 1):
+            title = it.get("title", "")
+            url = it.get("url", "")
+            desc = (it.get("description", "") or "")[:500]
+            lines.append(f"{i}. {title}\n   {url}\n   {desc}")
+        if lines:
+            return "Web search (Brave):\n" + "\n".join(lines)
+    except Exception as e:
+        logger.warning(f"[web_search] Brave failed: {e}")
+    return None
+
+
+def _ddgs_text_search(query: str, max_n: int) -> Optional[str]:
+    try:
+        from ddgs import DDGS
+    except ImportError:
+        try:
+            from duckduckgo_search import DDGS
+        except ImportError:
+            return None
+    lines: List[str] = []
+    try:
+        ddgs = DDGS()
+        iterable = ddgs.text(query, max_results=max_n)
+        for i, item in enumerate(iterable, 1):
+            if i > max_n:
+                break
+            if isinstance(item, dict):
+                title = item.get("title", "")
+                href = item.get("href", "") or item.get("link", "")
+                body = (item.get("body", "") or item.get("snippet", ""))[:450]
+            else:
+                title = str(item)
+                href = ""
+                body = ""
+            lines.append(f"{i}. {title}\n   {href}\n   {body}")
+    except Exception as e:
+        logger.warning(f"[web_search] ddgs failed: {e}")
+        return None
+    if lines:
+        return "Web search results (verify commands before run_shell):\n" + "\n".join(lines)
+    return None
+
+
+def _tool_web_search(query: str, focus: str = "") -> str:
+    if not _agent_web_search_enabled():
+        return "ERROR: web_search disabled (set AGENT_WEB_SEARCH_ENABLED=1)"
+    q = (query or "").strip()
+    focus = (focus or "").strip()
+    if focus:
+        q = f"{q} {focus}".strip()
+    if not q:
+        return "ERROR: empty query"
+    if len(q) > 800:
+        return "ERROR: query too long (max 800 characters)"
+    max_n = _agent_web_search_max_results()
+
+    out = _ddgs_text_search(q, max_n)
+    if out:
+        return out
+    out = _brave_web_search(q, max_n)
+    if out:
+        return out
+    ia = _ddg_instant_answer_fallback(q)
+    if ia.strip():
+        return "Web search (instant answer — may be brief):\n" + ia.strip()
+    return (
+        "No useful web results for this query. Try shorter keywords, official docs site name, "
+        "or read_file on README / package manifest in the repo."
+    )
+
+
 def _tool_check_owasp(feature: str) -> str:
     checklist = {
         "auth":        ["A01: Broken Access Control", "A02: Cryptographic Failures",
@@ -2071,11 +2836,26 @@ def run_shell(command: str) -> str:
     run tests, or verify the app boots. Returns combined stdout+stderr."""
     return _tool_run_shell(command)
 
+
 @_register_tool
 def http_request(method: str, url: str, body: str = "") -> str:
     """Make an HTTP request to a running service. method: GET/POST/PUT/DELETE.
     body: JSON string for POST/PUT. Returns HTTP status + response body."""
     return _tool_http_request(method, url, body)
+
+@_register_tool
+def download_url(url: str, dest_path: str) -> str:
+    """Download a file from a public https URL into code/<dest_path> (e.g. assets/textures/grass.png).
+    For textures and small binaries; use write_code_file for source. Respects AGENT_DOWNLOAD_MAX_BYTES."""
+    return _tool_download_url(url, dest_path)
+
+@_register_tool
+def web_search(query: str, focus: str = "") -> str:
+    """Search the web for official docs, CLI syntax, install steps, or test commands when the project
+    stack is unfamiliar — instead of guessing language-specific commands. Call before run_shell when unsure.
+    query: what to look up (e.g. 'deno run typescript', 'gradle test single class').
+    focus: optional hint (e.g. 'windows', 'install', 'ci')."""
+    return _tool_web_search(query, focus)
 
 @_register_tool
 def start_service(name: str, command: str) -> str:
@@ -2143,6 +2923,21 @@ def write_config_file(filename: str, content: str) -> str:
 def read_file(filename: str) -> str:
     """Read an existing file from any company_output/ subdirectory."""
     return _tool_read_file(filename)
+
+@_register_tool
+def create_directory(relative_path: str, root: str = "code") -> str:
+    """Create a folder (and parent folders) under the project. root: code, tests, config, or design."""
+    return _tool_create_directory(relative_path, root)
+
+@_register_tool
+def delete_file(relative_path: str, root: str = "code") -> str:
+    """Delete one file under the project (not a directory). root: code, tests, config, or design."""
+    return _tool_delete_file(relative_path, root)
+
+@_register_tool
+def remove_empty_directory(relative_path: str, root: str = "code") -> str:
+    """Remove one empty directory. Delete files inside first if needed."""
+    return _tool_remove_empty_directory(relative_path, root)
 
 @_register_tool
 def list_files() -> str:
@@ -2248,7 +3043,11 @@ def launch_application(command: str) -> str:
         return "ERROR: empty command"
     try:
         import subprocess
-        home = str(Path.home())
+        # Run from merged product tree so `python main.py` / relative paths resolve.
+        launch_root = OUTPUT_DIR / "code"
+        launch_root.mkdir(parents=True, exist_ok=True)
+        launch_cwd = str(launch_root.resolve())
+        launch_env = _subprocess_env_for_project(launch_root)
         if sys.platform == "win32":
             _detached = getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
             _newgrp = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
@@ -2259,7 +3058,8 @@ def launch_application(command: str) -> str:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 close_fds=False,
-                cwd=home,
+                cwd=launch_cwd,
+                env=launch_env,
                 creationflags=_detached | _newgrp,
             )
         else:
@@ -2270,7 +3070,8 @@ def launch_application(command: str) -> str:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 close_fds=True,
-                cwd=home,
+                cwd=launch_cwd,
+                env=launch_env,
                 start_new_session=True,
             )
         logger.info(f"[launch_application] pid={proc.pid} cmd={cmd[:300]!r}")
@@ -2519,26 +3320,29 @@ _ROLE_TOOL_NAMES: Dict[str, List[str]] = {
     "visual_designer":    ["create_style_guide", "write_design_file", "read_file",
                            "list_files", "search_codebase"] + _DASHBOARD_RO_TOOLS,
     "unit_tester":        ["write_test_file", "validate_python", "scan_vulnerabilities",
+                           "web_search", "run_shell", "start_service", "stop_service", "http_request",
+                           "read_file", "list_files", "search_codebase",
+                           "open_app", "browser_action", "close_browser", "launch_application",
+                           "desktop_screenshot", "desktop_mouse", "desktop_keyboard"] + _DASHBOARD_RO_TOOLS,
+    "integration_tester": ["write_test_file", "validate_python", "validate_json", "web_search",
                            "run_shell", "start_service", "stop_service", "http_request",
                            "read_file", "list_files", "search_codebase",
                            "open_app", "browser_action", "close_browser", "launch_application",
                            "desktop_screenshot", "desktop_mouse", "desktop_keyboard"] + _DASHBOARD_RO_TOOLS,
-    "integration_tester": ["write_test_file", "validate_python", "validate_json", "run_shell",
-                           "start_service", "stop_service", "http_request",
-                           "read_file", "list_files", "search_codebase",
-                           "open_app", "browser_action", "close_browser", "launch_application",
-                           "desktop_screenshot", "desktop_mouse", "desktop_keyboard"] + _DASHBOARD_RO_TOOLS,
-    "security_auditor":   ["write_test_file", "scan_vulnerabilities", "check_owasp", "run_shell",
-                           "start_service", "stop_service", "http_request",
+    "security_auditor":   ["write_test_file", "scan_vulnerabilities", "check_owasp", "web_search",
+                           "run_shell", "start_service", "stop_service", "http_request",
                            "read_file", "list_files", "search_codebase",
                            "open_app", "browser_action", "close_browser", "launch_application",
                            "desktop_screenshot", "desktop_mouse", "desktop_keyboard"] + _DASHBOARD_RO_TOOLS,
 }
 _DEV_TOOL_NAMES = ["write_code_file", "write_file_section", "write_test_file",
                    "validate_python", "validate_json",
-                   "validate_yaml", "write_config_file", "read_file", "run_shell",
+                   "validate_yaml", "write_config_file", "read_file",
+                   "create_directory", "delete_file", "remove_empty_directory",
+                   "run_shell",
                    "list_files", "search_codebase", "start_service", "stop_service",
-                   "http_request", "open_app", "browser_action", "close_browser", "launch_application",
+                   "http_request", "download_url", "web_search",
+                   "open_app", "browser_action", "close_browser", "launch_application",
                    "desktop_screenshot", "desktop_mouse", "desktop_keyboard",
                    # Full dashboard / messaging suite — Gemini SDK raises KeyError
                    # if the model tries to call a function that isn't in the tool list,
@@ -2551,7 +3355,8 @@ _DEV_TOOL_NAMES = ["write_code_file", "write_file_section", "write_test_file",
 _DEV_WRITE_ONLY_TOOL_NAMES = [
     "write_code_file", "write_file_section", "write_test_file",
     "write_config_file", "validate_python", "validate_json", "validate_yaml",
-    "run_shell", "start_service", "stop_service",
+    "create_directory", "delete_file", "remove_empty_directory",
+    "run_shell", "start_service", "stop_service", "download_url", "web_search",
 ]
 
 def _dev_tools_for_attempt(role_key: str, retry_count: int) -> List[str]:
@@ -2570,8 +3375,10 @@ def _dev_tools_for_attempt(role_key: str, retry_count: int) -> List[str]:
 _ENG_MANAGER_TOOL_NAMES = [
     "read_file", "list_files", "search_codebase",
     "write_code_file", "write_config_file",
+    "create_directory", "delete_file", "remove_empty_directory",
     "validate_python", "validate_json", "validate_yaml",
-    "run_shell", "start_service", "stop_service", "http_request", "launch_application",
+    "run_shell", "start_service", "stop_service", "http_request", "download_url", "web_search",
+    "launch_application",
     "desktop_screenshot", "desktop_mouse", "desktop_keyboard",
 ] + _DASHBOARD_RO_TOOLS
 
@@ -2636,7 +3443,17 @@ def _run_with_tools(
                     )
                 try:
                     result = fn(*args, **kwargs)
-                    entry = f"[TOOL: {fn.__name__}] {arg_repr}"
+                    _tn = fn.__name__
+                    # Desktop tools can return ERROR: strings without raising — the manager fix loop
+                    # must not count failed/no-op calls as verified GUI interaction.
+                    if _tn in ("desktop_screenshot", "desktop_mouse", "desktop_keyboard"):
+                        _dok = (
+                            isinstance(result, str)
+                            and not result.lstrip().upper().startswith("ERROR")
+                        )
+                        entry = f"[TOOL: {_tn}|{'ok' if _dok else 'fail'}] {arg_repr}"
+                    else:
+                        entry = f"[TOOL: {_tn}] {arg_repr}"
                     with _tool_inv_lock:
                         _tool_invocations.append(entry)
                     if is_list:
@@ -3852,7 +4669,8 @@ def run_team(
             f"  list_files() to see everything written.\n"
             f"  read_file() the entry point and any config files (requirements.txt, package.json,\n"
             f"  docker-compose.yml, Makefile, etc.) to understand exactly how this app is started.\n"
-            f"  Determine: what is the boot command? what port does it run on? what is the health endpoint?\n\n"
+            f"  Determine: what is the boot command? what port does it run on? what is the health endpoint?\n"
+            f"  web_search() if you need confirmation for an unfamiliar framework or CLI.\n\n"
             f"STEP 2 — Audit and fix\n"
             f"  read_file() every file in the NEW FILES and AFFECTED FILES lists.\n"
             f"  search_codebase() for import mismatches, wrong function names, missing symbols.\n"
@@ -3864,7 +4682,7 @@ def run_team(
             f"  Using what you learned in Step 1:\n"
             f"    start_service('app', '<the actual boot command you found>')\n"
             f"    http_request('GET', '<the actual health or root URL you found>')\n"
-            f"    run_shell('pytest') or run_shell('npm test') if test files exist\n"
+            f"    run_shell(the project's test command) if tests exist — web_search if the stack is unfamiliar\n"
             f"    stop_service('app')\n"
             f"  Do NOT use placeholder commands. Use the real boot command from the codebase.\n"
             f"  Do NOT declare INTEGRATION: DONE without showing actual HTTP response output.\n"
@@ -4140,6 +4958,7 @@ def _generate_contracts(
             f"The developers will use broadcasting and messaging to agree on the exact interfaces as they build them.\n\n"
             f"Output EXACTLY this JSON structure (no markdown fences, just raw JSON):\n"
             f'{{\n'
+            f'  "primary_language": "python",\n'
             f'  "build_command": "python server.py",\n'
             f'  "build_file": "requirements.txt",\n'
             f'  "dependencies": ["sqlite3"],\n'
@@ -4156,6 +4975,8 @@ def _generate_contracts(
             f'  "entry_imports": []\n'
             f'}}\n\n'
             f"RULES:\n"
+            f"- Set 'primary_language' to the project's main stack: python, rust, go, javascript, typescript, "
+            f"java, csharp, cpp, kotlin, ruby, php, mixed, etc. The orchestrator uses this for env and verification.\n"
             f"- Every dev must own at least one file\n"
             f"- Use 'files' to define ownership and 'description' to give the collaborative goal\n"
             f"- The entry point file is SYSTEM-MANAGED — set its owner to 'system'\n"
@@ -4171,6 +4992,7 @@ def _generate_contracts(
             f"signatures, import paths, and data models. This prevents integration failures.\n\n"
             f"Output EXACTLY this JSON structure (no markdown fences, just raw JSON):\n"
             f'{{\n'
+            f'  "primary_language": "python",\n'
             f'  "build_command": "python server.py",\n'
             f'  "build_file": "requirements.txt",\n'
             f'  "dependencies": ["sqlite3"],\n'
@@ -4192,6 +5014,8 @@ def _generate_contracts(
             f'  "app_type": "web"\n'
             f'}}\n\n'
             f"RULES:\n"
+            f"- Set 'primary_language' to the project's main stack (python, rust, go, javascript, typescript, "
+            f"java, csharp, cpp, kotlin, mixed, …). Use 'mixed' if several languages are first-class.\n"
             f"- Every dev must own at least one file\n"
             f"- Shared models/types go in ONE file that everyone imports from\n"
             f"- The entry point file is SYSTEM-MANAGED — set its owner to 'system'\n"
@@ -4218,6 +5042,8 @@ def _generate_contracts(
             f"  'gui' (desktop window app), 'script' (one-shot script, no stdin loop), 'worker' (background daemon),\n"
             f"  'library' (no runnable entry point — only importable modules).\n"
             f"  Choose based on the PROJECT description. This controls how the manager verifies the app.\n"
+            f"  CRITICAL: Any desktop UI (tkinter, PyQt, wxPython, Electron window, JavaFX, etc.) MUST use "
+            f"app_type 'gui' — never 'cli' or 'script'. Otherwise integration will not require desktop_mouse/keyboard.\n"
         )
 
     contract_output = llm_call(
@@ -4869,6 +5695,7 @@ def _run_build_command(registry: InterfaceContractRegistry) -> str:
     try:
         result = subprocess.run(
             registry.build_command, shell=True, cwd=str(code_dir),
+            env=_subprocess_env_for_project(code_dir),
             capture_output=True, text=True, timeout=60,
             encoding="utf-8", errors="replace",
         )
@@ -4890,6 +5717,77 @@ class TestGateResult:
     command: str     # command that ran (empty if skipped)
 
 
+def _resolve_cmake_tool(name: str) -> Optional[str]:
+    """Resolve ``cmake`` or ``ctest`` (PATH or typical Windows Kitware install under Program Files)."""
+    import shutil
+
+    w = shutil.which(name)
+    if w:
+        return w
+    if sys.platform == "win32":
+        roots: List[str] = []
+        for pf in ("ProgramFiles", "ProgramFiles(x86)"):
+            r = os.environ.get(pf)
+            if r:
+                roots.append(r)
+        # Fallback if env is stripped (rare in subprocess sandboxes)
+        roots.extend(["C:\\Program Files", "C:\\Program Files (x86)"])
+        seen: set = set()
+        for root in roots:
+            if root in seen:
+                continue
+            seen.add(root)
+            p = Path(root) / "CMake" / "bin" / f"{name}.exe"
+            if p.is_file():
+                return str(p)
+    return None
+
+
+def _cmake_build_is_msvc_multi_config(code_dir: Path) -> bool:
+    """True if build/ looks like a Visual Studio multi-config generator (needs --config Release)."""
+    b = code_dir / "build"
+    if not b.is_dir():
+        return False
+    if sys.platform != "win32":
+        return False
+    if any(b.glob("*.sln")):
+        return True
+    cache = b / "CMakeCache.txt"
+    if cache.exists():
+        try:
+            txt = cache.read_text(encoding="utf-8", errors="ignore")
+            if "Visual Studio" in txt and "Ninja" not in txt:
+                return True
+        except OSError:
+            pass
+    return False
+
+
+def _cmake_test_gate_command(code_dir: Path) -> Optional[str]:
+    """Build cmake+ctest shell command with resolved executables; None if cmake missing."""
+    cmake = _resolve_cmake_tool("cmake")
+    if not cmake:
+        return None
+    ctest = _resolve_cmake_tool("ctest")
+    if not ctest:
+        alt = Path(cmake).parent / ("ctest.exe" if sys.platform == "win32" else "ctest")
+        if alt.is_file():
+            ctest = str(alt)
+    if not ctest:
+        return None
+
+    def _q(p: str) -> str:
+        return f'"{p}"' if " " in p else p
+
+    qc, qt = _q(cmake), _q(ctest)
+    if _cmake_build_is_msvc_multi_config(code_dir):
+        return (
+            f"{qc} --build build --config Release && "
+            f"{qt} --test-dir build -C Release --output-on-failure"
+        )
+    return f"{qc} --build build && {qt} --test-dir build --output-on-failure"
+
+
 def _run_test_gate(code_dir: Path) -> TestGateResult:
     """
     Run the project's test suite.
@@ -4907,6 +5805,7 @@ def _run_test_gate(code_dir: Path) -> TestGateResult:
                 result = subprocess.run(
                     hook_cmd, shell=True, capture_output=True, text=True,
                     timeout=60, cwd=str(code_dir),
+                    env=_subprocess_env_for_project(code_dir),
                     encoding="utf-8", errors="replace",
                 )
                 raw = ((result.stdout or "") + (result.stderr or ""))[-4000:]
@@ -4980,10 +5879,21 @@ def _run_test_gate(code_dir: Path) -> TestGateResult:
         cmd = "mvn test -q"
     elif _has_file("build.gradle", "build.gradle.kts"):
         cmd = "gradle test"
-    elif _has_file("*.csproj") or any(code_dir.glob("*.sln")):
+    elif any(code_dir.glob("*.csproj")) or any(code_dir.glob("*.sln")):
         cmd = "dotnet test"
     elif _has_file("CMakeLists.txt"):
-        cmd = "cmake --build build/ && ctest --test-dir build/ --output-on-failure"
+        cmd = _cmake_test_gate_command(code_dir)
+        if not cmd:
+            return TestGateResult(
+                passed=False,
+                skipped=False,
+                output=(
+                    "cmake not found on PATH and not under Program Files\\CMake\\bin. "
+                    "Install CMake or add it to PATH so the test gate can run "
+                    "`cmake --build build` and `ctest`."
+                ),
+                command="(cmake not found)",
+            )
     elif _makefile_has_test():
         cmd = "make test"
     elif _has_test_files("*.spec.ts", "*.spec.js", "*.test.ts", "*.test.js") or _has_file("package.json"):
@@ -4997,6 +5907,7 @@ def _run_test_gate(code_dir: Path) -> TestGateResult:
         result = subprocess.run(
             cmd, shell=True, capture_output=True, text=True,
             timeout=120, cwd=str(code_dir),
+            env=_subprocess_env_for_project(code_dir),
             encoding="utf-8", errors="replace",
         )
         raw = ((result.stdout or "") + (result.stderr or ""))[-4000:]
@@ -5021,9 +5932,10 @@ class SelfVerifyResult:
 def _run_self_verify(code_dir: Path, eng_task: "EngTask") -> SelfVerifyResult:
     """Run lightweight per-file verification after an agent's merge.
 
-    Checks:
-      - Python: ``python -c "import <module>"`` + matching test file
-      - JS/TS: ``node --check <file>``
+    Checks (when applicable):
+      - Python: import smoke + matching pytest file
+      - JS/TS: node --check / tsc
+      - Rust/Go: ``cargo check`` / ``go vet`` when manifest present
       - Dockerfile / YAML / JSON: syntax validation
     Returns SelfVerifyResult; fault attribution is done by the caller.
     """
@@ -5035,10 +5947,17 @@ def _run_self_verify(code_dir: Path, eng_task: "EngTask") -> SelfVerifyResult:
     suffix = fpath.suffix.lower()
 
     if suffix == ".py":
-        mod_path = eng_task.file.replace("/", ".").replace("\\", ".")
-        if mod_path.endswith(".py"):
-            mod_path = mod_path[:-3]
-        checks.append(f"{sys.executable} -c \"import {mod_path}\"")
+        # Syntax parse always (avoids flaky package import before app/__init__.py exists).
+        checks.append(
+            f"{sys.executable} -c "
+            f"\"import ast, pathlib; ast.parse(pathlib.Path(r'{fpath}').read_text(encoding='utf-8'))\""
+        )
+        rel_slash = eng_task.file.replace("\\", "/")
+        if "/" not in rel_slash:
+            mod_path = rel_slash
+            if mod_path.endswith(".py"):
+                mod_path = mod_path[:-3]
+            checks.append(f"{sys.executable} -c \"import {mod_path}\"")
         _test_candidates = [
             code_dir / "tests" / f"test_{fpath.name}",
             code_dir / "tests" / f"{fpath.stem}_test.py",
@@ -5053,6 +5972,10 @@ def _run_self_verify(code_dir: Path, eng_task: "EngTask") -> SelfVerifyResult:
     elif suffix in (".ts", ".tsx"):
         npx = "npx.cmd" if sys.platform == "win32" else "npx"
         checks.append(f"{npx} tsc --noEmit {str(fpath)} 2>&1 || true")
+    elif suffix == ".rs" and (code_dir / "Cargo.toml").exists():
+        checks.append("cargo check -q")
+    elif suffix == ".go" and (code_dir / "go.mod").exists():
+        checks.append("go vet ./...")
     elif suffix in (".json",):
         checks.append(f"{sys.executable} -c \"import json, pathlib; json.loads(pathlib.Path(r'{fpath}').read_text())\"")
     elif suffix in (".yml", ".yaml"):
@@ -5068,6 +5991,7 @@ def _run_self_verify(code_dir: Path, eng_task: "EngTask") -> SelfVerifyResult:
         try:
             proc = subprocess.run(
                 cmd, shell=True, cwd=str(code_dir),
+                env=_subprocess_env_for_project(code_dir),
                 capture_output=True, text=True, timeout=30,
                 encoding="utf-8", errors="replace",
             )
@@ -5410,6 +6334,7 @@ def _generate_entry_point_via_llm(
         f"  - Import and wire ALL modules listed above\n"
         f"  - The app must be runnable with: {registry.build_command or 'appropriate command'}\n"
         f"  - Output ONLY the file content, no markdown fences\n"
+        f"  - Do NOT append CHANGES:, VALIDATION:, STANCE:, HANDOFF:, or any prose summary — executable source only\n"
         f"  - Make it production-ready with error handling\n"
         "\nINTEGRATION RULES:\n"
         "  - The entry point will be AUTO-GENERATED — do NOT create it yourself\n"
@@ -5424,9 +6349,18 @@ def _generate_entry_point_via_llm(
             if m:
                 source = m.group(1)
         if source and source.strip():
+            body = source.strip()
+            if str(registry.entry_point).endswith(".py"):
+                body = _strip_llm_summary_lines(body)
+                try:
+                    ast.parse(body)
+                except SyntaxError as se:
+                    logger.warning(
+                        f"[generate_entry_point] Python still invalid after prose strip: {se}"
+                    )
             ep_path = code_dir / registry.entry_point
             ep_path.parent.mkdir(parents=True, exist_ok=True)
-            ep_path.write_text(source.strip() + "\n", encoding="utf-8")
+            ep_path.write_text(body.rstrip() + "\n", encoding="utf-8")
             return True
     except Exception as e:
         logger.warning(f"  LLM entry-point generation failed: {e}")
@@ -5458,7 +6392,21 @@ def _emit_build_scaffold_via_llm(
         f"DEPENDENCIES: {registry.dependencies}\n"
         f"BUILD COMMAND: {registry.build_command}\n\n"
         f"Output ONLY the file content, no markdown fences.\n"
+        f"Do NOT append CHANGES:, VALIDATION:, STANCE:, HANDOFF:, or any prose summary.\n"
     )
+    if str(registry.build_file).endswith("requirements.txt"):
+        prompt += (
+            "\nPYTHON REQUIREMENTS.TXT RULES:\n"
+            "  - For pygame, PyOpenGL, or other C-extension packages: prefer flexible pins "
+            "(e.g. pygame>=2.5.0) over == pins that force sdist builds.\n"
+            "  - When a package often has no wheel for brand-new CPython (e.g. pygame on Windows), "
+            "use PEP 508 environment markers so pip does not try to compile from source on those "
+            "interpreters — e.g. `pygame>=2.5.0; python_version < \"3.14\"` plus a # comment telling "
+            "developers to use a 3.11–3.12 venv for full deps.\n"
+            "  - Add a short # comment at the top if native wheels matter: on Windows, "
+            "Python 3.11 or 3.12 (64-bit) usually gets pre-built wheels; very new Python "
+            "versions may lack wheels and pip will try to compile (often fails without MSYS2).\n"
+        )
     is_json = registry.build_file.endswith(".json")
     for attempt in range(3):
         try:
@@ -5469,7 +6417,7 @@ def _emit_build_scaffold_via_llm(
                     source = m.group(1)
             if not source or not source.strip():
                 continue
-            content = source.strip()
+            content = _strip_llm_summary_lines(source.strip())
             # Validate JSON files before writing
             if is_json:
                 # Robustly extract just the outermost {...} block — ignore trailing text
@@ -5484,7 +6432,7 @@ def _emit_build_scaffold_via_llm(
                     prompt += f"\n\nPREVIOUS ATTEMPT WAS INVALID JSON: {je}\nOutput ONLY valid JSON, no comments, no markdown."
                     continue
             bf_path.parent.mkdir(parents=True, exist_ok=True)
-            bf_path.write_text(content + "\n", encoding="utf-8")
+            bf_path.write_text(content.rstrip() + "\n", encoding="utf-8")
             return True
         except Exception as e:
             logger.warning(f"  LLM build-config generation failed: {e}")
@@ -5530,6 +6478,7 @@ def _setup_project(code_dir: Path) -> None:
     try:
         result = subprocess.run(
             install_cmd, shell=True, cwd=str(code_dir),
+            env=_subprocess_env_for_project(code_dir),
             capture_output=True, text=True, timeout=180,
             encoding="utf-8", errors="replace",
         )
@@ -5575,18 +6524,19 @@ def _manager_saw_start_service(tool_results: List[str]) -> bool:
 
 
 def _manager_saw_desktop_interaction(tool_results: List[str]) -> bool:
-    """True if manager actually interacted with the GUI (mouse/keyboard).
-    Screenshot-only does not count as interaction."""
+    """True if mouse/keyboard ran successfully (tool returned non-ERROR text).
+    Screenshot-only does not count; failed desktop_* calls do not count."""
     trs = tool_results or []
     return any(
-        tr.startswith("[TOOL: desktop_mouse]")
-        or tr.startswith("[TOOL: desktop_keyboard]")
+        tr.startswith("[TOOL: desktop_mouse|ok]")
+        or tr.startswith("[TOOL: desktop_keyboard|ok]")
         for tr in trs
     )
 
 
 def _count_desktop_screenshots(tool_results: List[str]) -> int:
-    return sum(1 for tr in (tool_results or []) if tr.startswith("[TOOL: desktop_screenshot]"))
+    """Count successful screenshots only (disabled desktop / pyautogui → ERROR → not counted)."""
+    return sum(1 for tr in (tool_results or []) if tr.startswith("[TOOL: desktop_screenshot|ok]"))
 
 
 def _manager_saw_http_request(tool_results: List[str]) -> bool:
@@ -5677,6 +6627,22 @@ def _manager_fix_loop(
         else ""
     )
 
+    _gui_desktop_env_warn = ""
+    if app_type == "gui":
+        _has_pyautogui = True
+        try:
+            import pyautogui as _pa  # noqa: F401
+        except ImportError:
+            _has_pyautogui = False
+        if not AGENT_DESKTOP_CONTROL_ENABLED or not _has_pyautogui:
+            _gui_desktop_env_warn = (
+                "\nGUI VERIFICATION PREREQUISITES (required or integration cannot pass):\n"
+                "  - Set AGENT_DESKTOP_CONTROL_ENABLED=1 in the environment (e.g. .env).\n"
+                "  - Install pyautogui: pip install pyautogui\n"
+                "  - Only successful desktop_* tool results count: if a call returns a line starting "
+                "with ERROR, fix the environment and call the tool again until it succeeds.\n"
+            )
+
     for round_num in range(1, max_rounds + 1):
         logger.info(f"[ManagerFix] round {round_num}/{max_rounds} — running verification…")
 
@@ -5705,11 +6671,24 @@ def _manager_fix_loop(
         file_list: List[str] = []
         try:
             for p in sorted(code_dir.rglob("*")):
-                if p.is_file() and ".git" not in p.parts and "node_modules" not in p.parts:
+                if p.is_file() and not _is_ignored_project_path(p):
                     file_list.append(str(p.relative_to(code_dir)).replace("\\", "/"))
         except Exception:
             pass
         files_section = "\n".join(file_list[:200]) if file_list else "(unable to list files)"
+
+        _gui_cumulative = ""
+        if app_type == "gui":
+            _gui_cumulative = (
+                f"── GUI verification status (cumulative across manager rounds) ──\n"
+                f"  start_service recorded: {'yes' if manager_ran_start_service else 'no'}\n"
+                f"  successful desktop_screenshot: {manager_desktop_screenshots} (need ≥2)\n"
+                f"  desktop_mouse OR desktop_keyboard (success): "
+                f"{'yes' if manager_ran_desktop_action else 'NO — still required'}\n"
+                f"  If boot is already yes: do NOT redo pip install/freeze, tasklist, or tkinter python -c checks — "
+                f"they do not count. Use desktop_mouse from screenshot coordinates, then another desktop_screenshot.\n"
+                f"  Never use run_shell with `python main.py &` on Windows (times out); GUI runs via start_service / launch_application only.\n\n"
+            )
 
         if errors:
             error_block = "\n\n".join(errors)[-4000:]
@@ -5717,7 +6696,9 @@ def _manager_fix_loop(
             _gui_extra = (
                 "GUI-SPECIFIC REQUIREMENT (applies even during error rounds):\n"
                 "  - Launch the desktop app; call desktop_screenshot() before interaction and again after.\n"
-                "  - Use desktop_mouse() and/or desktop_keyboard() at least once (screenshot-only is not enough).\n"
+                "  - Use desktop_mouse() (e.g. click on a visible button in the app) and/or "
+                "desktop_keyboard() at least once — screenshot-only is not enough.\n"
+                "  - Prefer clicking coordinates read from desktop_screenshot over alt+tab window switching.\n"
                 "  - Describe what changed on screen after each interaction.\n"
                 if app_type == "gui" else ""
             )
@@ -5738,12 +6719,15 @@ def _manager_fix_loop(
                 f"  1. Use read_file() to inspect the relevant files.\n"
                 f"  2. Use write_code_file() to fix the code.\n"
                 f"  3. Use run_shell() to re-run specific commands if needed.\n"
+                f"  3b. Use web_search() when the failure involves an unfamiliar stack or CLI you are guessing.\n"
                 f"  4. Focus on the FIRST error — fixing it often resolves cascading failures.\n"
                 f"NON-NEGOTIABLE: Before integration is complete you MUST run the real application "
                 f"at least once (method depends on app_type='{app_type}' — see mandatory boot "
                 f"instructions you will receive once tests are green).\n"
+                f"{_gui_cumulative}"
                 f"{_gui_extra}"
                 f"{_web_extra}"
+                f"{_gui_desktop_env_warn}"
                 f"Do NOT just describe what to do — actually make the changes with tools.\n"
             )
         else:
@@ -5763,8 +6747,8 @@ def _manager_fix_loop(
             if _needs_start_service:
                 _run_instructions = (
                     f"REQUIRED (use tools, not prose only):\n"
-                    f"  1. list_files() / read_file('app/main.py') to find the run command.\n"
-                    f"     Common: 'python app/main.py', 'uvicorn app.main:app --port 8000'\n"
+                    f"  1. list_files() / read_file() entry + manifest to find the run command.\n"
+                    f"     web_search() if the framework's boot command is unclear.\n"
                     f"  2. start_service('app', '<run command>') — starts server in background.\n"
                     f"     If it returns 'CRASHED immediately', read the traceback and fix the file.\n"
                     f"  3. http_request('GET', 'http://localhost:<port>/health') — confirm response.\n"
@@ -5778,42 +6762,60 @@ def _manager_fix_loop(
                     f"  2. launch_application('<run command>') — opens the GUI window.\n"
                     f"  3. desktop_screenshot() — baseline; then desktop_mouse() / desktop_keyboard().\n"
                     f"  4. desktop_screenshot() again — proof the UI changed after interaction.\n"
-                    f"     (At least TWO screenshots this session, plus real mouse/keyboard use.)\n"
-                    f"  5. Verify EACH checklist item using further screenshots as needed.\n"
+                    f"     (At least TWO successful screenshots this session, plus real mouse OR keyboard.)\n"
+                    f"  5. Prefer desktop_mouse('click', x, y) using coordinates from the screenshot description;\n"
+                    f"     avoid relying only on desktop_keyboard('press', keys='alt,tab') to find the window.\n"
+                    f"  6. Verify EACH checklist item using further screenshots as needed.\n"
                     f"  NOTE: call start_service() with the run command too — the orchestrator \n"
                     f"  tracks this to confirm you booted the app.\n"
                     f"  Do NOT use run_shell() for the full GUI main script — it blocks until the window closes.\n"
+                    f"  FORBIDDEN as GUI proof: run_shell(tasklist), pip freeze, pip install loops, or python -c tkinter one-liners.\n"
                 )
             elif app_type in ("cli", "script"):
+                _pl = (registry.primary_language or "").strip() or "python"
                 _run_instructions = (
                     f"REQUIRED (use tools, not prose only):\n"
-                    f"  1. read_file() to find the entry point and understand expected arguments.\n"
-                    f"  2. run_shell('python <entry_point> --help') — confirm it starts without crashing.\n"
-                    f"  3. run_shell('python <entry_point> <args>') — exercise the main functionality.\n"
+                    f"  Contract primary_language: {_pl!r} — use the real interpreter/build for this repo.\n"
+                    f"  1. read_file() to find the entry point and expected arguments.\n"
+                    f"  2. run_shell() a safe smoke (often --help or equivalent). If unsure of the CLI, web_search first.\n"
+                    f"  3. run_shell() the real run command from the contract / README — exercise main functionality.\n"
                     f"     Exit code 0 = success. Any non-zero or traceback = failure to fix.\n"
                     f"  4. Verify EACH checklist item by running the CLI with relevant arguments.\n"
-                    f"  NOTE: also call start_service('<entry_point>', 'python <entry_point>') \n"
-                    f"  (it will exit immediately which is fine) so the orchestrator knows you ran it.\n"
+                    f"  NOTE: also call start_service('<name>', '<same run command>') so the orchestrator "
+                    f"records that you ran it (short-lived exit is fine).\n"
                 )
             else:  # library
+                _pl = (registry.primary_language or "").strip() or "python"
                 _run_instructions = (
                     f"REQUIRED (use tools, not prose only):\n"
-                    f"  1. run_shell('python -c \"import <package>; print(<package>.__version__)\"')\n"
-                    f"     — confirm the library imports without error.\n"
-                    f"  2. run_shell('python -m pytest . --tb=short -q') to run any example/tests.\n"
+                    f"  Contract primary_language: {_pl!r}.\n"
+                    f"  1. run_shell() an import/compile check appropriate for this stack "
+                    f"(read pyproject/Cargo.toml/go.mod/etc.; web_search if unsure).\n"
+                    f"  2. run_shell() the project's test command from the repo (README, Makefile, CI).\n"
                     f"  3. Verify EACH checklist item is importable and callable.\n"
-                    f"  NOTE: call start_service('lib', 'python -c \"import <package>\"') \n"
-                    f"  so the orchestrator records that you verified the library.\n"
+                    f"  NOTE: call start_service with a short exiting check command so the orchestrator "
+                    f"records verification.\n"
                 )
 
+            _mgr_session_note = "You have NOT yet completed mandatory application verification in this manager session.\n\n"
+            if app_type == "gui" and (
+                manager_ran_start_service or manager_desktop_screenshots or manager_ran_desktop_action
+            ):
+                _mgr_session_note = (
+                    "Some verification tools already ran in a prior round — read the status block below. "
+                    "Complete only what is missing (usually desktop_mouse + a second screenshot). "
+                    "Do not repeat environment audit commands (pip freeze, tasklist, tkinter -c) — they do not satisfy GUI rules.\n\n"
+                )
             prompt = (
                 f"You are the Engineering Manager — MANDATORY {_verb} "
                 f"(round {round_num}/{max_rounds}).\n\n"
                 f"app_type: {app_type!r} — use the appropriate verification method below.\n"
                 f"Automated tests currently pass (or there is no failing gate).\n"
-                f"You have NOT yet run the application in this manager session.\n\n"
+                f"{_gui_cumulative}"
+                f"{_mgr_session_note}"
                 f"Contract build_command hint: {build_cmd_hint!r}\n\n"
                 f"{_run_instructions}"
+                f"{_gui_desktop_env_warn}"
                 f"{_hints_section}\n"
                 f"PROJECT FILES:\n{files_section}\n\n"
                 f"TASK QUEUE STATUS:\n{task_queue.get_status()}\n"
@@ -5886,8 +6888,9 @@ def _manager_fix_loop(
     if tests_build_ok and manager_ran_start_service and app_type == "gui" and not _desktop_ok:
         msg = (
             "Tests/build passed and start_service was used, but GUI verification is incomplete: "
-            "the manager must call desktop_mouse() or desktop_keyboard() at least once and "
-            "desktop_screenshot() at least twice (before and after interaction)."
+            "the manager needs at least one successful desktop_mouse or desktop_keyboard call "
+            "(non-ERROR result) and at least two successful desktop_screenshot calls. "
+            "If tools returned ERROR, set AGENT_DESKTOP_CONTROL_ENABLED=1 and pip install pyautogui, then retry."
         )
         logger.warning(f"[ManagerFix] {msg}")
         return ManagerFixResult(
@@ -6028,6 +7031,7 @@ def run_engineering_team(
                         logger.info(f"[{dev_key}] running pre-flight '{build_cmd}' (timeout=30s)...")
                         result = subprocess.run(
                             build_cmd, shell=True, cwd=str(code_dir),
+                            env=_subprocess_env_for_project(code_dir),
                             capture_output=True, text=True, timeout=30,
                             encoding="utf-8", errors="replace",
                         )
@@ -6292,7 +7296,10 @@ def run_engineering_team(
                 if TASK_CREATED_HOOKS:
                     _task_rejected = False
                     _hook_outputs: List[str] = []
-                    _task_env = {**os.environ, "ENG_TASK_DESCRIPTION": eng_task.description}
+                    _task_env = {
+                        **_subprocess_env_for_project(code_dir),
+                        "ENG_TASK_DESCRIPTION": eng_task.description,
+                    }
                     for _hook_cmd in TASK_CREATED_HOOKS:
                         try:
                             _hook_proc = subprocess.run(
@@ -6544,6 +7551,7 @@ def run_engineering_team(
                             try:
                                 subprocess.run(
                                     _install_cmd, shell=True, cwd=str(code_dir),
+                                    env=_subprocess_env_for_project(code_dir),
                                     capture_output=True, text=True, timeout=180,
                                     encoding="utf-8", errors="replace",
                                 )
@@ -6606,6 +7614,7 @@ def run_engineering_team(
                     _idle_proc = subprocess.run(
                         _idle_cmd, shell=True, capture_output=True, text=True,
                         timeout=60, cwd=str(code_dir),
+                        env=_subprocess_env_for_project(code_dir),
                         encoding="utf-8", errors="replace",
                     )
                     _idle_out = ((_idle_proc.stdout or "") + (_idle_proc.stderr or ""))[-2000:]

@@ -1,0 +1,87 @@
+=== QUANTUM SWARM — ENGINEERS-ONLY SPRINT BRIEF (paste or use: python run_engineers_only.py -f prompts/engineers_only_full_task_template.txt) ===
+
+PRODUCT SUMMARY
+  Build a small, playable voxel-style sandbox prototype in Python: discrete blocks in a chunked
+  world, first-person-style movement (WASD + mouse look), place and break blocks with mouse
+  buttons, and a readable top-down or pseudo-3D view. This is an original codebase inspired by
+  block-building games — do not use Minecraft assets, names, or official APIs.
+
+TARGET USER
+  A developer running locally who wants to launch one command, see a window, move around, and
+  modify the world.
+
+NON-GOALS (do not spend sprint time here)
+  - Multiplayer networking, authentication, or persistence beyond optional JSON save.
+  - Realistic lighting, PBR, or chunk meshing like a shipping game engine.
+  - Parity with any commercial game.
+
+TECH STACK (lock these unless impossible)
+  - Python 3.11+ (prefer 3.12 for pygame wheels on Windows).
+  - pygame for window, input, and 2D drawing.
+  - numpy allowed for math if helpful.
+  - unittest for tests; integration script or module named __integration__ is acceptable if the
+    orchestrator expects it.
+
+REPOSITORY LAYOUT — create this tree under eng_output (agents write to code/ and config/ via tools)
+
+  code/
+    main.py                      # Entry: init pygame, wire world / player / renderer / input, game loop.
+    app/
+      __init__.py
+      models/
+        __init__.py
+        voxel.py                 # Vec3, BlockType enum, Chunk (e.g. 16³), block storage API.
+      logic/
+        __init__.py
+        world.py                 # WorldManager: get/set block, chunk addressing, optional save/load.
+        player.py                # Position, yaw/pitch, WASD movement, gravity, ground clamp.
+      engine/
+        __init__.py
+        renderer.py              # Draw sky, blocks in camera-relative space; follow player.
+        input.py                 # pygame events: quit, mouse buttons for place/break, optional keys.
+
+  tests/
+    test_voxel.py                # Chunk get/set, coordinates.
+    test_world.py                # WorldManager block round-trip across chunk boundary if implemented.
+    test_player.py               # Movement / rotation sanity (no pygame window required if mocked).
+
+  config/
+    Dockerfile                   # Multi-stage optional; non-root if easy; run main.py with unbuffered stdout.
+    docker-compose.yml           # Optional service to build/run the game in a container (X11/vnc not required
+                                 # for CI — document that local play is host GUI; image still builds).
+    .dockerignore                # .git, .venv, __pycache__, *.pyc, eng_output artifacts.
+
+  design/
+    project_structure.md         # Copy the tree above + one paragraph describing module responsibilities.
+
+FUNCTIONAL REQUIREMENTS
+  F1 — World: finite or infinite logical space via chunks; at minimum one chunk with a flat ground
+        of grass/dirt and a few stone blocks for visual reference.
+  F2 — Player: spawn above ground; WASD moves relative to view yaw; mouse changes look; movement
+        must be visible (camera-relative rendering, not a fixed corner of the screen).
+  F3 — Interaction: left click removes targeted block; right click places a block (e.g. dirt) along
+        a simple ray/step in view direction; respect a short reach distance.
+  F4 — Loop: stable frame rate target ~60 FPS; clean shutdown on window close or Esc.
+  F5 — Dependencies: requirements.txt in code/ with pinned or lower-bounded versions; comment if
+        pygame is skipped on Python 3.14+ via environment markers.
+
+DOCKER / REPRODUCIBILITY
+  - Provide Dockerfile + docker-compose.yml + .dockerignore per prompts/docker_delivery.txt.
+  - Compose must at least build the application image successfully; document that GUI may require
+    host display for interactive play.
+  - validate_yaml on compose after writing.
+
+TESTING
+  - Unit tests runnable with: python -m pytest tests/ -q  OR  python -m unittest discover -s tests -p "test_*.py"
+  - No test may require a human to click the window to finish.
+
+INTEGRATION & CONTRACTS
+  - Modules must import each other with consistent symbols (e.g. WorldManager.set_block / get_block).
+  - Entry point must run with: python main.py from the code/ directory (document in comments).
+
+DEFINITION OF DONE (manager must verify)
+  - [ ] Tree above exists with real implementations (no TODO stubs in shipped paths).
+  - [ ] python main.py opens a window; player can move and look; blocks can be placed/broken.
+  - [ ] Tests pass without manual steps.
+  - [ ] Docker files present and compose YAML validates; docker compose config exits 0 if Docker installed.
+  - [ ] README or design/project_structure.md explains run commands for host and optional Docker build.

@@ -8,6 +8,8 @@ Just the engineering manager + 8 developers building from a task brief.
 Usage:
     python run_engineers_only.py
     python run_engineers_only.py "Build a REST API for a notes app with CRUD"
+    python run_engineers_only.py -f prompts/engineers_only_full_task_template.txt
+    python run_engineers_only.py --file prompts/engineers_only_full_task_template.txt
 
 Output goes to: eng_output/code/  and  eng_output/tests/
 """
@@ -68,8 +70,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("eng_sim")
 
-
-TASK = sys.argv[1] if len(sys.argv) > 1 else (
+_DEFAULT_TASK = (
     "Build a simple notes app backend using plain Python and SQLite. "
     "No frameworks — use only the standard library (http.server, sqlite3, json). "
     "Implement: POST /notes (create), GET /notes (list all), GET /notes/<id> (get one), "
@@ -78,6 +79,27 @@ TASK = sys.argv[1] if len(sys.argv) > 1 else (
     "Write tests in test_server.py using unittest. "
     "Keep it minimal and completable in 2 rounds."
 )
+
+
+def _parse_task(argv: list) -> str:
+    if len(argv) < 2:
+        return _DEFAULT_TASK
+    if argv[1] in ("-h", "--help"):
+        print(__doc__)
+        raise SystemExit(0)
+    if argv[1] in ("-f", "--file"):
+        if len(argv) < 3:
+            print("ERROR: -f/--file requires a path", file=sys.stderr)
+            raise SystemExit(2)
+        path = Path(argv[2])
+        if not path.is_file():
+            print(f"ERROR: task file not found: {path}", file=sys.stderr)
+            raise SystemExit(2)
+        return path.read_text(encoding="utf-8").strip()
+    return " ".join(argv[1:]).strip() or _DEFAULT_TASK
+
+
+TASK = _parse_task(sys.argv)
 
 
 def main():
