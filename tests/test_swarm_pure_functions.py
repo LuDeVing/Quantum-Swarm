@@ -12,6 +12,7 @@ import math
 import numpy as np
 import pytest
 import software_company as sc
+import software_company.llm_client as _llm_counters
 
 
 # ── perplexity_to_similarities ────────────────────────────────────────────────
@@ -36,11 +37,11 @@ class TestPerplexityToSimilarities:
         # log(max(1.0, 1.0)) = 0 → confusion=0
         # healthy  = 1 - 2*0 = 1.0
         # uncertain = 1 - 2*|0 - 0.5| = 1 - 1 = 0.0
-        # confused  = 2*0 - 1 = -1.0
+        # confused  = clamp(2*0 - 1) = 0.0
         result = sc.perplexity_to_similarities(1.0)
         assert math.isclose(result["healthy"],   1.0, abs_tol=1e-9)
         assert math.isclose(result["uncertain"], 0.0, abs_tol=1e-9)
-        assert math.isclose(result["confused"],  -1.0, abs_tol=1e-9)
+        assert math.isclose(result["confused"],  0.0, abs_tol=1e-9)
 
     def test_perplexity_below_one_clamped_to_one(self):
         # max(perplexity, 1.0) clamps to 1.0
@@ -226,9 +227,9 @@ class TestInterfereWeighted:
 
 class TestTokenSummary:
     def _reset_counters(self):
-        sc._tokens_in  = 0
-        sc._tokens_out = 0
-        sc._call_count = 0
+        _llm_counters._tokens_in = 0
+        _llm_counters._tokens_out = 0
+        _llm_counters._call_count = 0
 
     def test_zero_tokens_zero_cost(self):
         self._reset_counters()
@@ -236,37 +237,37 @@ class TestTokenSummary:
         assert "~$0.0000" in summary
 
     def test_known_cost_calculation(self):
-        # 1M input tokens at $0.10 = $0.10
+        # 1M input tokens at $0.25/1M (see token_summary in implementation)
         self._reset_counters()
-        sc._tokens_in  = 1_000_000
-        sc._tokens_out = 0
+        _llm_counters._tokens_in = 1_000_000
+        _llm_counters._tokens_out = 0
         summary = sc.token_summary()
-        assert "~$0.1000" in summary
+        assert "~$0.2500" in summary
 
     def test_output_tokens_cost_more(self):
-        # 1M output at $0.40 = $0.40
+        # 1M output at $1.50/1M
         self._reset_counters()
-        sc._tokens_in  = 0
-        sc._tokens_out = 1_000_000
+        _llm_counters._tokens_in = 0
+        _llm_counters._tokens_out = 1_000_000
         summary = sc.token_summary()
-        assert "~$0.4000" in summary
+        assert "~$1.5000" in summary
 
     def test_summary_includes_call_count(self):
         self._reset_counters()
-        sc._call_count = 42
+        _llm_counters._call_count = 42
         summary = sc.token_summary()
         assert "calls=42" in summary
 
     def test_summary_includes_totals(self):
         self._reset_counters()
-        sc._tokens_in  = 500
-        sc._tokens_out = 300
+        _llm_counters._tokens_in = 500
+        _llm_counters._tokens_out = 300
         summary = sc.token_summary()
         assert "in=500" in summary
         assert "out=300" in summary
         assert "total=800" in summary
 
     def teardown_method(self):
-        sc._tokens_in  = 0
-        sc._tokens_out = 0
-        sc._call_count = 0
+        _llm_counters._tokens_in = 0
+        _llm_counters._tokens_out = 0
+        _llm_counters._call_count = 0

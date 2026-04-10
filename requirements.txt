@@ -4,7 +4,7 @@ numpy==2.4.3
 scipy==1.17.1
 
 # AI
-anthropic           # native SDK — required for software_company.py agents
+anthropic           # native SDK — required for software_company agent tooling
 google-genai==1.68.0
 # Previously required (now removed — safe to uninstall):
 #   pip uninstall langchain-anthropic langchain-core langgraph -y
@@ -27,6 +27,9 @@ tenacity==9.1.4
 tqdm==4.67.3
 
 python-dotenv
+
+# Desktop automation (optional at runtime; required for window tools + pyautogui flows)
+PyGetWindow
 
 # Dev / Testing
 pytest==9.0.2

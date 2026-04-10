@@ -11,6 +11,9 @@ return realistic code outputs. Verifies that:
   - The final TeamResult has the right structure
 
 No real API calls — all LLM responses are scripted to return realistic code.
+
+The ``TestDevTeamSimulation`` class is marked ``slow`` (full pipeline). Default
+``pytest`` skips it; run with ``RUN_SLOW_TESTS=1`` when you need that coverage.
 """
 
 import os
@@ -427,14 +430,14 @@ STANCE: ROBUST""",
 
 # Manager responses
 BOARD_RESPONSE = """
-ITEM_1: Implement JWT authentication module (register/login endpoints, password hashing, token generation)
-ITEM_2: Build Todo CRUD REST API endpoints (create, read, update, delete todos with user ownership)
-ITEM_3: Design SQLAlchemy database models (User and TodoItem tables with relationships)
-ITEM_4: Create FastAPI application entry point (wire all routers, CORS, health check)
-ITEM_5: Build React Login and Register frontend components with API integration
-ITEM_6: Build React TodoList component with full CRUD UI operations
-ITEM_7: Write Docker Compose configuration and Python requirements file
-ITEM_8: Write unit and integration tests for all API endpoints
+ITEM_1: Implement JWT authentication module (register/login endpoints, password hashing, token generation) [auth.py]
+ITEM_2: Build Todo CRUD REST API endpoints (create, read, update, delete todos with user ownership) [todo_routes.py]
+ITEM_3: Design SQLAlchemy database models (User and TodoItem tables with relationships) [models.py]
+ITEM_4: Create FastAPI application entry point (wire all routers, CORS, health check) [main.py]
+ITEM_5: Build React Login and Register frontend components with API integration [Login.tsx]
+ITEM_6: Build React TodoList component with full CRUD UI operations [TodoList.tsx]
+ITEM_7: Write Docker Compose configuration and Python requirements file [docker-compose.yml]
+ITEM_8: Write unit and integration tests for all API endpoints [test_api.py]
 """.strip()
 
 WORKER_CLAIMS = {
@@ -483,6 +486,7 @@ def sim_env(tmp_path):
     sc.WorkDashboard.SAVE_PATH = tmp_path / "WORK_DASHBOARD.json"
     sc.OUTPUT_DIR              = tmp_path
     sc._dashboard              = None
+    sc.reset_contracts()
 
     # Create subdirs agents will write to
     (tmp_path / "code").mkdir()
@@ -510,7 +514,7 @@ def _make_run_with_tools_mock(call_tracker: list, written_files: dict):
     """
     call_lock = threading.Lock()
 
-    def mock_run(prompt: str, role_key: str, label: str = "") -> tuple:
+    def mock_run(prompt: str, role_key: str, label: str = "", retry_count: int = 0, **kwargs) -> tuple:
         output = DEV_CODE_OUTPUTS.get(role_key, f"No code defined for {role_key} STANCE: PRAGMATIC")
         with call_lock:
             call_tracker.append({
@@ -540,7 +544,14 @@ def _make_run_with_tools_mock(call_tracker: list, written_files: dict):
                 written_files[fname] = str(fpath)
 
         perplexity = 2.0  # confident output → low perplexity
-        return (output, [], perplexity)
+        # Manager-fix loop requires these markers or it burns all rounds and devs never run.
+        tool_results: list = []
+        if role_key == "eng_manager":
+            tool_results = [
+                "[TOOL: start_service] ok",
+                "[TOOL: http_request] GET http://localhost/ HTTP 200",
+            ]
+        return (output, tool_results, perplexity)
 
     return mock_run
 
@@ -590,8 +601,13 @@ def _make_llm_call_mock(call_tracker: list):
 
 # ── Main simulation test ───────────────────────────────────────────────────────
 
+
+@pytest.mark.slow
 class TestDevTeamSimulation:
-    """Full 8-developer engineering team simulation — 1 sprint, 2 rounds."""
+    """Full 8-developer engineering team simulation — 1 sprint, 2 rounds.
+
+    Skipped in default ``pytest`` runs; set RUN_SLOW_TESTS=1 to execute.
+    """
 
     def test_all_8_devs_get_unique_assignments(self, sim_env):
         tmp_path, rolling_ctxs, health_states = sim_env

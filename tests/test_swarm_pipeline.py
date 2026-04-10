@@ -48,7 +48,7 @@ class TestBlackboardPlanningCycle:
         with patch("software_company.llm_call", side_effect=responses):
             rolling_ctxs   = make_rolling_ctxs(self.MANAGER, *self.WORKERS)
             health_states  = {k: make_state() for k in [self.MANAGER] + self.WORKERS}
-            assignments = run_team_planning(
+            assignments, _pool = run_team_planning(
                 self.TEAM, self.MANAGER, self.WORKERS,
                 "Build a todo app", rolling_ctxs, health_states,
             )
@@ -60,7 +60,7 @@ class TestBlackboardPlanningCycle:
         with patch("software_company.llm_call", side_effect=responses):
             rolling_ctxs  = make_rolling_ctxs(self.MANAGER, *self.WORKERS)
             health_states = {k: make_state() for k in [self.MANAGER] + self.WORKERS}
-            assignments = run_team_planning(
+            assignments, _pool = run_team_planning(
                 self.TEAM, self.MANAGER, self.WORKERS,
                 "Build a todo app", rolling_ctxs, health_states,
             )
@@ -78,7 +78,7 @@ class TestBlackboardPlanningCycle:
         with patch("software_company.llm_call", side_effect=[board] + conflict_claims):
             rolling_ctxs  = make_rolling_ctxs(self.MANAGER, *self.WORKERS)
             health_states = {k: make_state() for k in [self.MANAGER] + self.WORKERS}
-            assignments = run_team_planning(
+            assignments, _pool = run_team_planning(
                 self.TEAM, self.MANAGER, self.WORKERS,
                 "Build a todo app", rolling_ctxs, health_states,
             )
@@ -108,7 +108,7 @@ class TestBlackboardPlanningCycle:
         with patch("software_company.llm_call", side_effect=[board] + no_claim_responses):
             rolling_ctxs  = make_rolling_ctxs(self.MANAGER, *self.WORKERS)
             health_states = {k: make_state() for k in [self.MANAGER] + self.WORKERS}
-            assignments = run_team_planning(
+            assignments, _pool = run_team_planning(
                 self.TEAM, self.MANAGER, self.WORKERS,
                 "Build a todo app", rolling_ctxs, health_states,
             )

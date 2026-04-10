@@ -3,158 +3,334 @@
     "dev_1": [
       {
         "from": "dev_2",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'requirements.txt'. Exports: (see file). Test hint: Run `pip install -r requirements.txt && pip freeze` to confirm zero packages are listed.",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'design/project_structure.md'. Exports: (see file). Test hint: Verify `GET /design/tokens` returns a JSON object containing the defined color palette and spacing scale specifications.",
         "sprint": 1
       },
       {
-        "from": "dev_6",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_6 finished 'docs/testing.md'. Exports: (see file). Test hint: Navigate to '/dashboard', confirm the swarm activity graph renders without console errors and updates every 5 seconds.\n\n**CHANGES:**\n- Updated `docs/testing.md` to include the GUI verification step...",
+        "from": "dev_3",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_3 finished 'code/requirements.txt'. Exports: (see file). Test hint: Submit a POST request to `/api/transform` with a JSON body `{\"data\": \"test\"}` and verify the response contains the SHA-256 hash.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `hash_data` function...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_3",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_3 finished 'code/app/logic.py'. Exports: (see file). Test hint: POST a string to `/api/transform` and verify the returned JSON contains the correct SHA-256 hash.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `compute_sha256(data: str) -> str`.\n- `code/require...",
         "sprint": 1
       },
       {
         "from": "dev_2",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'tests/test_gui.py'. Exports: (see file). Test hint: Run `python main.py` and verify that a window titled \"Quantum Swarm Dashboard\" appears on the screen.\n\n### CHANGES\n- Created `app/gui.py`: Implemented `QuantumApp` class using `tkinter` with window...",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'tests/test_logic.py'. Exports: (see file). Test hint: POST /api/transform with a JSON body {\"data\": \"test\"} must return a 200 OK with a valid SHA-256 hash string.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `hash_data` using `hashlib`.\n- `requirem...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_7",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_7 finished 'code/app/theme.py'. Exports: (see file). Test hint: Run `python -c \"from app.theme import ThemeManager; print(ThemeManager().get_tokens())\"` to verify the dictionary output.",
         "sprint": 1
       }
     ],
     "dev_3": [
       {
         "from": "dev_2",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'requirements.txt'. Exports: (see file). Test hint: Run `pip install -r requirements.txt && pip freeze` to confirm zero packages are listed.",
-        "sprint": 1
-      },
-      {
-        "from": "dev_6",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_6 finished 'docs/testing.md'. Exports: (see file). Test hint: Navigate to '/dashboard', confirm the swarm activity graph renders without console errors and updates every 5 seconds.\n\n**CHANGES:**\n- Updated `docs/testing.md` to include the GUI verification step...",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'design/project_structure.md'. Exports: (see file). Test hint: Verify `GET /design/tokens` returns a JSON object containing the defined color palette and spacing scale specifications.",
         "sprint": 1
       },
       {
         "from": "dev_1",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'app/gui.py'. Exports: (see file). Test hint: Run `python main.py` and verify that a window titled \"Quantum Swarm Interface\" appears on the screen.\n\n### CHANGES\n- `app/gui.py`: Created `QuantumGUI` class using `tkinter` with window title and b...",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'design/ui_spec.md'. Exports: (see file). Test hint: Verify that `npm run storybook` launches a local dev server displaying the defined component library tokens and structure.",
         "sprint": 1
       },
       {
         "from": "dev_2",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'tests/test_gui.py'. Exports: (see file). Test hint: Run `python main.py` and verify that a window titled \"Quantum Swarm Dashboard\" appears on the screen.\n\n### CHANGES\n- Created `app/gui.py`: Implemented `QuantumApp` class using `tkinter` with window...",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'tests/test_logic.py'. Exports: (see file). Test hint: POST /api/transform with a JSON body {\"data\": \"test\"} must return a 200 OK with a valid SHA-256 hash string.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `hash_data` using `hashlib`.\n- `requirem...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'config/Dockerfile'. Exports: (see file). Test hint: POST a string to `/api/transform` and verify the returned JSON contains the correct SHA-256 hash string.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `hash_string(data: str) -> str`.\n- `code/req...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'config/docker-compose.yml'. Exports: (see file). Test hint: POST a string to `/api/transform` and verify the returned JSON contains the correct SHA-256 hash value.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `compute_sha256(data: str) -> str`.\n- `code/r...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_7",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_7 finished 'code/app/theme.py'. Exports: (see file). Test hint: Run `python -c \"from app.theme import ThemeManager; print(ThemeManager().get_tokens())\"` to verify the dictionary output.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'tests/test_theme.py'. Exports: (see file). Test hint: POST to `/api/transform` with a JSON payload `{\"data\": \"test\"}` returns a status 200 and the correct SHA-256 hash string.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `sha256_hash` function.\n- `...",
         "sprint": 1
       }
     ],
     "dev_4": [
       {
         "from": "dev_2",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'requirements.txt'. Exports: (see file). Test hint: Run `pip install -r requirements.txt && pip freeze` to confirm zero packages are listed.",
-        "sprint": 1
-      },
-      {
-        "from": "dev_6",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_6 finished 'docs/testing.md'. Exports: (see file). Test hint: Navigate to '/dashboard', confirm the swarm activity graph renders without console errors and updates every 5 seconds.\n\n**CHANGES:**\n- Updated `docs/testing.md` to include the GUI verification step...",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'design/project_structure.md'. Exports: (see file). Test hint: Verify `GET /design/tokens` returns a JSON object containing the defined color palette and spacing scale specifications.",
         "sprint": 1
       },
       {
         "from": "dev_1",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'app/gui.py'. Exports: (see file). Test hint: Run `python main.py` and verify that a window titled \"Quantum Swarm Interface\" appears on the screen.\n\n### CHANGES\n- `app/gui.py`: Created `QuantumGUI` class using `tkinter` with window title and b...",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'design/ui_spec.md'. Exports: (see file). Test hint: Verify that `npm run storybook` launches a local dev server displaying the defined component library tokens and structure.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_3",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_3 finished 'code/requirements.txt'. Exports: (see file). Test hint: Submit a POST request to `/api/transform` with a JSON body `{\"data\": \"test\"}` and verify the response contains the SHA-256 hash.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `hash_data` function...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_3",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_3 finished 'code/app/logic.py'. Exports: (see file). Test hint: POST a string to `/api/transform` and verify the returned JSON contains the correct SHA-256 hash.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `compute_sha256(data: str) -> str`.\n- `code/require...",
         "sprint": 1
       },
       {
         "from": "dev_2",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'tests/test_gui.py'. Exports: (see file). Test hint: Run `python main.py` and verify that a window titled \"Quantum Swarm Dashboard\" appears on the screen.\n\n### CHANGES\n- Created `app/gui.py`: Implemented `QuantumApp` class using `tkinter` with window...",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'tests/test_logic.py'. Exports: (see file). Test hint: POST /api/transform with a JSON body {\"data\": \"test\"} must return a 200 OK with a valid SHA-256 hash string.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `hash_data` using `hashlib`.\n- `requirem...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'config/Dockerfile'. Exports: (see file). Test hint: POST a string to `/api/transform` and verify the returned JSON contains the correct SHA-256 hash string.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `hash_string(data: str) -> str`.\n- `code/req...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'config/docker-compose.yml'. Exports: (see file). Test hint: POST a string to `/api/transform` and verify the returned JSON contains the correct SHA-256 hash value.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `compute_sha256(data: str) -> str`.\n- `code/r...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_7",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_7 finished 'code/app/theme.py'. Exports: (see file). Test hint: Run `python -c \"from app.theme import ThemeManager; print(ThemeManager().get_tokens())\"` to verify the dictionary output.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'tests/test_theme.py'. Exports: (see file). Test hint: POST to `/api/transform` with a JSON payload `{\"data\": \"test\"}` returns a status 200 and the correct SHA-256 hash string.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `sha256_hash` function.\n- `...",
         "sprint": 1
       }
     ],
     "dev_5": [
       {
         "from": "dev_2",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'requirements.txt'. Exports: (see file). Test hint: Run `pip install -r requirements.txt && pip freeze` to confirm zero packages are listed.",
-        "sprint": 1
-      },
-      {
-        "from": "dev_6",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_6 finished 'docs/testing.md'. Exports: (see file). Test hint: Navigate to '/dashboard', confirm the swarm activity graph renders without console errors and updates every 5 seconds.\n\n**CHANGES:**\n- Updated `docs/testing.md` to include the GUI verification step...",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'design/project_structure.md'. Exports: (see file). Test hint: Verify `GET /design/tokens` returns a JSON object containing the defined color palette and spacing scale specifications.",
         "sprint": 1
       },
       {
         "from": "dev_1",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'app/gui.py'. Exports: (see file). Test hint: Run `python main.py` and verify that a window titled \"Quantum Swarm Interface\" appears on the screen.\n\n### CHANGES\n- `app/gui.py`: Created `QuantumGUI` class using `tkinter` with window title and b...",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'design/ui_spec.md'. Exports: (see file). Test hint: Verify that `npm run storybook` launches a local dev server displaying the defined component library tokens and structure.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_3",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_3 finished 'code/requirements.txt'. Exports: (see file). Test hint: Submit a POST request to `/api/transform` with a JSON body `{\"data\": \"test\"}` and verify the response contains the SHA-256 hash.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `hash_data` function...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_3",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_3 finished 'code/app/logic.py'. Exports: (see file). Test hint: POST a string to `/api/transform` and verify the returned JSON contains the correct SHA-256 hash.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `compute_sha256(data: str) -> str`.\n- `code/require...",
         "sprint": 1
       },
       {
         "from": "dev_2",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'tests/test_gui.py'. Exports: (see file). Test hint: Run `python main.py` and verify that a window titled \"Quantum Swarm Dashboard\" appears on the screen.\n\n### CHANGES\n- Created `app/gui.py`: Implemented `QuantumApp` class using `tkinter` with window...",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'tests/test_logic.py'. Exports: (see file). Test hint: POST /api/transform with a JSON body {\"data\": \"test\"} must return a 200 OK with a valid SHA-256 hash string.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `hash_data` using `hashlib`.\n- `requirem...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'config/Dockerfile'. Exports: (see file). Test hint: POST a string to `/api/transform` and verify the returned JSON contains the correct SHA-256 hash string.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `hash_string(data: str) -> str`.\n- `code/req...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'config/docker-compose.yml'. Exports: (see file). Test hint: POST a string to `/api/transform` and verify the returned JSON contains the correct SHA-256 hash value.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `compute_sha256(data: str) -> str`.\n- `code/r...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_7",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_7 finished 'code/app/theme.py'. Exports: (see file). Test hint: Run `python -c \"from app.theme import ThemeManager; print(ThemeManager().get_tokens())\"` to verify the dictionary output.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'tests/test_theme.py'. Exports: (see file). Test hint: POST to `/api/transform` with a JSON payload `{\"data\": \"test\"}` returns a status 200 and the correct SHA-256 hash string.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `sha256_hash` function.\n- `...",
         "sprint": 1
       }
     ],
     "dev_6": [
       {
         "from": "dev_2",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'requirements.txt'. Exports: (see file). Test hint: Run `pip install -r requirements.txt && pip freeze` to confirm zero packages are listed.",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'design/project_structure.md'. Exports: (see file). Test hint: Verify `GET /design/tokens` returns a JSON object containing the defined color palette and spacing scale specifications.",
         "sprint": 1
       },
       {
         "from": "dev_1",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'app/gui.py'. Exports: (see file). Test hint: Run `python main.py` and verify that a window titled \"Quantum Swarm Interface\" appears on the screen.\n\n### CHANGES\n- `app/gui.py`: Created `QuantumGUI` class using `tkinter` with window title and b...",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'design/ui_spec.md'. Exports: (see file). Test hint: Verify that `npm run storybook` launches a local dev server displaying the defined component library tokens and structure.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_3",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_3 finished 'code/requirements.txt'. Exports: (see file). Test hint: Submit a POST request to `/api/transform` with a JSON body `{\"data\": \"test\"}` and verify the response contains the SHA-256 hash.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `hash_data` function...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_3",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_3 finished 'code/app/logic.py'. Exports: (see file). Test hint: POST a string to `/api/transform` and verify the returned JSON contains the correct SHA-256 hash.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `compute_sha256(data: str) -> str`.\n- `code/require...",
         "sprint": 1
       },
       {
         "from": "dev_2",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'tests/test_gui.py'. Exports: (see file). Test hint: Run `python main.py` and verify that a window titled \"Quantum Swarm Dashboard\" appears on the screen.\n\n### CHANGES\n- Created `app/gui.py`: Implemented `QuantumApp` class using `tkinter` with window...",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'tests/test_logic.py'. Exports: (see file). Test hint: POST /api/transform with a JSON body {\"data\": \"test\"} must return a 200 OK with a valid SHA-256 hash string.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `hash_data` using `hashlib`.\n- `requirem...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'config/Dockerfile'. Exports: (see file). Test hint: POST a string to `/api/transform` and verify the returned JSON contains the correct SHA-256 hash string.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `hash_string(data: str) -> str`.\n- `code/req...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'config/docker-compose.yml'. Exports: (see file). Test hint: POST a string to `/api/transform` and verify the returned JSON contains the correct SHA-256 hash value.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `compute_sha256(data: str) -> str`.\n- `code/r...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_7",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_7 finished 'code/app/theme.py'. Exports: (see file). Test hint: Run `python -c \"from app.theme import ThemeManager; print(ThemeManager().get_tokens())\"` to verify the dictionary output.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'tests/test_theme.py'. Exports: (see file). Test hint: POST to `/api/transform` with a JSON payload `{\"data\": \"test\"}` returns a status 200 and the correct SHA-256 hash string.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `sha256_hash` function.\n- `...",
         "sprint": 1
       }
     ],
     "dev_7": [
       {
         "from": "dev_2",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'requirements.txt'. Exports: (see file). Test hint: Run `pip install -r requirements.txt && pip freeze` to confirm zero packages are listed.",
-        "sprint": 1
-      },
-      {
-        "from": "dev_6",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_6 finished 'docs/testing.md'. Exports: (see file). Test hint: Navigate to '/dashboard', confirm the swarm activity graph renders without console errors and updates every 5 seconds.\n\n**CHANGES:**\n- Updated `docs/testing.md` to include the GUI verification step...",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'design/project_structure.md'. Exports: (see file). Test hint: Verify `GET /design/tokens` returns a JSON object containing the defined color palette and spacing scale specifications.",
         "sprint": 1
       },
       {
         "from": "dev_1",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'app/gui.py'. Exports: (see file). Test hint: Run `python main.py` and verify that a window titled \"Quantum Swarm Interface\" appears on the screen.\n\n### CHANGES\n- `app/gui.py`: Created `QuantumGUI` class using `tkinter` with window title and b...",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'design/ui_spec.md'. Exports: (see file). Test hint: Verify that `npm run storybook` launches a local dev server displaying the defined component library tokens and structure.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_3",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_3 finished 'code/requirements.txt'. Exports: (see file). Test hint: Submit a POST request to `/api/transform` with a JSON body `{\"data\": \"test\"}` and verify the response contains the SHA-256 hash.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `hash_data` function...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_3",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_3 finished 'code/app/logic.py'. Exports: (see file). Test hint: POST a string to `/api/transform` and verify the returned JSON contains the correct SHA-256 hash.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `compute_sha256(data: str) -> str`.\n- `code/require...",
         "sprint": 1
       },
       {
         "from": "dev_2",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'tests/test_gui.py'. Exports: (see file). Test hint: Run `python main.py` and verify that a window titled \"Quantum Swarm Dashboard\" appears on the screen.\n\n### CHANGES\n- Created `app/gui.py`: Implemented `QuantumApp` class using `tkinter` with window...",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'tests/test_logic.py'. Exports: (see file). Test hint: POST /api/transform with a JSON body {\"data\": \"test\"} must return a 200 OK with a valid SHA-256 hash string.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `hash_data` using `hashlib`.\n- `requirem...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'config/Dockerfile'. Exports: (see file). Test hint: POST a string to `/api/transform` and verify the returned JSON contains the correct SHA-256 hash string.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `hash_string(data: str) -> str`.\n- `code/req...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'config/docker-compose.yml'. Exports: (see file). Test hint: POST a string to `/api/transform` and verify the returned JSON contains the correct SHA-256 hash value.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `compute_sha256(data: str) -> str`.\n- `code/r...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'tests/test_theme.py'. Exports: (see file). Test hint: POST to `/api/transform` with a JSON payload `{\"data\": \"test\"}` returns a status 200 and the correct SHA-256 hash string.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `sha256_hash` function.\n- `...",
         "sprint": 1
       }
     ],
     "dev_8": [
       {
         "from": "dev_2",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'requirements.txt'. Exports: (see file). Test hint: Run `pip install -r requirements.txt && pip freeze` to confirm zero packages are listed.",
-        "sprint": 1
-      },
-      {
-        "from": "dev_6",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_6 finished 'docs/testing.md'. Exports: (see file). Test hint: Navigate to '/dashboard', confirm the swarm activity graph renders without console errors and updates every 5 seconds.\n\n**CHANGES:**\n- Updated `docs/testing.md` to include the GUI verification step...",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'design/project_structure.md'. Exports: (see file). Test hint: Verify `GET /design/tokens` returns a JSON object containing the defined color palette and spacing scale specifications.",
         "sprint": 1
       },
       {
         "from": "dev_1",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'app/gui.py'. Exports: (see file). Test hint: Run `python main.py` and verify that a window titled \"Quantum Swarm Interface\" appears on the screen.\n\n### CHANGES\n- `app/gui.py`: Created `QuantumGUI` class using `tkinter` with window title and b...",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'design/ui_spec.md'. Exports: (see file). Test hint: Verify that `npm run storybook` launches a local dev server displaying the defined component library tokens and structure.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_3",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_3 finished 'code/requirements.txt'. Exports: (see file). Test hint: Submit a POST request to `/api/transform` with a JSON body `{\"data\": \"test\"}` and verify the response contains the SHA-256 hash.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `hash_data` function...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_3",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_3 finished 'code/app/logic.py'. Exports: (see file). Test hint: POST a string to `/api/transform` and verify the returned JSON contains the correct SHA-256 hash.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `compute_sha256(data: str) -> str`.\n- `code/require...",
         "sprint": 1
       },
       {
         "from": "dev_2",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'tests/test_gui.py'. Exports: (see file). Test hint: Run `python main.py` and verify that a window titled \"Quantum Swarm Dashboard\" appears on the screen.\n\n### CHANGES\n- Created `app/gui.py`: Implemented `QuantumApp` class using `tkinter` with window...",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_2 finished 'tests/test_logic.py'. Exports: (see file). Test hint: POST /api/transform with a JSON body {\"data\": \"test\"} must return a 200 OK with a valid SHA-256 hash string.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `hash_data` using `hashlib`.\n- `requirem...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'config/Dockerfile'. Exports: (see file). Test hint: POST a string to `/api/transform` and verify the returned JSON contains the correct SHA-256 hash string.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `hash_string(data: str) -> str`.\n- `code/req...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'config/docker-compose.yml'. Exports: (see file). Test hint: POST a string to `/api/transform` and verify the returned JSON contains the correct SHA-256 hash value.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `compute_sha256(data: str) -> str`.\n- `code/r...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_7",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_7 finished 'code/app/theme.py'. Exports: (see file). Test hint: Run `python -c \"from app.theme import ThemeManager; print(ThemeManager().get_tokens())\"` to verify the dictionary output.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'tests/test_theme.py'. Exports: (see file). Test hint: POST to `/api/transform` with a JSON payload `{\"data\": \"test\"}` returns a status 200 and the correct SHA-256 hash string.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `sha256_hash` function.\n- `...",
         "sprint": 1
       }
     ],
     "dev_2": [
       {
-        "from": "dev_6",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_6 finished 'docs/testing.md'. Exports: (see file). Test hint: Navigate to '/dashboard', confirm the swarm activity graph renders without console errors and updates every 5 seconds.\n\n**CHANGES:**\n- Updated `docs/testing.md` to include the GUI verification step...",
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'design/ui_spec.md'. Exports: (see file). Test hint: Verify that `npm run storybook` launches a local dev server displaying the defined component library tokens and structure.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_3",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_3 finished 'code/requirements.txt'. Exports: (see file). Test hint: Submit a POST request to `/api/transform` with a JSON body `{\"data\": \"test\"}` and verify the response contains the SHA-256 hash.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `hash_data` function...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_3",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_3 finished 'code/app/logic.py'. Exports: (see file). Test hint: POST a string to `/api/transform` and verify the returned JSON contains the correct SHA-256 hash.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `compute_sha256(data: str) -> str`.\n- `code/require...",
         "sprint": 1
       },
       {
         "from": "dev_1",
-        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'app/gui.py'. Exports: (see file). Test hint: Run `python main.py` and verify that a window titled \"Quantum Swarm Interface\" appears on the screen.\n\n### CHANGES\n- `app/gui.py`: Created `QuantumGUI` class using `tkinter` with window title and b...",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'config/Dockerfile'. Exports: (see file). Test hint: POST a string to `/api/transform` and verify the returned JSON contains the correct SHA-256 hash string.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `hash_string(data: str) -> str`.\n- `code/req...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'config/docker-compose.yml'. Exports: (see file). Test hint: POST a string to `/api/transform` and verify the returned JSON contains the correct SHA-256 hash value.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `compute_sha256(data: str) -> str`.\n- `code/r...",
+        "sprint": 1
+      },
+      {
+        "from": "dev_7",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_7 finished 'code/app/theme.py'. Exports: (see file). Test hint: Run `python -c \"from app.theme import ThemeManager; print(ThemeManager().get_tokens())\"` to verify the dictionary output.",
+        "sprint": 1
+      },
+      {
+        "from": "dev_1",
+        "text": "\ud83d\udce2 BROADCAST: COMPLETED: dev_1 finished 'tests/test_theme.py'. Exports: (see file). Test hint: POST to `/api/transform` with a JSON payload `{\"data\": \"test\"}` returns a status 200 and the correct SHA-256 hash string.\n\n### CHANGES\n- `code/app/logic.py`: Implemented `sha256_hash` function.\n- `...",
         "sprint": 1
       }
     ]
-  }
+  },
+  "domains": {}
 }

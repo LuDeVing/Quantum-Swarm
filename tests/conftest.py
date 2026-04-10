@@ -1,9 +1,12 @@
 """
 conftest.py — Shared fixtures for Quantum Swarm tests.
 
-Import strategy: software_company.py calls load_dotenv() and imports heavy
-dependencies at module level. We patch those before import using sys.modules
-so tests never need a real API key or network connection.
+Import strategy: ``import software_company`` runs load_dotenv() and pulls in heavy
+dependencies at module level. We stub those before import using sys.modules so tests
+never need a real API key or network connection.
+
+Full ``run_engineering_team`` simulations are marked ``@pytest.mark.slow`` and skipped
+unless the environment sets ``RUN_SLOW_TESTS=1``.
 """
 import sys
 import types
@@ -106,3 +109,15 @@ def three_states():
     hypotheses = ["healthy", "uncertain", "confused"]
     prior = {"healthy": 0.8, "uncertain": 0.15, "confused": 0.05}
     return [ActiveInferenceState(hypotheses, prior) for _ in range(3)]
+
+
+def pytest_collection_modifyitems(config, items):
+    """Skip @pytest.mark.slow tests unless RUN_SLOW_TESTS=1 (full engineering pipeline)."""
+    if os.environ.get("RUN_SLOW_TESTS", "").strip().lower() in ("1", "true", "yes", "on"):
+        return
+    skip = pytest.mark.skip(
+        reason="slow pipeline test; set RUN_SLOW_TESTS=1 to run (see pytest.ini)",
+    )
+    for item in items:
+        if "slow" in item.keywords:
+            item.add_marker(skip)

@@ -1,0 +1,204 @@
+{
+  "tasks": {
+    "task_design_ui_spec_md_p1": {
+      "id": "task_design_ui_spec_md_p1",
+      "file": "design/ui_spec.md",
+      "description": "PHASE 1: Task item_1: Define design system tokens, layout specifications, and project structure documentation [design/ui_spec.md, design/project_structure.md]",
+      "depends_on": [],
+      "assigned_to": "dev_1",
+      "status": "completed",
+      "retries": 0,
+      "primary_owner": null,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_design_project_structure_md_p1": {
+      "id": "task_design_project_structure_md_p1",
+      "file": "design/project_structure.md",
+      "description": "PHASE 1: Task item_1: Define design system tokens, layout specifications, and project structure documentation [design/ui_spec.md, design/project_structure.md]",
+      "depends_on": [],
+      "assigned_to": "dev_2",
+      "status": "completed",
+      "retries": 0,
+      "primary_owner": null,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_code_requirements_txt_p1": {
+      "id": "task_code_requirements_txt_p1",
+      "file": "code/requirements.txt",
+      "description": "PHASE 1: Task item_3: Implement the core transformation logic (SHA-256 processor) to be imported by the UI [code/app/logic.py]\n\nTask item_6: Create configuration files for containerization and dependencies [config/Dockerfile, config/docker-compose.yml, config/.dockerignore, code/requirements.txt]\n\nTask item_7: Write unit tests for the theme logic and core transformation functionality [tests/test_theme.py, tests/test_logic.py]",
+      "depends_on": [],
+      "assigned_to": "dev_3",
+      "status": "completed",
+      "retries": 0,
+      "primary_owner": null,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_config_Dockerfile_p1": {
+      "id": "task_config_Dockerfile_p1",
+      "file": "config/Dockerfile",
+      "description": "PHASE 1: Task item_3: Implement the core transformation logic (SHA-256 processor) to be imported by the UI [code/app/logic.py]\n\nTask item_6: Create configuration files for containerization and dependencies [config/Dockerfile, config/docker-compose.yml, config/.dockerignore, code/requirements.txt]\n\nTask item_7: Write unit tests for the theme logic and core transformation functionality [tests/test_theme.py, tests/test_logic.py]",
+      "depends_on": [
+        "task_code_requirements_txt_p1"
+      ],
+      "assigned_to": "dev_1",
+      "status": "completed",
+      "retries": 8,
+      "primary_owner": null,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_config_docker-compose_yml_p1": {
+      "id": "task_config_docker-compose_yml_p1",
+      "file": "config/docker-compose.yml",
+      "description": "PHASE 1: Task item_3: Implement the core transformation logic (SHA-256 processor) to be imported by the UI [code/app/logic.py]\n\nTask item_6: Create configuration files for containerization and dependencies [config/Dockerfile, config/docker-compose.yml, config/.dockerignore, code/requirements.txt]\n\nTask item_7: Write unit tests for the theme logic and core transformation functionality [tests/test_theme.py, tests/test_logic.py]",
+      "depends_on": [
+        "task_config_Dockerfile_p1"
+      ],
+      "assigned_to": "dev_1",
+      "status": "completed",
+      "retries": 3,
+      "primary_owner": null,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_config__dockerignore_p1": {
+      "id": "task_config__dockerignore_p1",
+      "file": "config/.dockerignore",
+      "description": "PHASE 1: Task item_3: Implement the core transformation logic (SHA-256 processor) to be imported by the UI [code/app/logic.py]\n\nTask item_6: Create configuration files for containerization and dependencies [config/Dockerfile, config/docker-compose.yml, config/.dockerignore, code/requirements.txt]\n\nTask item_7: Write unit tests for the theme logic and core transformation functionality [tests/test_theme.py, tests/test_logic.py]",
+      "depends_on": [],
+      "assigned_to": "dev_8",
+      "status": "failed",
+      "retries": 10,
+      "primary_owner": null,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_code_app_theme_py_p1": {
+      "id": "task_code_app_theme_py_p1",
+      "file": "code/app/theme.py",
+      "description": "PHASE 1: Task item_2: Implement the theme manager as the single source of truth for UI colors, fonts, and spacing tokens [code/app/theme.py]",
+      "depends_on": [
+        "task_design_ui_spec_md_p1"
+      ],
+      "assigned_to": "dev_7",
+      "status": "completed",
+      "retries": 9,
+      "primary_owner": null,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_code_app_logic_py_p1": {
+      "id": "task_code_app_logic_py_p1",
+      "file": "code/app/logic.py",
+      "description": "PHASE 1: Task item_3: Implement the core transformation logic (SHA-256 processor) to be imported by the UI [code/app/logic.py]\n\nTask item_6: Create configuration files for containerization and dependencies [config/Dockerfile, config/docker-compose.yml, config/.dockerignore, code/requirements.txt]\n\nTask item_7: Write unit tests for the theme logic and core transformation functionality [tests/test_theme.py, tests/test_logic.py]",
+      "depends_on": [],
+      "assigned_to": "dev_3",
+      "status": "completed",
+      "retries": 4,
+      "primary_owner": null,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_code_app_ui_components_py_p1": {
+      "id": "task_code_app_ui_components_py_p1",
+      "file": "code/app/ui/components.py",
+      "description": "PHASE 1: Task item_4: Build reusable UI components (custom buttons, card containers) using the design system tokens [code/app/ui/components.py]",
+      "depends_on": [
+        "task_code_app_theme_py_p1"
+      ],
+      "assigned_to": "dev_5",
+      "status": "failed",
+      "retries": 10,
+      "primary_owner": null,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_code_app_ui_main_window_py_p1": {
+      "id": "task_code_app_ui_main_window_py_p1",
+      "file": "code/app/ui/main_window.py",
+      "description": "PHASE 1: Task item_5: Construct the main window structure, menu bar, and interaction handlers [code/app/ui/main_window.py]",
+      "depends_on": [
+        "task_code_app_theme_py_p1",
+        "task_code_app_logic_py_p1",
+        "task_code_app_ui_components_py_p1"
+      ],
+      "assigned_to": "dev_8",
+      "status": "failed",
+      "retries": 10,
+      "primary_owner": null,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_tests_test_theme_py_p1": {
+      "id": "task_tests_test_theme_py_p1",
+      "file": "tests/test_theme.py",
+      "description": "PHASE 1: Task item_3: Implement the core transformation logic (SHA-256 processor) to be imported by the UI [code/app/logic.py]\n\nTask item_6: Create configuration files for containerization and dependencies [config/Dockerfile, config/docker-compose.yml, config/.dockerignore, code/requirements.txt]\n\nTask item_7: Write unit tests for the theme logic and core transformation functionality [tests/test_theme.py, tests/test_logic.py]",
+      "depends_on": [
+        "task_code_app_theme_py_p1"
+      ],
+      "assigned_to": "dev_1",
+      "status": "completed",
+      "retries": 6,
+      "primary_owner": null,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_tests_test_logic_py_p1": {
+      "id": "task_tests_test_logic_py_p1",
+      "file": "tests/test_logic.py",
+      "description": "PHASE 1: Task item_3: Implement the core transformation logic (SHA-256 processor) to be imported by the UI [code/app/logic.py]\n\nTask item_6: Create configuration files for containerization and dependencies [config/Dockerfile, config/docker-compose.yml, config/.dockerignore, code/requirements.txt]\n\nTask item_7: Write unit tests for the theme logic and core transformation functionality [tests/test_theme.py, tests/test_logic.py]",
+      "depends_on": [
+        "task_code_app_logic_py_p1"
+      ],
+      "assigned_to": "dev_2",
+      "status": "completed",
+      "retries": 0,
+      "primary_owner": null,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_integration_test": {
+      "id": "task_integration_test",
+      "file": "__integration__",
+      "description": "Final integration: final build check and smoke tests",
+      "depends_on": [
+        "task_design_ui_spec_md_p1",
+        "task_design_project_structure_md_p1",
+        "task_code_requirements_txt_p1",
+        "task_config_Dockerfile_p1",
+        "task_config_docker-compose_yml_p1",
+        "task_config__dockerignore_p1",
+        "task_code_app_theme_py_p1",
+        "task_code_app_logic_py_p1",
+        "task_code_app_ui_components_py_p1",
+        "task_code_app_ui_main_window_py_p1",
+        "task_tests_test_theme_py_p1",
+        "task_tests_test_logic_py_p1"
+      ],
+      "assigned_to": "dev_7",
+      "status": "failed",
+      "retries": 10,
+      "primary_owner": null,
+      "phase": 2,
+      "waiting_for": []
+    }
+  },
+  "completed_tasks": [
+    "task_design_ui_spec_md_p1",
+    "task_tests_test_theme_py_p1",
+    "task_code_app_logic_py_p1",
+    "task_config_Dockerfile_p1",
+    "task_code_app_ui_components_py_p1",
+    "task_config__dockerignore_p1",
+    "task_tests_test_logic_py_p1",
+    "task_integration_test",
+    "task_config_docker-compose_yml_p1",
+    "task_code_app_ui_main_window_py_p1",
+    "task_design_project_structure_md_p1",
+    "task_code_requirements_txt_p1",
+    "task_code_app_theme_py_p1"
+  ]
+}

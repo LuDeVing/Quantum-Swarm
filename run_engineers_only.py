@@ -9,6 +9,7 @@ Usage:
     python run_engineers_only.py
     python run_engineers_only.py "Build a REST API for a notes app with CRUD"
     python run_engineers_only.py -f prompts/engineers_only_full_task_template.txt
+    python run_engineers_only.py -f prompts/engineers_only_tkinter_docker_gui.txt
     python run_engineers_only.py --file prompts/engineers_only_full_task_template.txt
 
 Output goes to: eng_output/code/  and  eng_output/tests/

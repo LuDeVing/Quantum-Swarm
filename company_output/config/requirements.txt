@@ -1,0 +1,5 @@
+# Dependency manifest
+# Using standard Python libraries for core functionality.
+# Minimal dependencies as requested.
+hashlib
+unittest

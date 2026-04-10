@@ -1,0 +1,134 @@
+=== QUANTUM SWARM — ENGINEERS-ONLY: TKINTER GUI + DOCKER + DESIGN SYSTEM ===
+
+Run from repo root (uses eng_output/, real Gemini):
+  python run_engineers_only.py -f prompts/engineers_only_tkinter_docker_gui.txt
+
+Or paste this entire block as the brief:
+  python run_engineers_only.py "…first line of PRODUCT SUMMARY…"
+
+PRODUCT SUMMARY
+  Build a small desktop utility app with Python’s standard-library Tkinter (and ttk where it
+  improves widgets). The app must feel intentional: a named visual theme, consistent spacing,
+  readable typography, and a clear primary action. Ship reproducible Docker artifacts for the
+  same codebase (Linux image; document that Tkinter GUIs are usually exercised on the host with
+  X11/Wayland or similar — the image must still build and the app must start headlessly or with
+  a documented display requirement).
+
+TARGET USER
+  A developer who runs `python main.py` locally to open one window, completes one core task in
+  under a minute, and can optionally build/run the container to verify packaging.
+
+NON-GOALS
+  - Web framework (Flask/FastAPI) as the primary UI — this sprint is desktop Tkinter only.
+  - Cloud deployment, auth, or multi-user accounts.
+  - Pixel-perfect Figma import — follow the DESIGN SYSTEM below as the source of truth.
+
+TECH STACK (lock)
+  - Python 3.11+ (stdlib first). GUI: tkinter + tkinter.ttk.
+  - Optional: Pillow (PIL) only if you need an image asset; prefer pure Tk drawing otherwise.
+  - Tests: pytest or unittest; tests must not require a human to click the GUI to finish CI.
+
+DESIGN SYSTEM — implement exactly these tokens (names + values). Put the same table in
+  design/ui_spec.md and load colors/fonts from code/app/theme.py as single source of truth.
+
+  Brand & surfaces
+    --color-bg-app:        #0f1419   (main window background)
+    --color-bg-elevated:   #1a2332   (cards, grouped panels)
+    --color-bg-input:      #0c1017   (entries, list areas)
+    --color-border-subtle: #2d3a4d
+    --color-border-strong: #4c6a92
+
+  Text
+    --color-text-primary:   #e8eef7
+    --color-text-secondary: #9db0c9
+    --color-text-muted:       #6b7c94
+
+  Accent (one primary action only)
+    --color-accent:          #3d8bfd
+    --color-accent-hover:    #5ca0ff
+    --color-accent-pressed: #2a6fd6
+
+  Semantic
+    --color-success: #3ecf8e
+    --color-warning: #f5a524
+    --color-danger:  #e5484d
+
+  Typography (use Tk font families available on Windows/Linux; fall back gracefully)
+    --font-family-ui:  "Segoe UI" on Windows, "Ubuntu" on Linux, else "DejaVu Sans"
+    --font-size-xs:    11px
+    --font-size-sm:    12px
+    --font-size-md:    14px   (body)
+    --font-size-lg:    18px   (screen titles)
+    --font-weight-title: bold
+
+  Spacing scale (px) — use multiples only: 4, 8, 12, 16, 24, 32
+    --space-xs: 4
+    --space-sm: 8
+    --space-md: 16
+    --space-lg: 24
+
+  Radii
+    --radius-sm: 4px
+    --radius-md: 8px
+
+  Layout
+    - Minimum window size: 720×480; default 900×600; centered on screen.
+    - Max line length for help text: ~72 characters per line in labels.
+    - Primary button is exactly one per screen; destructive actions use --color-danger.
+
+FUNCTIONAL REQUIREMENTS (app behavior — choose one coherent mini-product)
+  F1 — Single main window with: title bar area (ttk or Frame), a short subtitle in
+       --color-text-secondary, and a primary workspace.
+  F2 — Core interaction: user can type text into a multiline or single-line field, click
+       “Process” (or your primary verb), and see a deterministic result in a read-only area
+       (e.g. reversed string, word count, or SHA-256 hex of UTF-8 input — pick one and document).
+  F3 — Status feedback: show success/warning/error using semantic colors (label or ttk style).
+  F4 — Menu bar: File → Exit; Help → About (short dialog with app name + version 1.0.0).
+  F5 — Clean shutdown: destroy root on window close; no orphan threads.
+
+REPOSITORY LAYOUT (under company_output when using full company; under eng_output/ for engineers-only)
+
+  code/
+    main.py                 # Entry: create root, apply theme, construct UI, mainloop.
+    requirements.txt      # Pin if anything beyond stdlib (e.g. Pillow); else comment "stdlib only".
+    app/
+      __init__.py
+      theme.py              # Maps DESIGN SYSTEM tokens → Tk colors/fonts; one place to edit.
+      ui/
+        __init__.py
+        main_window.py      # Composes frames; wires callbacks.
+        components.py       # Optional: reusable primary button, card frame helpers.
+
+  tests/
+    test_theme.py           # theme strings / color format sanity (no GUI).
+    test_logic.py           # Pure function for the “Process” transform (no Tk).
+
+  design/
+    ui_spec.md              # Copy of DESIGN SYSTEM table + 1 paragraph UX rationale.
+    project_structure.md    # Tree + responsibilities (Quantum Swarm convention).
+
+  config/
+    Dockerfile              # Python slim base; WORKDIR; non-root USER if practical; CMD runs main.
+    docker-compose.yml      # Service `app` builds context from repo; document DISPLAY for GUI.
+    .dockerignore           # Per prompts/docker_delivery.txt
+
+DOCKER / REPRODUCIBILITY
+  - Follow prompts/docker_delivery.txt verbatim for Dockerfile, docker-compose.yml, .dockerignore.
+  - After writing docker-compose.yml, agents should validate YAML (validate_yaml tool).
+  - Prefer: `docker compose config` exits 0 when Docker is installed.
+
+INTEGRATION CONTRACT HINTS (for the auto-generated interface contract)
+  - app_type must be "gui" (Tkinter desktop); entry point runs with: python main.py from code/.
+  - build_command / install_command should align with Docker + local pytest as documented in README
+    comments inside config/ or design/ui_spec.md.
+
+TESTING
+  - `python -m pytest tests/ -q` or unittest discover — all green without display.
+  - Optional __integration__ task only if the orchestrator requires it; keep it non-interactive.
+
+DELIVERABLE QUALITY BAR
+  - No hard-coded hex in UI modules except through theme.py.
+  - Visual hierarchy: one clear H1-equivalent title, body text, one primary button.
+  - README or top-of-main.py comment: how to run locally and how to build Docker.
+
+END OF BRIEF

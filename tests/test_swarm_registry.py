@@ -8,6 +8,12 @@ import pytest
 import software_company as sc
 
 
+def _lc_tool_name(tool) -> str:
+    if isinstance(tool, dict):
+        return tool.get("name") or ""
+    return getattr(tool, "name", str(tool))
+
+
 # ── Tool registry integrity ───────────────────────────────────────────────────
 
 class TestToolRegistryIntegrity:
@@ -108,23 +114,23 @@ class TestGetRoleLcTools:
         for role_key in sc._ROLE_TOOL_NAMES:
             tools = sc.get_role_lc_tools(role_key)
             for tool in tools:
-                name = getattr(tool, "name", str(tool))
+                name = _lc_tool_name(tool)
                 assert name in sc._LC_TOOLS_BY_NAME, \
                     f"Tool '{name}' returned for '{role_key}' but not in registry"
 
     def test_security_auditor_has_read_file(self):
         tools = sc.get_role_lc_tools("security_auditor")
-        names = [getattr(t, "name", "") for t in tools]
+        names = [_lc_tool_name(t) for t in tools]
         assert "read_file" in names
 
     def test_integration_tester_has_validate_python(self):
         tools = sc.get_role_lc_tools("integration_tester")
-        names = [getattr(t, "name", "") for t in tools]
+        names = [_lc_tool_name(t) for t in tools]
         assert "validate_python" in names
 
     def test_dev_tools_include_write_code_file(self):
         tools = sc.get_role_lc_tools("dev_1")
-        names = [getattr(t, "name", "") for t in tools]
+        names = [_lc_tool_name(t) for t in tools]
         assert "write_code_file" in names
 
 
