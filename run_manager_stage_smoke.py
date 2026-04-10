@@ -9,8 +9,20 @@ manager actually mutates the project.
 Prerequisites
 -------------
 - ``GEMINI_API_KEY`` in the environment (same as the rest of Quantum Swarm).
-- Optional but recommended for GUI verification:
+- Optional but recommended for **real** GUI screen verification (default):
     ``AGENT_DESKTOP_CONTROL_ENABLED=1`` and ``pip install pyautogui``
+- For **reliable** clicks on this smoke Tk window (Windows): ``pip install uiautomation`` then
+    ``desktop_uia_click('Manager stage smoke', 'Hello')`` — vision-only ``desktop_suggest_click`` is
+    often wrong with *flash-lite* models; use ``DESKTOP_VISION_MODEL`` + a non-lite vision id and/or
+    ``DESKTOP_SUGGEST_CLICK_REFINE=1`` if you rely on pixels.
+- For **headless / CI-style** GUI projects (pytest only, no mouse):
+    ``MANAGER_GUI_DESKTOP_PROOF=0`` — manager passes with ``start_service`` + green tests, no ``desktop_*`` proof.
+- Sharper **vision clicks** (optional): ``DESKTOP_VISION_MODEL=<stronger-gemini-vision-id>``;
+    second pass: ``DESKTOP_SUGGEST_CLICK_REFINE=1`` (optional ``DESKTOP_SUGGEST_REFINE_MARGIN=160``).
+- **Live screen on every manager turn** (optional): ``DESKTOP_LIVE_SNAPSHOT_INTERVAL_SEC=1`` —
+    buffers a full-screen PNG on that interval and attaches the latest to each ``eng_manager``
+    opening message (comma-separated ``DESKTOP_LIVE_SNAPSHOT_ROLES`` to add roles).
+- Default chat model is ``gemini-3.1-flash-preview`` (override with ``GEMINI_MODEL``).
 - Opt-in guard (prevents accidental spend):
     ``RUN_MANAGER_STAGE_SMOKE=1``
 
@@ -20,6 +32,9 @@ Usage (PowerShell)::
     $env:GEMINI_API_KEY = "<your-key>"
     $env:AGENT_DESKTOP_CONTROL_ENABLED = "1"   # for real mouse/keyboard
     python run_manager_stage_smoke.py
+
+    # If HTTP logs still show ``gemini-3.1-flash-lite-preview``, your shell or .env sets GEMINI_MODEL.
+    # Fix: ``$env:MANAGER_SMOKE_USE_CONFIG_GEMINI = "1"`` or ``python run_manager_stage_smoke.py --gemini-model gemini-3.1-flash-preview``
 
 Usage (cmd)::
 
@@ -55,6 +70,36 @@ _REPO_ROOT = Path(__file__).resolve().parent
 load_dotenv(_REPO_ROOT / ".env", override=True)
 load_dotenv(override=True)
 
+_SMOKE_DEFAULT_GEMINI = "gemini-3.1-flash-preview"
+
+
+def _consume_smoke_early_argv() -> None:
+    """Handle ``--gemini-model <id>`` before ``import software_company`` (so config picks it up)."""
+    out: list[str] = [sys.argv[0]]
+    i = 1
+    while i < len(sys.argv):
+        if sys.argv[i] == "--gemini-model" and i + 1 < len(sys.argv):
+            os.environ["GEMINI_MODEL"] = sys.argv[i + 1].strip()
+            i += 2
+            continue
+        out.append(sys.argv[i])
+        i += 1
+    sys.argv[:] = out
+
+
+_consume_smoke_early_argv()
+
+# Force repo default model for this script only (overrides a stale shell GEMINI_MODEL=e.g. flash-lite).
+if os.getenv("MANAGER_SMOKE_USE_CONFIG_GEMINI", "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+):
+    os.environ["GEMINI_MODEL"] = _SMOKE_DEFAULT_GEMINI
+elif not (os.environ.get("GEMINI_MODEL") or "").strip():
+    os.environ["GEMINI_MODEL"] = _SMOKE_DEFAULT_GEMINI
+
 # ── Must set output tree before heavy imports use OUTPUT_DIR ─────────────────
 if os.environ.get("RUN_MANAGER_STAGE_SMOKE", "").strip().lower() not in (
     "1",
@@ -77,6 +122,68 @@ if not os.environ.get("GEMINI_API_KEY", "").strip():
     sys.exit(2)
 
 import software_company as sc
+import software_company.config as _smoke_cfg
+
+
+def _resync_gemini_model_modules(model: str) -> None:
+    """Submodules keep their own ``GEMINI_MODEL`` binding; align after env/dotenv tweaks."""
+    _smoke_cfg.GEMINI_MODEL = model
+    sc.GEMINI_MODEL = model
+    try:
+        import software_company.llm_client as _lc
+
+        _lc.GEMINI_MODEL = model
+    except Exception:
+        pass
+    try:
+        import software_company.agent_loop as _al
+
+        _al.GEMINI_MODEL = model
+    except Exception:
+        pass
+    try:
+        import software_company.tool_registry as _tr
+
+        _tr.GEMINI_MODEL = model
+    except Exception:
+        pass
+    try:
+        import software_company.browser as _br
+
+        _br.GEMINI_MODEL = model
+    except Exception:
+        pass
+
+
+_resync_gemini_model_modules(_smoke_cfg.GEMINI_MODEL)
+
+
+def _resync_desktop_vision_bindings() -> None:
+    """Re-read DESKTOP_* from ``os.environ`` and push into config + tool_registry.
+
+    ``from .config import DESKTOP_VISION_MODEL`` keeps a stale copy in submodules unless we
+    reassign after ``load_dotenv``. Also surfaces common mistake: vars only in an unsaved editor
+    buffer never reach the process environment.
+    """
+    dvm = (os.environ.get("DESKTOP_VISION_MODEL") or "").strip()
+    refine_on = (os.getenv("DESKTOP_SUGGEST_CLICK_REFINE") or "0").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+    _smoke_cfg.DESKTOP_VISION_MODEL = dvm
+    _smoke_cfg.DESKTOP_SUGGEST_CLICK_REFINE = refine_on
+    try:
+        import software_company.tool_registry as _tr
+
+        _tr.DESKTOP_VISION_MODEL = dvm
+        _tr.DESKTOP_SUGGEST_CLICK_REFINE = refine_on
+    except Exception:
+        pass
+
+
+_resync_desktop_vision_bindings()
 
 # Force Gemini client to use the key from env after `load_dotenv` (singleton may not exist yet).
 try:
@@ -220,9 +327,32 @@ def main() -> None:
     task_queue = MagicMock()
     task_queue.get_status.return_value = "(smoke — queue not used)"
 
+    _resync_desktop_vision_bindings()
     log.info("OUTPUT_DIR=%s", out)
     log.info("code_dir=%s", code_dir.resolve())
     log.info("max_rounds=%s  AGENT_DESKTOP_CONTROL_ENABLED=%r", args.rounds, os.environ.get("AGENT_DESKTOP_CONTROL_ENABLED"))
+    _dv = getattr(_smoke_cfg, "DESKTOP_VISION_MODEL", "") or ""
+    _ref = getattr(_smoke_cfg, "DESKTOP_SUGGEST_CLICK_REFINE", False)
+    log.info(
+        "GEMINI_MODEL=%r  DESKTOP_VISION_MODEL=%r  DESKTOP_SUGGEST_CLICK_REFINE=%s",
+        _smoke_cfg.GEMINI_MODEL,
+        _dv,
+        _ref,
+    )
+    if not _dv and "lite" in (_smoke_cfg.GEMINI_MODEL or "").lower():
+        log.warning(
+            "DESKTOP_VISION_MODEL is empty — desktop_suggest_click uses GEMINI_MODEL (lite). "
+            "Add e.g. DESKTOP_VISION_MODEL=gemini-3.1-flash-preview to the saved repo .env file "
+            "(Cursor must write the file to disk; unsaved buffer lines are invisible to Python)."
+        )
+    if "lite" in (_smoke_cfg.GEMINI_MODEL or "").lower() and not (
+        os.getenv("MANAGER_SMOKE_USE_CONFIG_GEMINI", "").strip().lower()
+        in ("1", "true", "yes", "on")
+    ):
+        log.warning(
+            "Using a *-lite* GEMINI_MODEL — vision/clicks are weaker. Prefer gemini-3.1-flash-preview "
+            "or set MANAGER_SMOKE_USE_CONFIG_GEMINI=1 / --gemini-model ..."
+        )
 
     result = _manager_fix_loop(
         code_dir,

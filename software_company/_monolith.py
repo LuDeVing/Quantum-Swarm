@@ -201,7 +201,19 @@ _merge_submodule(_mp, _engineering_mod)
 from . import desktop_skill as _desktop_skill_mod
 
 _merge_submodule(_mp, _desktop_skill_mod)
-del _mp, _merge_submodule, _workers_mod, _planning_mod, _teams_mod, _engineering_mod, _desktop_skill_mod
+from . import desktop_live_snapshot as _desktop_live_snapshot_mod
+
+_merge_submodule(_mp, _desktop_live_snapshot_mod)
+del (
+    _mp,
+    _merge_submodule,
+    _workers_mod,
+    _planning_mod,
+    _teams_mod,
+    _engineering_mod,
+    _desktop_skill_mod,
+    _desktop_live_snapshot_mod,
+)
 
 # ── Orchestration (run_company, outputs, dashboard) ───────────────────────────
 from . import orchestration as _orch_mod

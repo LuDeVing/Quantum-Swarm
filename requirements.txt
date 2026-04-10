@@ -30,6 +30,7 @@ python-dotenv
 
 # Desktop automation (optional at runtime; required for window tools + pyautogui flows)
 PyGetWindow
+# uiautomation — optional; Windows-only desktop_uia_* tools (UI Automation list/read/click by name)
 
 # Dev / Testing
 pytest==9.0.2

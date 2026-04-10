@@ -11,7 +11,14 @@ import sys
 import threading
 from typing import Callable, Dict, List
 
-from .config import AGENT_DESKTOP_CONTROL_ENABLED, AGENT_LAUNCH_APPS_ENABLED, OUTPUT_DIR
+from .config import (
+    AGENT_DESKTOP_CONTROL_ENABLED,
+    AGENT_LAUNCH_APPS_ENABLED,
+    DESKTOP_SUGGEST_CLICK_REFINE,
+    DESKTOP_VISION_MODEL,
+    OUTPUT_DIR,
+)
+from . import desktop_uia as _desktop_uia
 from .desktop_skill import DESKTOP_AUTOMATION_TOOL_NAMES
 from .contracts import _registry_request_amendment
 from .dashboard import get_dashboard
@@ -545,12 +552,72 @@ def desktop_activate_window(title_substring: str) -> str:
 
 
 @_register_tool
+def desktop_uia_list_elements(
+    title_substring: str,
+    name_filter: str = "",
+    control_type: str = "",
+    limit: int = 60,
+) -> str:
+    """Windows only. List interactive UI Automation elements under the first window whose title
+    contains ``title_substring`` (same matching style as ``desktop_activate_window``).
+    OpenClaw-style workflow: after focusing the app, use this before pixel/vision clicks when
+    controls expose names. Columns: index, ControlType, Name, screen rect, AutomationId.
+    ``name_filter``: optional substring (case-insensitive) matched against control Name.
+    ``control_type``: optional substring matched against ControlTypeName (e.g. ``Button``, ``Edit``).
+    ``limit``: max rows (1–200). Requires AGENT_DESKTOP_CONTROL_ENABLED=1 and ``pip install uiautomation``."""
+    if not AGENT_DESKTOP_CONTROL_ENABLED:
+        return (
+            "ERROR: desktop control is disabled. Set AGENT_DESKTOP_CONTROL_ENABLED=1 in the "
+            "environment to allow UIA tools."
+        )
+    return _desktop_uia.list_elements(title_substring, name_filter, control_type, limit)
+
+
+@_register_tool
+def desktop_uia_read_text(title_substring: str, max_chars: int = 8000) -> str:
+    """Windows only. Collect non-empty UIA ``Name`` values under the matched window (no OCR).
+    Use to verify dialogs or forms when automation names are exposed. Caps output length with
+    ``max_chars``. Requires AGENT_DESKTOP_CONTROL_ENABLED=1 and ``pip install uiautomation``."""
+    if not AGENT_DESKTOP_CONTROL_ENABLED:
+        return (
+            "ERROR: desktop control is disabled. Set AGENT_DESKTOP_CONTROL_ENABLED=1 in the "
+            "environment to allow UIA tools."
+        )
+    return _desktop_uia.read_text(title_substring, max_chars)
+
+
+@_register_tool
+def desktop_uia_click(
+    title_substring: str,
+    name_substring: str,
+    control_type: str = "",
+) -> str:
+    """Windows only. Click the single interactive control whose Name contains ``name_substring``
+    (case-insensitive). Scope to the first matching top-level window (``title_substring``).
+    Optional ``control_type`` substring disambiguates (e.g. ``Button``). Uses UIA ``Click`` with
+    pyautogui center fallback. If 0 or multiple matches, returns ERROR — narrow strings or call
+    ``desktop_uia_list_elements`` first. Requires AGENT_DESKTOP_CONTROL_ENABLED=1."""
+    if not AGENT_DESKTOP_CONTROL_ENABLED:
+        return (
+            "ERROR: desktop control is disabled. Set AGENT_DESKTOP_CONTROL_ENABLED=1 in the "
+            "environment to allow UIA tools."
+        )
+    return _desktop_uia.click_named(
+        title_substring,
+        name_substring,
+        control_type,
+        dpi_prep=_maybe_windows_desktop_dpi_aware,
+    )
+
+
+@_register_tool
 def desktop_screenshot() -> str:
     """Take a full-screen screenshot and return a Gemini vision description of what is visible.
     Call before and after desktop_mouse/desktop_keyboard actions to verify the result.
     For click targets use desktop_suggest_click('description') first — it captures the screen
     and returns coordinates matched to the current layout.
     Returns: resolution, cursor position, and a natural-language description of the screen.
+    Uses ``DESKTOP_VISION_MODEL`` when set, else ``GEMINI_MODEL``.
     Requires AGENT_DESKTOP_CONTROL_ENABLED=1 in the environment."""
     if not AGENT_DESKTOP_CONTROL_ENABLED:
         return (
@@ -570,7 +637,7 @@ def desktop_screenshot() -> str:
         img_b64 = base64.b64encode(buf.getvalue()).decode()
         try:
             resp = get_client().models.generate_content(
-                model=GEMINI_MODEL,
+                model=_desktop_vision_model(),
                 contents=[{
                     "parts": [
                         {"text": (
@@ -722,8 +789,13 @@ def desktop_keyboard(action: str, text: str = "", keys: str = "") -> str:
         return f"ERROR: {e}"
 
 
+def _desktop_vision_model() -> str:
+    """Model id for screen understanding; override with DESKTOP_VISION_MODEL for sharper clicks."""
+    return (DESKTOP_VISION_MODEL or "").strip() or GEMINI_MODEL
+
+
 def _parse_click_coords_json(raw: str) -> tuple:
-    """Parse vision JSON: {\"x\": int, \"y\": int, ...} or nulls with reason."""
+    """Parse vision JSON: bbox (preferred) or x/y; nulls with reason."""
     import re
 
     t = (raw or "").strip()
@@ -742,12 +814,29 @@ def _parse_click_coords_json(raw: str) -> tuple:
         obj = json.loads(m.group(0))
     except json.JSONDecodeError as e:
         return None, None, f"invalid JSON: {e}"
+
+    el = str(obj.get("element") or "").strip()
+    bbox = obj.get("bbox")
+    if bbox is not None and isinstance(bbox, (list, tuple)) and len(bbox) == 4:
+        try:
+            x1, y1, x2, y2 = (int(round(float(bbox[i]))) for i in range(4))
+            if x1 > x2:
+                x1, x2 = x2, x1
+            if y1 > y2:
+                y1, y2 = y2, y1
+            cx = (x1 + x2) // 2
+            cy = (y1 + y2) // 2
+            note = el or "bbox"
+            return cx, cy, note
+        except (TypeError, ValueError):
+            pass
+
     x, y = obj.get("x"), obj.get("y")
     if x is None or y is None:
-        reason = obj.get("reason") or obj.get("element") or "target not found"
+        reason = obj.get("reason") or el or "target not found"
         return None, None, str(reason)
     try:
-        return int(round(float(x))), int(round(float(y))), str(obj.get("element") or "")
+        return int(round(float(x))), int(round(float(y))), el
     except (TypeError, ValueError):
         return None, None, "x/y not numeric"
 
@@ -762,6 +851,10 @@ def desktop_suggest_click(target: str) -> str:
     ``pyautogui.size()`` (Windows display scaling).
 
     ``target``: short phrase, e.g. "OK button", "Run menu", "text field labeled Name".
+
+    Vision quality: set ``DESKTOP_VISION_MODEL`` to a stronger Gemini vision model than
+    ``GEMINI_MODEL`` if clicks are imprecise. Optional ``DESKTOP_SUGGEST_CLICK_REFINE=1``
+    runs a second vision pass on a crop around the first guess (slower, often tighter).
 
     Does not move the mouse. On failure returns ERROR: ... (e.g. target not visible).
     Requires AGENT_DESKTOP_CONTROL_ENABLED=1."""
@@ -786,19 +879,31 @@ def desktop_suggest_click(target: str) -> str:
         buf = io.BytesIO()
         img.save(buf, format="PNG")
         img_b64 = base64.b64encode(buf.getvalue()).decode()
+        vision_model = _desktop_vision_model()
         prompt = (
-            f"This image is a screenshot of size {w}x{h} pixels (width × height). "
-            f"The user wants to click: {tgt!r}.\n\n"
-            "Reply with ONLY one JSON object, no markdown fences, no other text. Keys:\n"
-            '  "x": integer pixel column (0 = left edge, increases right)\n'
-            '  "y": integer pixel row (0 = top edge, increases down)\n'
-            '  "element": short string naming what you chose\n'
-            "Use the center of the clickable region. If nothing matches, use "
-            '"x": null, "y": null, "reason": "why not found".'
+            f"You are localizing a UI control for mouse input. Screenshot size {w}x{h} pixels "
+            f"(width × height, origin top-left, x right, y down).\n"
+            f"Target to click: {tgt!r}.\n\n"
+            "Rules:\n"
+            "- Put the click on the **actual interactive widget** (button rectangle, link, checkbox), "
+            "not on static instructional text above/beside it.\n"
+            "- For a **labeled button** (e.g. text 'Hello' on a button): bbox must wrap only the "
+            "**raised/flat button chrome** that receives the click, not the whole window and not a "
+            "separate caption line above the button. The center (x,y) must land **on the button face**.\n"
+            "- Prefer a **tight** box; oversized boxes produce wrong centers.\n\n"
+            "Reply with ONLY one JSON object, no markdown, no code fences. Prefer a tight axis-aligned "
+            "bounding box in **image pixel coordinates**:\n"
+            '  "bbox": [x1, y1, x2, y2]  — corners of the smallest rectangle that fully contains the '
+            "clickable control (button face, not whole window).\n"
+            '  "element": short label of what you boxed\n'
+            "If you cannot box it reliably, omit bbox and instead give:\n"
+            '  "x": <int>, "y": <int>  — center of the clickable area\n'
+            "Do not guess: if the target is not visible, use "
+            '"x": null, "y": null, "bbox": null, "reason": "why not visible".'
         )
         try:
             resp = get_client().models.generate_content(
-                model=GEMINI_MODEL,
+                model=vision_model,
                 contents=[{
                     "parts": [
                         {"text": prompt},
@@ -814,17 +919,79 @@ def desktop_suggest_click(target: str) -> str:
             return f"ERROR: could not locate click target ({note}). Raw: {raw[:500]!r}"
         ix = max(0, min(w - 1, ix))
         iy = max(0, min(h - 1, iy))
+
+        if DESKTOP_SUGGEST_CLICK_REFINE:
+            try:
+                margin = int((os.getenv("DESKTOP_SUGGEST_REFINE_MARGIN") or "160").strip() or "160")
+            except ValueError:
+                margin = 160
+            margin = max(48, min(margin, min(w, h) // 2))
+            left = max(0, ix - margin)
+            top = max(0, iy - margin)
+            right = min(w, ix + margin)
+            bottom = min(h, iy + margin)
+            if right - left >= 32 and bottom - top >= 32:
+                crop = img.crop((left, top, right, bottom))
+                cw, ch = crop.size
+                cbuf = io.BytesIO()
+                crop.save(cbuf, format="PNG")
+                crop_b64 = base64.b64encode(cbuf.getvalue()).decode()
+                rprompt = (
+                    f"Cropped region {cw}x{ch} pixels from a larger screenshot. "
+                    f"In the full image this crop's top-left was at ({left},{top}).\n"
+                    f"Find the best single click point for: {tgt!r}.\n"
+                    "Reply ONLY JSON: {\"x\": <int>, \"y\": <int>} relative to THIS crop "
+                    "(0,0 = top-left of crop). Center of the button/control. "
+                    "If not visible here: {\"x\": null, \"y\": null, \"reason\": \"...\"}."
+                )
+                try:
+                    rresp = get_client().models.generate_content(
+                        model=vision_model,
+                        contents=[{
+                            "parts": [
+                                {"text": rprompt},
+                                {"inline_data": {"mime_type": "image/png", "data": crop_b64}},
+                            ],
+                        }],
+                    )
+                    rraw = (getattr(rresp, "text", None) or "").strip()
+                    rx, ry, _ = _parse_click_coords_json(rraw)
+                    if rx is not None and ry is not None:
+                        nix = max(0, min(w - 1, left + rx))
+                        niy = max(0, min(h - 1, top + ry))
+                        logger.info(
+                            f"[desktop_suggest_click] refine crop=({left},{top})-({right},{bottom}) "
+                            f"local=({rx},{ry}) -> image=({nix},{niy}) was=({ix},{iy})"
+                        )
+                        ix, iy = nix, niy
+                except Exception as _ref_e:
+                    logger.warning(f"[desktop_suggest_click] refine pass failed: {_ref_e}")
         sx, sy, scaled = _map_image_coords_to_screen(ix, iy, w, h, screen_w, screen_h)
         scale_hint = ""
         if scaled:
             scale_hint = f" (image {w}x{h} → screen {screen_w}x{screen_h}: mapped {ix},{iy} → {sx},{sy})"
         logger.info(
-            f"[desktop_suggest_click] target={tgt!r} image=({ix},{iy}) screen=({sx},{sy}) scaled={scaled} note={note!r}"
+            f"[desktop_suggest_click] model={vision_model!r} target={tgt!r} image=({ix},{iy}) "
+            f"screen=({sx},{sy}) scaled={scaled} note={note!r}"
         )
+        _lite = "lite" in (vision_model or "").lower()
+        _retry = (
+            " After desktop_mouse + desktop_screenshot: if the click clearly missed (cursor wrong, "
+            "button not pressed), call desktop_suggest_click again with a **narrower** target "
+            "(e.g. exact button label only) or use desktop_uia_click on Windows if the control has "
+            "a UIA name — retry up to 2–3 times; one bad vision box is common."
+        )
+        _model_hint = ""
+        if _lite:
+            _model_hint = (
+                " Vision is using a *lite* model — clicks are often imprecise; set DESKTOP_VISION_MODEL "
+                "to a stronger Gemini vision id, and/or DESKTOP_SUGGEST_CLICK_REFINE=1 for a second crop pass."
+            )
         return (
             f"Suggested click for {tgt!r}: use screen coordinates ({sx}, {sy}) for desktop_mouse"
             + (f" — {note}" if note else "")
-            + f".{scale_hint} Next: desktop_mouse('click', {sx}, {sy})"
+            + f".{scale_hint} (vision_model={vision_model})"
+            f" Next: desktop_mouse('click', {sx}, {sy}).{_retry}{_model_hint}"
         )
     except ImportError:
         return "ERROR: pyautogui is not installed. Run: pip install pyautogui"

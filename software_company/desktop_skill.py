@@ -19,8 +19,9 @@ Or assign ``list(base) + list(DESKTOP_AUTOMATION_TOOL_NAMES)`` if you prefer;
 ``merge_role_tools_with_desktop`` deduplicates while preserving order (base first).
 
 Recommended agent flow: ``desktop_list_windows`` → ``desktop_activate_window`` →
-``desktop_screenshot`` → ``desktop_suggest_click`` → ``desktop_mouse`` /
-``desktop_keyboard``.
+(on Windows, prefer) ``desktop_uia_list_elements`` / ``desktop_uia_read_text`` →
+``desktop_uia_click`` when names are reliable → else ``desktop_screenshot`` →
+``desktop_suggest_click`` → ``desktop_mouse`` / ``desktop_keyboard``.
 """
 
 from __future__ import annotations
@@ -31,6 +32,9 @@ from typing import Iterable, List, Sequence
 DESKTOP_AUTOMATION_TOOL_NAMES: tuple[str, ...] = (
     "desktop_list_windows",
     "desktop_activate_window",
+    "desktop_uia_list_elements",
+    "desktop_uia_read_text",
+    "desktop_uia_click",
     "desktop_screenshot",
     "desktop_suggest_click",
     "desktop_mouse",

@@ -30,6 +30,20 @@ def test_parse_float_coords():
     assert x == 100 and y == 200
 
 
+def test_parse_bbox_center():
+    raw = '{"bbox": [100, 200, 140, 240], "element": "OK"}'
+    x, y, note = _parse_click_coords_json(raw)
+    assert x == 120
+    assert y == 220
+    assert note == "OK"
+
+
+def test_parse_bbox_swapped_corners():
+    x, y, _ = _parse_click_coords_json('{"bbox": [50, 80, 10, 20]}')
+    assert x == 30
+    assert y == 50
+
+
 def test_map_image_coords_identity():
     sx, sy, scaled = _map_image_coords_to_screen(100, 50, 1920, 1080, 1920, 1080)
     assert (sx, sy) == (100, 50)

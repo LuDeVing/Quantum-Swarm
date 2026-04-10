@@ -5,7 +5,26 @@ import os
 from pathlib import Path
 from typing import List
 
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite-preview")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-preview")
+# If set, used for desktop_screenshot vision text and desktop_suggest_click (stronger models = better boxes).
+# Example: gemini-2.0-flash or gemini-2.5-pro-preview-05-06 — check current Google AI model IDs.
+DESKTOP_VISION_MODEL = (os.environ.get("DESKTOP_VISION_MODEL") or "").strip()
+# Second vision pass on a crop around the first guess (slower, often tighter clicks).
+DESKTOP_SUGGEST_CLICK_REFINE = os.getenv("DESKTOP_SUGGEST_CLICK_REFINE", "0").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+)
+# Background full-screen PNG buffer for multimodal turns (see desktop_live_snapshot.py).
+# 0 = disabled. Example: 1.0 = refresh ~every second while any allowed role runs.
+try:
+    _live_iv = float((os.getenv("DESKTOP_LIVE_SNAPSHOT_INTERVAL_SEC") or "0").strip())
+    DESKTOP_LIVE_SNAPSHOT_INTERVAL_SEC = _live_iv if _live_iv > 0 else 0.0
+except ValueError:
+    DESKTOP_LIVE_SNAPSHOT_INTERVAL_SEC = 0.0
+# Comma-separated role_key values that receive the latest snapshot on each _run_with_tools turn.
+DESKTOP_LIVE_SNAPSHOT_ROLES = os.getenv("DESKTOP_LIVE_SNAPSHOT_ROLES", "eng_manager").strip()
 OUTPUT_DIR = Path("company_output")
 
 # Canonical cross-team reference files written by each team's manager
@@ -26,6 +45,14 @@ AGENT_LAUNCH_APPS_ENABLED = os.getenv("AGENT_LAUNCH_APPS_ENABLED", "0").strip().
 )
 AGENT_DESKTOP_CONTROL_ENABLED = os.getenv("AGENT_DESKTOP_CONTROL_ENABLED", "0").strip().lower() in (
     "1", "true", "yes", "on",
+)
+# When False, GUI integration passes with pytest + start_service only (no desktop_mouse/screenshots).
+# Set MANAGER_GUI_DESKTOP_PROOF=0 in CI / headless runs; keep default on for real screen verification.
+MANAGER_GUI_DESKTOP_PROOF = os.getenv("MANAGER_GUI_DESKTOP_PROOF", "1").strip().lower() not in (
+    "0",
+    "false",
+    "no",
+    "off",
 )
 TEAMMATE_IDLE_HOOKS: List[str] = []
 TEAMMATE_IDLE_MAX_RETRIES: int = 3
@@ -61,6 +88,10 @@ PHASE_INTEGRATION = 2  # Final integration test (manager fix loop)
 
 __all__ = [
     "GEMINI_MODEL",
+    "DESKTOP_VISION_MODEL",
+    "DESKTOP_SUGGEST_CLICK_REFINE",
+    "DESKTOP_LIVE_SNAPSHOT_INTERVAL_SEC",
+    "DESKTOP_LIVE_SNAPSHOT_ROLES",
     "OUTPUT_DIR",
     "TEAM_CANONICAL_FILES",
     "INTERFERENCE_ALPHA",
@@ -72,6 +103,7 @@ __all__ = [
     "MANAGER_FIX_MAX_ROUNDS",
     "AGENT_LAUNCH_APPS_ENABLED",
     "AGENT_DESKTOP_CONTROL_ENABLED",
+    "MANAGER_GUI_DESKTOP_PROOF",
     "TEAMMATE_IDLE_HOOKS",
     "TEAMMATE_IDLE_MAX_RETRIES",
     "TASK_CREATED_HOOKS",

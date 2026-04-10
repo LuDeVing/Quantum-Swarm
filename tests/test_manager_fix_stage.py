@@ -59,6 +59,16 @@ def _gui_verified_keyboard_tool_lines() -> list[str]:
     ]
 
 
+def _gui_verified_uia_click_tool_lines() -> list[str]:
+    """GUI gate accepts ``desktop_uia_click`` as interaction (Windows UIA path)."""
+    return [
+        "[TOOL: start_service] {'name': 'app', 'command': 'python main.py'}",
+        "[TOOL: desktop_screenshot|ok] {}",
+        "[TOOL: desktop_screenshot|ok] {}",
+        "[TOOL: desktop_uia_click|ok] {'title_substring': 'App', 'name_substring': 'OK'}",
+    ]
+
+
 def _gui_suggest_click_only_lines() -> list[str]:
     """Suggest-click alone does not satisfy the mandatory mouse/keyboard proof."""
     return [
@@ -66,6 +76,13 @@ def _gui_suggest_click_only_lines() -> list[str]:
         "[TOOL: desktop_screenshot|ok] {}",
         "[TOOL: desktop_screenshot|ok] {}",
         "[TOOL: desktop_suggest_click|ok] {'target': 'OK'}",
+    ]
+
+
+def _gui_headless_only_start_service_lines() -> list[str]:
+    """MANAGER_GUI_DESKTOP_PROOF=0: start_service + green gate, no desktop_*."""
+    return [
+        "[TOOL: start_service] {'name': 'gui-app', 'command': 'python main.py'}",
     ]
 
 
@@ -129,6 +146,32 @@ class TestManagerFixLoopFinalStage:
         assert result.app_run_verified is True
         assert result.rounds_used == 1
 
+    def test_gui_passes_with_desktop_uia_click_instead_of_mouse(
+        self, code_dir: Path, patch_manager_deps: dict
+    ) -> None:
+        _fresh_registry("gui")
+
+        def run_tools(*_a, **_kw):
+            return ("Manager verified GUI via UIA.", _gui_verified_uia_click_tool_lines(), None)
+
+        with (
+            patch(
+                "software_company.engineering._manager_fix_collect_errors",
+                return_value=[],
+            ),
+            patch("software_company.engineering._run_with_tools_pkg", side_effect=run_tools),
+        ):
+            result = _manager_fix_loop(
+                code_dir,
+                _dummy_task_queue(),
+                {},
+                max_rounds=4,
+            )
+
+        assert result.passed is True
+        assert result.app_run_verified is True
+        assert result.rounds_used == 1
+
     def test_gui_passes_with_desktop_keyboard_typing_instead_of_mouse(
         self, code_dir: Path, patch_manager_deps: dict
     ) -> None:
@@ -138,6 +181,32 @@ class TestManagerFixLoopFinalStage:
             return ("Typed in focused field.", _gui_verified_keyboard_tool_lines(), None)
 
         with (
+            patch(
+                "software_company.engineering._manager_fix_collect_errors",
+                return_value=[],
+            ),
+            patch("software_company.engineering._run_with_tools_pkg", side_effect=run_tools),
+        ):
+            result = _manager_fix_loop(
+                code_dir,
+                _dummy_task_queue(),
+                {},
+                max_rounds=4,
+            )
+
+        assert result.passed is True
+        assert result.app_run_verified is True
+
+    def test_gui_headless_passes_with_start_service_only_no_desktop_tools(
+        self, code_dir: Path, patch_manager_deps: dict
+    ) -> None:
+        _fresh_registry("gui")
+
+        def run_tools(*_a, **_kw):
+            return ("Headless GUI ok.", _gui_headless_only_start_service_lines(), None)
+
+        with (
+            patch("software_company.engineering.MANAGER_GUI_DESKTOP_PROOF", False),
             patch(
                 "software_company.engineering._manager_fix_collect_errors",
                 return_value=[],
@@ -177,7 +246,12 @@ class TestManagerFixLoopFinalStage:
             )
 
         assert result.passed is False
-        assert "desktop_mouse" in result.final_output.lower() or "desktop_keyboard" in result.final_output.lower()
+        _out = result.final_output.lower()
+        assert (
+            "desktop_mouse" in _out
+            or "desktop_keyboard" in _out
+            or "desktop_uia_click" in _out
+        )
 
     def test_gui_fails_without_desktop_interaction_even_if_tests_green(
         self, code_dir: Path, patch_manager_deps: dict
@@ -210,7 +284,12 @@ class TestManagerFixLoopFinalStage:
 
         assert result.passed is False
         assert result.app_run_verified is True
-        assert "desktop_mouse" in result.final_output.lower() or "desktop_keyboard" in result.final_output.lower()
+        _out = result.final_output.lower()
+        assert (
+            "desktop_mouse" in _out
+            or "desktop_keyboard" in _out
+            or "desktop_uia_click" in _out
+        )
 
     def test_web_fails_without_http_request(
         self, code_dir: Path, patch_manager_deps: dict

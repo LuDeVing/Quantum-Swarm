@@ -363,7 +363,8 @@ def _generate_contracts(
             f"  'library' (no runnable entry point — only importable modules).\n"
             f"  Choose based on the PROJECT description. This controls how the manager verifies the app.\n"
             f"  CRITICAL: Any desktop UI (tkinter, PyQt, wxPython, Electron window, JavaFX, etc.) MUST use "
-            f"app_type 'gui' — never 'cli' or 'script'. Otherwise integration will not require desktop_mouse/keyboard.\n"
+            f"app_type 'gui' — never 'cli' or 'script'. The manager verifies with pytest + start_service; "
+            f"real desktop_mouse/screenshots are required only when MANAGER_GUI_DESKTOP_PROOF is on (default).\n"
         )
 
     contract_output = _llm(
@@ -1551,12 +1552,13 @@ def _manager_saw_start_service(tool_results: List[str]) -> bool:
 
 
 def _manager_saw_desktop_interaction(tool_results: List[str]) -> bool:
-    """True if mouse/keyboard ran successfully (tool returned non-ERROR text).
+    """True if mouse, keyboard, or UIA click ran successfully (tool returned non-ERROR text).
     Screenshot-only does not count; failed desktop_* calls do not count."""
     trs = tool_results or []
     return any(
         tr.startswith("[TOOL: desktop_mouse|ok]")
         or tr.startswith("[TOOL: desktop_keyboard|ok]")
+        or tr.startswith("[TOOL: desktop_uia_click|ok]")
         for tr in trs
     )
 
@@ -1627,7 +1629,10 @@ def _manager_fix_loop(
 
     Success requires: (1) test gate + build green, (2) ``start_service()`` at least once,
     (3) for ``app_type=='web'``, at least one ``http_request()`` toward the running server,
-    (4) for ``app_type=='gui'``, mouse/keyboard plus two ``desktop_screenshot()`` calls.
+    (4) for ``app_type=='gui'`` when ``MANAGER_GUI_DESKTOP_PROOF`` is true (default), a successful
+    ``desktop_mouse``, ``desktop_keyboard``, or ``desktop_uia_click`` plus two ``desktop_screenshot()``
+    calls; when ``MANAGER_GUI_DESKTOP_PROOF=0`` (headless/CI),
+    ``start_service`` plus a green test gate is enough — no real desktop control required.
     """
     registry = get_contracts()
     _set_agent_ctx("eng_manager", _get_sprint_num())
@@ -1638,10 +1643,14 @@ def _manager_fix_loop(
     last_error_block = ""
     build_cmd_hint = registry.build_command or ""
     app_type = registry.app_type or registry._infer_app_type()
-    logger.info(f"[ManagerFix] app_type={app_type!r}")
+    _desktop_proof_required = app_type == "gui" and MANAGER_GUI_DESKTOP_PROOF
+    logger.info(
+        f"[ManagerFix] app_type={app_type!r}  "
+        f"gui_desktop_proof_required={_desktop_proof_required}"
+    )
 
     # web/worker → start_service (mandatory); web also needs http_request (mandatory)
-    # gui        → start_service + desktop screenshots + mouse/keyboard (mandatory)
+    # gui        → start_service + (desktop proof OR headless: see MANAGER_GUI_DESKTOP_PROOF)
     # cli/script/library → start_service still required for orchestration tracking
     _needs_start_service = app_type in ("web", "worker")
 
@@ -1655,7 +1664,7 @@ def _manager_fix_loop(
     )
 
     _gui_desktop_env_warn = ""
-    if app_type == "gui":
+    if _desktop_proof_required:
         _has_pyautogui = True
         try:
             import pyautogui as _pa  # noqa: F401
@@ -1666,9 +1675,18 @@ def _manager_fix_loop(
                 "\nGUI VERIFICATION PREREQUISITES (required or integration cannot pass):\n"
                 "  - Set AGENT_DESKTOP_CONTROL_ENABLED=1 in the environment (e.g. .env).\n"
                 "  - Install pyautogui: pip install pyautogui\n"
+                "  - Optional: DESKTOP_VISION_MODEL=<Gemini vision id> for sharper suggest_click; "
+                "DESKTOP_SUGGEST_CLICK_REFINE=1 for a second crop pass (slower).\n"
+                "  - Optional (Windows): pip install uiautomation for desktop_uia_list_elements / "
+                "desktop_uia_read_text / desktop_uia_click (structured UI before pixel/vision).\n"
                 "  - Only successful desktop_* tool results count: if a call returns a line starting "
                 "with ERROR, fix the environment and call the tool again until it succeeds.\n"
             )
+    elif app_type == "gui":
+        _gui_desktop_env_warn = (
+            "\nGUI HEADLESS MODE: MANAGER_GUI_DESKTOP_PROOF is off — integration passes with "
+            "start_service() and a green test gate only. Desktop tools are optional.\n"
+        )
 
     for round_num in range(1, max_rounds + 1):
         logger.info(f"[ManagerFix] round {round_num}/{max_rounds} — running verification…")
@@ -1678,7 +1696,7 @@ def _manager_fix_loop(
             last_error_block = "\n\n".join(errors)[-4000:]
 
         tests_build_ok = not errors
-        _desktop_ok = (app_type != "gui") or (
+        _desktop_ok = (not _desktop_proof_required) or (
             manager_ran_desktop_action and manager_desktop_screenshots >= 2
         )
         _web_ok = (app_type != "web") or manager_ran_http_request
@@ -1706,31 +1724,54 @@ def _manager_fix_loop(
 
         _gui_cumulative = ""
         if app_type == "gui":
-            _gui_cumulative = (
-                f"── GUI verification status (cumulative across manager rounds) ──\n"
-                f"  start_service recorded: {'yes' if manager_ran_start_service else 'no'}\n"
-                f"  successful desktop_screenshot: {manager_desktop_screenshots} (need ≥2)\n"
-                f"  desktop_mouse OR desktop_keyboard (success): "
-                f"{'yes' if manager_ran_desktop_action else 'NO — still required'}\n"
-                f"  If boot is already yes: do NOT redo pip install/freeze, tasklist, or tkinter python -c checks — "
-                f"they do not count. If the app may be in the background: desktop_list_windows() then "
-                f"desktop_activate_window('title substring'), then desktop_suggest_click(...) for (x,y), "
-                f"desktop_mouse('click', x, y), then another desktop_screenshot.\n"
-                f"  Never use run_shell with `python main.py &` on Windows (times out); GUI runs via start_service / launch_application only.\n\n"
-            )
+            if _desktop_proof_required:
+                _gui_cumulative = (
+                    f"── GUI verification status (cumulative across manager rounds) ──\n"
+                    f"  start_service recorded: {'yes' if manager_ran_start_service else 'no'}\n"
+                    f"  successful desktop_screenshot: {manager_desktop_screenshots} (need ≥2)\n"
+                    f"  desktop_mouse OR desktop_keyboard OR desktop_uia_click (success): "
+                    f"{'yes' if manager_ran_desktop_action else 'NO — still required'}\n"
+                    f"  If boot is already yes: do NOT redo pip install/freeze, tasklist, or tkinter python -c checks — "
+                    f"they do not count. If the app may be in the background: desktop_list_windows() then "
+                    f"desktop_activate_window('title substring'). On Windows prefer desktop_uia_list_elements / "
+                    f"desktop_uia_click when control names are exposed; else desktop_suggest_click(...) for (x,y), "
+                    f"desktop_mouse('click', x, y), then another desktop_screenshot.\n"
+                    f"  Never use run_shell with `python main.py &` on Windows (times out); GUI runs via start_service / launch_application only.\n\n"
+                )
+            else:
+                _gui_cumulative = (
+                    f"── GUI verification (headless / test-gate mode) ──\n"
+                    f"  MANAGER_GUI_DESKTOP_PROOF=0 — real desktop mouse/screenshots are NOT required.\n"
+                    f"  start_service recorded: {'yes' if manager_ran_start_service else 'no'}\n"
+                    f"  Requirement: call start_service with the GUI entry command; pytest must stay green.\n"
+                    f"  Prefer automated tests that exercise widgets or a short-lived GUI smoke in-process.\n\n"
+                )
 
         if errors:
             error_block = "\n\n".join(errors)[-4000:]
             logger.warning(f"[ManagerFix] round {round_num} errors:\n{error_block[:500]}")
             _gui_extra = (
-                "GUI-SPECIFIC REQUIREMENT (applies even during error rounds):\n"
-                "  - Launch the desktop app; if focus is unclear use desktop_list_windows() then "
-                "desktop_activate_window('substring').\n"
-                "  - desktop_screenshot() before interaction and again after.\n"
-                "  - Use desktop_suggest_click('what to click') for coordinates, then desktop_mouse('click', x, y); "
-                "and/or desktop_keyboard() at least once — screenshot-only is not enough.\n"
-                "  - Prefer that flow over guessing coordinates or alt+tab window switching.\n"
-                "  - Describe what changed on screen after each interaction.\n"
+                (
+                    "GUI-SPECIFIC REQUIREMENT (applies even during error rounds):\n"
+                    "  - Launch the desktop app; if focus is unclear use desktop_list_windows() then "
+                    "desktop_activate_window('substring').\n"
+                    "  - desktop_screenshot() before interaction and again after.\n"
+                    "  - On Windows try desktop_uia_read_text / desktop_uia_list_elements then desktop_uia_click when "
+                    "automation names exist; else desktop_suggest_click('what to click') for coordinates, then "
+                    "desktop_mouse('click', x, y); and/or desktop_keyboard() at least once — screenshot-only is not enough.\n"
+                    "  - If the post-click screenshot shows the click missed, **retry** suggest_click + mouse "
+                    "(narrower target) or desktop_uia_click — do not stop after one wrong coordinate; "
+                    "integration can still pass with a missed click, so you must verify visually.\n"
+                    "  - Prefer that flow over guessing coordinates or alt+tab window switching.\n"
+                    "  - Describe what changed on screen after each interaction.\n"
+                    if _desktop_proof_required
+                    else (
+                        "GUI-SPECIFIC (headless mode — fix tests first):\n"
+                        "  - Fix failing pytest output above; use read_file / write_code_file.\n"
+                        "  - start_service('gui', '<run command>') still records that the app boots.\n"
+                        "  - Add or tighten tests that validate GUI logic without requiring desktop_* tools.\n"
+                    )
+                )
                 if app_type == "gui" else ""
             )
             _web_extra = (
@@ -1787,23 +1828,37 @@ def _manager_fix_loop(
                     f"  5. stop_service('app') when done.\n"
                 )
             elif app_type == "gui":
-                _run_instructions = (
-                    f"REQUIRED (use tools, not prose only):\n"
-                    f"  1. read_file() to identify the entry point and run command.\n"
-                    f"  2. launch_application('<run command>') — opens the GUI window.\n"
-                    f"  3. desktop_list_windows() then desktop_activate_window('app title substring') if the window is not focused.\n"
-                    f"  4. desktop_screenshot() — baseline.\n"
-                    f"  5. desktop_suggest_click('visible control') → then desktop_mouse('click', x, y) with those integers;\n"
-                    f"     or desktop_keyboard() if typing is the right interaction.\n"
-                    f"  6. desktop_screenshot() again — proof the UI changed after interaction.\n"
-                    f"     (At least TWO successful screenshots this session, plus real mouse OR keyboard.)\n"
-                    f"  7. Avoid guessing (x,y); suggest_click uses a fresh capture so coordinates match the current layout.\n"
-                    f"  8. Verify EACH checklist item using further screenshots as needed.\n"
-                    f"  NOTE: call start_service() with the run command too — the orchestrator \n"
-                    f"  tracks this to confirm you booted the app.\n"
-                    f"  Do NOT use run_shell() for the full GUI main script — it blocks until the window closes.\n"
-                    f"  FORBIDDEN as GUI proof: run_shell(tasklist), pip freeze, pip install loops, or python -c tkinter one-liners.\n"
-                )
+                if _desktop_proof_required:
+                    _run_instructions = (
+                        f"REQUIRED (use tools, not prose only):\n"
+                        f"  1. read_file() to identify the entry point and run command.\n"
+                        f"  2. launch_application('<run command>') — opens the GUI window.\n"
+                        f"  3. desktop_list_windows() then desktop_activate_window('app title substring') if the window is not focused.\n"
+                        f"  4. desktop_screenshot() — baseline.\n"
+                        f"  5. On Windows: desktop_uia_list_elements('title substring') / desktop_uia_read_text, then "
+                        f"desktop_uia_click(...) when a unique control name matches; else desktop_suggest_click('visible control') "
+                        f"→ desktop_mouse('click', x, y); or desktop_keyboard() if typing fits.\n"
+                        f"  6. desktop_screenshot() again — proof the UI changed after interaction.\n"
+                        f"     (At least TWO successful screenshots this session, plus mouse, keyboard, or desktop_uia_click.)\n"
+                        f"  7. Avoid guessing (x,y); suggest_click uses a fresh capture so coordinates match the current layout. "
+                        f"If the click missed, retry suggest_click with a tighter target or desktop_uia_click "
+                        f"(e.g. window title substring + button name on Windows).\n"
+                        f"  8. Verify EACH checklist item using further screenshots as needed.\n"
+                        f"  NOTE: call start_service() with the run command too — the orchestrator \n"
+                        f"  tracks this to confirm you booted the app.\n"
+                        f"  Do NOT use run_shell() for the full GUI main script — it blocks until the window closes.\n"
+                        f"  FORBIDDEN as GUI proof: run_shell(tasklist), pip freeze, pip install loops, or python -c tkinter one-liners.\n"
+                    )
+                else:
+                    _run_instructions = (
+                        f"REQUIRED (headless GUI mode — MANAGER_GUI_DESKTOP_PROOF=0):\n"
+                        f"  1. read_file() to identify the entry point and run command.\n"
+                        f"  2. start_service('gui', '<run command>') — records boot (same command as real GUI).\n"
+                        f"  3. Rely on pytest: add tests under tests/ that import widgets, build windows off-screen, or\n"
+                        f"     run short smokes; run_shell('pytest ...') if you need a one-off check.\n"
+                        f"  4. Do NOT spend rounds on desktop_screenshot / desktop_mouse unless debugging locally.\n"
+                        f"  5. launch_application() is optional here; focus on green test gate + start_service.\n"
+                    )
             elif app_type in ("cli", "script"):
                 _pl = (registry.primary_language or "").strip() or "python"
                 _run_instructions = (
@@ -1831,13 +1886,19 @@ def _manager_fix_loop(
                 )
 
             _mgr_session_note = "You have NOT yet completed mandatory application verification in this manager session.\n\n"
-            if app_type == "gui" and (
+            if app_type == "gui" and _desktop_proof_required and (
                 manager_ran_start_service or manager_desktop_screenshots or manager_ran_desktop_action
             ):
                 _mgr_session_note = (
                     "Some verification tools already ran in a prior round — read the status block below. "
-                    "Complete only what is missing (usually desktop_suggest_click + desktop_mouse + a second screenshot). "
+                    "Complete only what is missing (usually desktop_uia_click or desktop_suggest_click + desktop_mouse, "
+                    "plus a second screenshot). "
                     "Do not repeat environment audit commands (pip freeze, tasklist, tkinter -c) — they do not satisfy GUI rules.\n\n"
+                )
+            elif app_type == "gui" and (not _desktop_proof_required) and manager_ran_start_service:
+                _mgr_session_note = (
+                    "start_service already ran — if the loop continues, focus on any remaining test failures or "
+                    "contract checklist items; desktop tools are not required for pass in this mode.\n\n"
                 )
             prompt = (
                 f"You are the Engineering Manager — MANDATORY {_verb} "
@@ -1894,7 +1955,7 @@ def _manager_fix_loop(
     tests_build_ok = not errors
     if errors:
         last_error_block = "\n\n".join(errors)[-4000:]
-    _desktop_ok = (app_type != "gui") or (
+    _desktop_ok = (not _desktop_proof_required) or (
         manager_ran_desktop_action and manager_desktop_screenshots >= 2
     )
     _web_ok = (app_type != "web") or manager_ran_http_request
@@ -1918,12 +1979,20 @@ def _manager_fix_loop(
             final_output=msg,
             app_run_verified=False,
         )
-    if tests_build_ok and manager_ran_start_service and app_type == "gui" and not _desktop_ok:
+    if (
+        tests_build_ok
+        and manager_ran_start_service
+        and app_type == "gui"
+        and _desktop_proof_required
+        and not _desktop_ok
+    ):
         msg = (
             "Tests/build passed and start_service was used, but GUI verification is incomplete: "
-            "the manager needs at least one successful desktop_mouse or desktop_keyboard call "
+            "the manager needs at least one successful desktop_mouse, desktop_keyboard, or desktop_uia_click call "
             "(non-ERROR result) and at least two successful desktop_screenshot calls. "
-            "If tools returned ERROR, set AGENT_DESKTOP_CONTROL_ENABLED=1 and pip install pyautogui, then retry."
+            "If tools returned ERROR, set AGENT_DESKTOP_CONTROL_ENABLED=1, pip install pyautogui, and on Windows "
+            "optionally pip install uiautomation for UIA tools, then retry. "
+            "For CI/headless runs only, set MANAGER_GUI_DESKTOP_PROOF=0 so pytest + start_service suffice."
         )
         logger.warning(f"[ManagerFix] {msg}")
         return ManagerFixResult(
@@ -2084,9 +2153,9 @@ def run_engineering_team(
                     "GUI PROJECT: Never use run_shell() to start the full app (main.py / run.py / Tk or Qt "
                     "main loop). That blocks until the window closes and will freeze or time out this agent.\n"
                     "Use run_shell only for commands that exit on their own: pytest, linters, "
-                    "python -m py_compile, or python <entry> --help. Live GUI verification is the manager's job "
-                    "(launch_application, desktop_list_windows / desktop_activate_window as needed, desktop_screenshot, "
-                    "desktop_suggest_click + desktop_mouse / desktop_keyboard).\n\n"
+                    "python -m py_compile, or python <entry> --help. The manager verifies the GUI via "
+                    "start_service + tests; full desktop_mouse/screenshot proof runs only when "
+                    "MANAGER_GUI_DESKTOP_PROOF is enabled (omit or set 0 in headless/CI).\n\n"
                 )
             task_instruction = (
                 f"INTEGRATION TEST — all code merged.\n"

@@ -19,6 +19,11 @@ def test_desktop_automation_tool_names_order() -> None:
         "desktop_list_windows",
         "desktop_activate_window",
     )
+    assert DESKTOP_AUTOMATION_TOOL_NAMES[2:5] == (
+        "desktop_uia_list_elements",
+        "desktop_uia_read_text",
+        "desktop_uia_click",
+    )
     assert "desktop_screenshot" in DESKTOP_AUTOMATION_TOOL_NAMES
     assert DESKTOP_TOOLS_OK_FAIL == frozenset(DESKTOP_AUTOMATION_TOOL_NAMES)
 

@@ -775,9 +775,10 @@ def _run_shell_segment_blocks_gui(seg: str) -> Optional[str]:
         "  • Smoke-check without UI: run_shell('python run.py --help') or unit tests / "
         "python -c \"import tkinter; print('ok')\"\n"
         "  • Real GUI session (manager / integration with desktop tools): "
-        "start_service('gui', 'python run.py'), then desktop_list_windows() / desktop_activate_window() if needed, "
+        "start_service('gui', 'python run.py'), then desktop_list_windows() / desktop_activate_window() if needed; "
+        "on Windows prefer desktop_uia_list_elements / desktop_uia_click when UIA names exist, else "
         "desktop_screenshot(), desktop_suggest_click('control name'), desktop_mouse('click', x, y), "
-        "desktop_keyboard() as needed, then stop_service('gui').\n"
+        "desktop_keyboard() as needed; then stop_service('gui').\n"
     )
 
 

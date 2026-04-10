@@ -10,6 +10,7 @@ import threading
 from typing import List, Tuple
 
 from .config import OUTPUT_DIR
+from .desktop_live_snapshot import build_user_message_with_live_screen
 from .desktop_skill import DESKTOP_TOOLS_OK_FAIL
 from .llm_client import (
     GEMINI_MODEL,
@@ -158,7 +159,13 @@ def _run_with_tools(
             config=_gtypes.GenerateContentConfig(**cfg_kwargs),
         )
 
-        r = chat.send_message(prompt)
+        initial_msg = build_user_message_with_live_screen(prompt, role_key)
+        if isinstance(initial_msg, list):
+            logger.info(
+                f"  [{label}] first turn includes live desktop PNG "
+                f"({len(initial_msg)} parts; see DESKTOP_LIVE_SNAPSHOT_INTERVAL_SEC)"
+            )
+        r = chat.send_message(initial_msg)
         _track_tokens(r)
 
         final_text = (getattr(r, "text", "") or "").strip()

@@ -3,7 +3,8 @@ Tests for Engineering Manager desktop verification helpers.
 
 These mirror how ``agent_loop`` logs tool invocations (``[TOOL: name|ok|fail]``)
 and what ``_manager_fix_loop`` requires for ``app_type == "gui"``: at least one
-successful ``desktop_mouse`` or ``desktop_keyboard`` call (screenshots alone do not count).
+successful ``desktop_mouse``, ``desktop_keyboard``, or ``desktop_uia_click`` call
+(screenshots alone do not count).
 
 No real desktop, LLM, or full ``run_engineering_team`` run — pure logic only.
 """
@@ -16,7 +17,7 @@ import software_company as sc
 
 
 class TestManagerSawDesktopInteraction:
-    """``_manager_saw_desktop_interaction`` — mouse/keyboard success lines only."""
+    """``_manager_saw_desktop_interaction`` — mouse/keyboard/UIA click success lines."""
 
     @pytest.mark.parametrize(
         "lines,expected",
@@ -26,6 +27,7 @@ class TestManagerSawDesktopInteraction:
             (["[TOOL: desktop_screenshot|ok] {}"], False),
             (["[TOOL: desktop_mouse|ok] {}"], True),
             (["[TOOL: desktop_keyboard|ok] {}"], True),
+            (["[TOOL: desktop_uia_click|ok] {}"], True),
             (
                 [
                     "[TOOL: desktop_screenshot|ok] {}",
@@ -40,6 +42,13 @@ class TestManagerSawDesktopInteraction:
                 ],
                 True,
             ),
+            (
+                [
+                    "[TOOL: desktop_screenshot|ok] {}",
+                    "[TOOL: desktop_uia_click|ok] {'title_substring': 'App'}",
+                ],
+                True,
+            ),
             # suggest_click success does not replace mouse/keyboard for the gate
             (
                 [
@@ -51,6 +60,7 @@ class TestManagerSawDesktopInteraction:
             # Failed desktop calls do not count
             (["[TOOL: desktop_mouse|fail] {}"], False),
             (["[TOOL: desktop_keyboard|fail] {}"], False),
+            (["[TOOL: desktop_uia_click|fail] {}"], False),
             # Wrong prefix / partial match
             (["desktop_mouse ok"], False),
             (["[TOOL: desktop_mouse] {}"], False),
