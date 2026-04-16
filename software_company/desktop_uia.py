@@ -38,6 +38,25 @@ _DEFAULT_READ_MAX = 8000
 _MAX_TREE_DEPTH = 28
 
 
+def _restore_uia_native_window_if_minimized(root_win: Any) -> None:
+    """Minimized top-level windows are invisible to full-screen capture; restore via Win32 if needed."""
+    if sys.platform != "win32":
+        return
+    try:
+        hwnd = int(getattr(root_win, "NativeWindowHandle", 0) or 0)
+    except (TypeError, ValueError):
+        return
+    if not hwnd:
+        return
+    try:
+        import ctypes
+
+        if ctypes.windll.user32.IsIconic(hwnd):
+            ctypes.windll.user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+    except Exception:
+        pass
+
+
 def _import_uia():
     try:
         import uiautomation as auto  # type: ignore[import-untyped]
@@ -126,6 +145,7 @@ def list_elements(
     win, err = _find_window_first(auto_mod, title_substring)
     if err:
         return err
+    _restore_uia_native_window_if_minimized(win)
     try:
         lim = max(1, min(200, int(limit)))
     except (TypeError, ValueError):
@@ -182,6 +202,7 @@ def read_text(title_substring: str, max_chars: int = _DEFAULT_READ_MAX) -> str:
     win, err = _find_window_first(auto_mod, title_substring)
     if err:
         return err
+    _restore_uia_native_window_if_minimized(win)
     try:
         cap = max(500, min(50_000, int(max_chars)))
     except (TypeError, ValueError):
@@ -222,6 +243,7 @@ def click_named(
     win, err = _find_window_first(auto_mod, title_substring)
     if err:
         return err
+    _restore_uia_native_window_if_minimized(win)
 
     matches: List[Any] = []
     for ctrl, _ in _iter_descendants(win, _MAX_TREE_DEPTH):

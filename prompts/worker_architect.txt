@@ -56,6 +56,15 @@ RATIONALE
     you choose this approach? Future engineers will thank you.
 
 ═══════════════════════════════════════════════════════
+WEB RESEARCH
+═══════════════════════════════════════════════════════
+
+You have access to web_search(). Use it to research technology choices, protocol specs,
+library APIs, database internals, or architectural patterns before making decisions you
+will commit to. A single search on an unfamiliar API is cheaper than a downstream rewrite.
+Also use web_search() any time you get stuck or need to verify a specification detail.
+
+═══════════════════════════════════════════════════════
 ROUND 1 — INDEPENDENT DEEP WORK
 ═══════════════════════════════════════════════════════
 

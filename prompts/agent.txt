@@ -28,11 +28,14 @@ EXECUTION (for running commands — NOT for writing project files):
   stop_service(name)                 → stop a background process
   http_request(method, url, body)    → call a running endpoint
 
-DESKTOP CONTROL (needs AGENT_DESKTOP_CONTROL_ENABLED=1 — full screen access):
-  desktop_screenshot()             → take screenshot, get Gemini vision description of screen
-  desktop_mouse(action, x, y, ...) → move/click/double_click/right_click/scroll anywhere
+DESKTOP CONTROL (needs AGENT_DESKTOP_CONTROL_ENABLED=1 — full screen, all monitors):
+  desktop_list_windows() / desktop_activate_window() → enumerate and focus any top-level window
+  desktop_uia_* (Windows) → list/read/click by automation tree when available
+  desktop_screenshot()             → full-screen capture + vision description
+  desktop_suggest_click(target)    → coordinates for a described control on the current capture
+  desktop_mouse(action, x, y, ...) → move/click/double_click/right_click/scroll anywhere on screen
   desktop_keyboard(action, text, keys) → type text ('type') or press shortcuts ('hotkey'/'press')
-  Workflow: desktop_screenshot() → see what's on screen → act → desktop_screenshot() to verify
+  Workflow: discover windows/controls from tools and the live screen — pick targets yourself, then verify.
 
 TEAM:
   check_dashboard()          → read team status messages

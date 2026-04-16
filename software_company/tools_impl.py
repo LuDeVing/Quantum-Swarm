@@ -198,21 +198,43 @@ def _tool_write_config_file(filename: str, content: str) -> str:
         return f"ERROR writing config/{filename}: {e}"
 
 
-def _tool_read_file(filename: str) -> str:
+def _tool_read_file(filename: str, offset: int = 1, limit: int = 200) -> str:
+    """Read file lines with line numbers. offset: 1-based start line. limit: max lines."""
+    MAX_LINES = 500  # hard cap regardless of what caller passes
+
+    def _render(path: Path) -> str:
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError as e:
+            return f"[READ ERROR: {e}]"
+        all_lines = text.splitlines()
+        total = len(all_lines)
+        start = max(1, int(offset)) - 1          # convert to 0-based index
+        count = min(int(limit), MAX_LINES)
+        chunk = all_lines[start: start + count]
+        if not chunk:
+            return f"[Empty or offset beyond end of file — file has {total} lines]"
+        lines_out = [f"{start + i + 1}\t{line}" for i, line in enumerate(chunk)]
+        header = f"File: {filename}  (lines {start + 1}–{start + len(chunk)} of {total})"
+        suffix = (
+            f"\n[{total - start - len(chunk)} more lines — call read_file('{filename}', "
+            f"offset={start + len(chunk) + 1}) to continue]"
+            if start + len(chunk) < total else ""
+        )
+        return header + "\n" + "\n".join(lines_out) + suffix
+
     # Check agent's worktree first for code files
     code_dir = _get_code_dir()
     wt_path = (code_dir / _strip_subdir_prefix(filename, "code")).resolve()
     if wt_path.exists():
-        return wt_path.read_text(encoding="utf-8")[:2000]
+        return _render(wt_path)
 
     out_root = OUTPUT_DIR.resolve()
-    # Join with stripped relative paths so we never get OUTPUT_DIR/code/code/… when filename is "code/app/…".
     candidates: List[Path] = []
     candidates.append((OUTPUT_DIR / "code" / _strip_subdir_prefix(filename, "code")).resolve())
     candidates.append(
         (OUTPUT_DIR / "code" / "tests" / _strip_subdir_prefix(filename, "tests")).resolve()
     )
-    # Legacy layout (older runs)
     candidates.append((OUTPUT_DIR / "tests" / _strip_subdir_prefix(filename, "tests")).resolve())
     for subdir, strip_key in [("design", "design"), ("config", "config")]:
         candidates.append((OUTPUT_DIR / subdir / _strip_subdir_prefix(filename, strip_key)).resolve())
@@ -222,7 +244,7 @@ def _tool_read_file(filename: str) -> str:
         if not str(p).startswith(str(out_root)):
             return "[ACCESS DENIED: path outside project directory]"
         if p.exists():
-            return p.read_text(encoding="utf-8")[:2000]
+            return _render(p)
     return f"[FILE NOT FOUND: {filename}]"
 
 
@@ -352,6 +374,122 @@ def _tool_search_codebase(query: str) -> str:
 
     logger.info(f"{label} returning {len(parts)} result sections")
     return "\n\n".join(parts) if parts else "[No relevant code found]"
+
+
+def _tool_recall_memory(role_key: str, query: str) -> str:
+    """Return relevant lessons from this role's long-term memory."""
+    try:
+        from .long_term_memory import get_role_memory
+        store = get_role_memory(role_key)
+        result = store.query(query, top_k=8)
+        if not result:
+            concepts = store.top_concepts(5)
+            if concepts:
+                concept_str = ", ".join(f"{c}({n})" for c, n in concepts)
+                return (
+                    f"[No lessons match '{query}'. "
+                    f"Top concepts in memory: {concept_str}. "
+                    f"Try a broader query or check after more sprints have run.]"
+                )
+            return f"[No memory yet for this role. Lessons accumulate after each sprint.]"
+        count = len(store)
+        return f"Long-term memory ({count} facts stored):\n{result}"
+    except Exception as e:
+        return f"[recall_memory error: {e}]"
+
+
+def _tool_grep_codebase(pattern: str, glob: str = "", context_lines: int = 0) -> str:
+    """Regex search across every file in the project — returns file:line: text matches."""
+    import fnmatch
+
+    MAX_MATCHES = 60
+    MAX_OUTPUT  = 5000
+
+    if not pattern:
+        return "ERROR: pattern is required"
+    try:
+        rx = re.compile(pattern)
+    except re.error as e:
+        return f"ERROR: invalid regex — {e}"
+
+    # Determine which directories to search (agent worktree + merged output)
+    code_dir = _get_code_dir()
+    search_roots: list[Path] = []
+    if code_dir.exists():
+        search_roots.append(code_dir)
+    fallback = OUTPUT_DIR / "code"
+    if fallback.exists() and fallback.resolve() != code_dir.resolve():
+        search_roots.append(fallback)
+
+    # Collect candidate files from all roots (deduplicated by resolved path)
+    seen_resolved: set[str] = set()
+    candidates: list[tuple[Path, str]] = []   # (abs_path, display_path)
+    for root in search_roots:
+        for fpath in sorted(root.rglob("*")):
+            if not fpath.is_file():
+                continue
+            # Skip binary-ish and noisy files
+            if fpath.suffix in {".pyc", ".pyo", ".pkl", ".db", ".sqlite",
+                                 ".png", ".jpg", ".jpeg", ".gif", ".ico",
+                                 ".zip", ".tar", ".gz", ".whl", ".egg"}:
+                continue
+            resolved = str(fpath.resolve())
+            if resolved in seen_resolved:
+                continue
+            seen_resolved.add(resolved)
+            display = str(fpath.relative_to(root))
+            # Apply glob filter if given
+            if glob:
+                # Support patterns like "*.py" or "**/*.ts"
+                if not fnmatch.fnmatch(fpath.name, glob) and not fnmatch.fnmatch(display, glob):
+                    continue
+            candidates.append((fpath, display))
+
+    if not candidates:
+        return f"[No files to search{' matching glob ' + repr(glob) if glob else ''}]"
+
+    lines_out: list[str] = []
+    match_count = 0
+    truncated = False
+
+    for fpath, display in candidates:
+        try:
+            text = fpath.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        file_lines = text.splitlines()
+        file_hits: list[str] = []
+        for lineno, line in enumerate(file_lines, 1):
+            if rx.search(line):
+                if match_count >= MAX_MATCHES:
+                    truncated = True
+                    break
+                match_count += 1
+                # Context lines (before)
+                if context_lines > 0:
+                    for ci in range(max(0, lineno - 1 - context_lines), lineno - 1):
+                        file_hits.append(f"  {display}:{ci + 1}: {file_lines[ci]}")
+                file_hits.append(f"  {display}:{lineno}: {line}")
+                # Context lines (after)
+                if context_lines > 0:
+                    for ci in range(lineno, min(len(file_lines), lineno + context_lines)):
+                        file_hits.append(f"  {display}:{ci + 1}: {file_lines[ci]}")
+        if file_hits:
+            lines_out.extend(file_hits)
+        if truncated:
+            break
+
+    if not lines_out:
+        return f"[No matches for {pattern!r}{' in ' + repr(glob) if glob else ''}]"
+
+    header = f"Grep results for {pattern!r}{' (' + glob + ')' if glob else ''} — {match_count} match(es):"
+    body = "\n".join(lines_out)
+    result = header + "\n" + body
+    if truncated:
+        result += f"\n[Truncated — showing first {MAX_MATCHES} matches. Narrow pattern or add glob filter.]"
+    if len(result) > MAX_OUTPUT:
+        result = result[:MAX_OUTPUT] + "\n[Output truncated — use a more specific pattern]"
+    return result
 
 
 def _tool_list_files() -> str:

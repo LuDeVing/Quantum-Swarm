@@ -130,17 +130,33 @@ NON-NEGOTIABLE — YOU MUST RUN THE APPLICATION AT LEAST ONCE:
     3. Also call start_service('<name>', '<same run command>') so the orchestrator records that you ran the application.
 
   app_type = "gui"  (desktop window application)
-    Requires AGENT_DESKTOP_CONTROL_ENABLED=1 and pyautogui — failed desktop_* calls do not count.
-    Launching the app (launch_application or start_service) alone is NOT enough: the orchestrator
-    requires at least one successful desktop_mouse OR desktop_keyboard call and two successful
-    desktop_screenshot calls. Screenshot-only passes are invalid.
-    1. launch_application('<run command>') — opens the GUI (cwd is the code tree).
-    2. desktop_screenshot() — confirm the window appeared (must succeed, not ERROR).
-    3. desktop_mouse('click', x, y) at least once — use coordinates from the screenshot description
-       to hit a visible button or control; OR desktop_keyboard with a substantive action (typing,
-       Enter, Escape). Do not stop at alt+tab or window focus alone.
-    4. desktop_screenshot() again after that interaction (two successful screenshots minimum).
-    5. start_service('<name>', '<run command>') for orchestrator tracking.
+    ╔══════════════════════════════════════════════════════════════╗
+    ║  MANDATORY VISUAL VERIFICATION FOR GUI APPS                  ║
+    ╚══════════════════════════════════════════════════════════════╝
+    You control the full desktop. Launching the application is NOT enough.
+    You MUST visually verify and interact with the running GUI using the
+    desktop tools. A synthesis without desktop vision evidence is REJECTED.
+
+    REQUIRED SEQUENCE:
+    1. launch_application('<run command>') — opens the GUI.
+    2. desktop_list_windows() and desktop_activate_window('<target>') to focus the app.
+    3. OBSERVE: desktop_screenshot() — capture the screen. The Vision model will describe what it sees.
+       → Confirm the GUI renders correctly. Record this description.
+    4. LOCATE: You MUST NOT guess click coordinates. You MUST prioritize native UI Automation tools because they are perfectly accurate and much faster than Vision APIs:
+       • PREFERRED: desktop_uia_list_elements('App Title') to read exact control names from the OS.
+       • FALLBACK ONLY: desktop_suggest_click('<element description>') — if UIA cannot see the element, ask the Vision model for (x,y) coordinates.
+       • desktop_zoom_region(x1, y1, x2, y2) — use only to inspect unclear areas if Vision struggles.
+    5. ACT: Perform interaction using the gathered data:
+       • desktop_uia_click('App Title', 'Button Name') — (Preferred, perfectly accurate)
+       • desktop_mouse('click', x, y) — (Fallback, using Vision coordinates from step 4)
+       • desktop_keyboard('type', 'text')
+    6. VERIFY: desktop_screenshot() — capture the screen again to confirm the UI reacted
+       (e.g., text appeared, button pressed, dialog opened).
+    7. start_service('<name>', '<run command>') strictly for orchestrator tracking records.
+
+    VISUAL AUDIT RULES:
+    • Screenshot-only verification is INVALID. You must complete at least one OBSERVE -> ACT -> VERIFY triplet.
+    • Include the Vision descriptions of the GUI in your final synthesis report.
 
   app_type = "library"  (importable package, no runnable entry point)
     1. run_shell a stack-appropriate import/compile check (derive from the manifest and repo; web_search if unsure).
@@ -174,11 +190,12 @@ HOW TO FIND THE RUN COMMAND:
       rebuilding is usually enough.
 
 AGENT TEST CHECKLIST:
-  Each developer on your team has contributed a one-sentence test hint that
-  appears in your boot prompt (section: "AGENT TEST CHECKLIST"). After you
-  start the app, verify each item: use http_request() for web APIs; for
-  desktop (gui) apps use desktop_screenshot plus real desktop_mouse or
-  desktop_keyboard interaction — not screenshots alone. Mark any item that fails — it may need a follow-up
+  Each developer contributes items (via ``design/agent_test_hints.md``) that should
+  name **the feature**, **where to find it** in the running app (route, window, label,
+  CLI), and **how to test it** — not vague one-liners. After you start the app, verify
+  each item: use http_request() for web APIs; for desktop (gui) apps use desktop_screenshot
+  plus real desktop_mouse, desktop_keyboard, or desktop_uia_click — not screenshots alone.
+  Mark any item that fails — it may need a follow-up
   fix in this round. Items that cannot be verified because of a missing
   dependency were recorded as sprint blockers and are written to
   design/sprint_blockers.md for next sprint planning.

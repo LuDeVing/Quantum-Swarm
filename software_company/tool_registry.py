@@ -77,6 +77,15 @@ def _map_image_coords_to_screen(
     return sx, sy, True
 
 
+def _restore_window_if_minimized(win) -> None:
+    """``SetForegroundWindow`` alone often leaves a minimized window on the taskbar; restore first."""
+    try:
+        if getattr(win, "isMinimized", False):
+            win.restore()
+    except Exception:
+        pass
+
+
 def _activate_window_robust(win) -> None:
     """PyGetWindow ``activate()`` treats SetForegroundWindow==0 as failure; sometimes
     GetLastError is 0 ("success"), producing a bogus exception. Fall back to ctypes."""
@@ -96,7 +105,8 @@ def _activate_window_robust(win) -> None:
 
             hwnd = win._hWnd
             SW_RESTORE = 9
-            ctypes.windll.user32.ShowWindow(hwnd, SW_RESTORE)
+            if ctypes.windll.user32.IsIconic(hwnd):
+                ctypes.windll.user32.ShowWindow(hwnd, SW_RESTORE)
             ctypes.windll.user32.SetForegroundWindow(hwnd)
             return
         raise
@@ -185,6 +195,23 @@ def get_role_anthropic_tools(role_key: str) -> List[dict]:
     if missing:
         logger.warning(f"[{role_key}] tools not found in registry (skipped): {missing}")
     return [_make_anthropic_tool_def(_TOOL_CALLABLES[n]) for n in names if n in _TOOL_CALLABLES]
+
+
+@_register_tool
+def think(thought: str) -> str:
+    """Record your architectural reasoning BEFORE writing any code.
+    Call this once at the start of a task to think through:
+      1. Best design pattern / structure for this file
+      2. What makes this code excellent, not just functional
+      3. Integration risks with teammate code
+      4. Quality improvements beyond the minimum spec
+    Use web_search() DURING this phase to research unfamiliar patterns, best practices,
+    or library APIs before committing to a design. Has no side effects — purely structures
+    your thinking. Returns the thought so you can confirm it was recorded.
+    Required before the first write_code_file call."""
+    _agent = _get_agent_id() or "unknown"
+    logger.info(f"[think:{_agent}] {thought[:120]}")
+    return f"Architectural analysis recorded ({len(thought)} chars). Proceed to implementation."
 
 
 @_register_tool
@@ -277,9 +304,15 @@ def write_config_file(filename: str, content: str) -> str:
     return _tool_write_config_file(filename, content)
 
 @_register_tool
-def read_file(filename: str) -> str:
-    """Read an existing file from any company_output/ subdirectory."""
-    return _tool_read_file(filename)
+def read_file(filename: str, offset: int = 1, limit: int = 200) -> str:
+    """Read a file with line numbers. Returns lines in 'lineno: content' format.
+    filename: path relative to the project root (e.g. 'app/models.py', 'tests/test_auth.py').
+    offset: 1-based line number to start reading from (default 1 = beginning of file).
+    limit: max number of lines to return (default 200, max 500).
+    When a file is too large to read at once, use offset to read the next window:
+      read_file('app/models.py', offset=201) — reads lines 201-400.
+    The response footer tells you how many lines remain and what offset to use next."""
+    return _tool_read_file(filename, offset, limit)
 
 @_register_tool
 def create_directory(relative_path: str, root: str = "code") -> str:
@@ -308,6 +341,26 @@ def search_codebase(query: str) -> str:
     Use this to find existing implementations before writing new code — e.g. 'authentication middleware',
     'WebSocket handler', 'database models'. Prevents duplicate implementations."""
     return _tool_search_codebase(query)
+
+@_register_tool
+def recall_memory(query: str) -> str:
+    """Search your role's long-term memory for lessons learned in past sprints.
+    query: topic or task description — e.g. 'SQLAlchemy async session', 'React useState hook'.
+    Returns bullet list of specific lessons other agents in your role have accumulated.
+    Use during THINK phase BEFORE web_search when the question concerns patterns this team has
+    already encountered. Also use when stuck — past failure modes are stored here."""
+    agent_id = _get_agent_id() or "unknown"
+    return _tool_recall_memory(agent_id, query)
+
+@_register_tool
+def grep_codebase(pattern: str, glob: str = "", context_lines: int = 0) -> str:
+    """Exact regex search across every project file — returns file:line: text, like grep -rn.
+    pattern: Python regex (or plain string) to search for, e.g. 'def authenticate', 'TODO', 'import os'.
+    glob: optional file-name filter, e.g. '*.py', '*.ts', '*.go' — leave blank to search all files.
+    context_lines: lines of context to show before/after each match (like grep -C N), default 0.
+    Use this to locate a specific function, class, import, or string when you know what to look for.
+    Prefer search_codebase for open-ended semantic discovery; prefer grep_codebase for exact matches."""
+    return _tool_grep_codebase(pattern, glob, context_lines)
 
 @_register_tool
 def check_dashboard() -> str:
@@ -449,6 +502,7 @@ def desktop_list_windows(limit: int = 40) -> str:
     Use before ``desktop_activate_window`` when the target app is not focused.
     Typical flow: ``desktop_list_windows`` → ``desktop_activate_window`` →
     ``desktop_screenshot`` → ``desktop_suggest_click`` → ``desktop_mouse`` / ``desktop_keyboard``.
+    Rows may include ``[minimized]`` — those windows are not usable for screenshots until activated.
 
     ``limit``: maximum number of rows (clamped 1–200).
     Requires AGENT_DESKTOP_CONTROL_ENABLED=1."""
@@ -475,7 +529,8 @@ def desktop_list_windows(limit: int = 40) -> str:
                 title = (w.title or "").strip()
                 if not title:
                     continue
-                rows.append((title, w.left, w.top, w.width, w.height))
+                mini = bool(getattr(w, "isMinimized", False))
+                rows.append((title, w.left, w.top, w.width, w.height, mini))
             except Exception:
                 continue
         if not rows:
@@ -484,13 +539,16 @@ def desktop_list_windows(limit: int = 40) -> str:
                 "try desktop_screenshot() to see the screen instead."
             )
         lines: List[str] = []
-        for i, (title, left, top, width, height) in enumerate(rows[:lim], start=1):
-            lines.append(f"{i}. {title!r}  rect=({left}, {top}, {width}x{height})")
+        for i, (title, left, top, width, height, mini) in enumerate(rows[:lim], start=1):
+            tag = "  [minimized]" if mini else ""
+            lines.append(f"{i}. {title!r}  rect=({left}, {top}, {width}x{height}){tag}")
         n = len(lines)
         return (
             f"Windows (showing {n} of {len(rows)}, limit={lim}):\n"
             + "\n".join(lines)
-            + "\n\nNext: desktop_activate_window('unique substring of title') then desktop_screenshot()."
+            + "\n\nMinimized windows do not appear in full-screen captures — call "
+            "desktop_activate_window first to restore and focus.\n"
+            "Next: desktop_activate_window('unique substring of title') then desktop_screenshot()."
         )
     except Exception as e:
         logger.warning(f"[desktop_list_windows] failed: {e}", exc_info=True)
@@ -501,6 +559,7 @@ def desktop_list_windows(limit: int = 40) -> str:
 def desktop_activate_window(title_substring: str) -> str:
     """Bring the first window whose title contains ``title_substring`` to the foreground.
 
+    On Windows, **restores from minimized** first so the window is visible for screenshots and clicks.
     Match is case-insensitive. If multiple match, the first enumeration order wins —
     use a longer substring from ``desktop_list_windows`` if needed.
     Flow: list → activate → screenshot → suggest_click → mouse/keyboard.
@@ -539,11 +598,12 @@ def desktop_activate_window(title_substring: str) -> str:
             )
         win = candidates[0]
         _maybe_windows_desktop_dpi_aware()
+        _restore_window_if_minimized(win)
         _activate_window_robust(win)
         time.sleep(0.12)
         logger.info(f"[desktop_activate_window] activated {win.title!r}")
         return (
-            f"Activated window: {win.title!r}. "
+            f"Activated window: {win.title!r} (restored if it was minimized). "
             "Next: desktop_screenshot() then desktop_suggest_click / desktop_mouse / desktop_keyboard."
         )
     except Exception as e:
@@ -613,6 +673,7 @@ def desktop_uia_click(
 @_register_tool
 def desktop_screenshot() -> str:
     """Take a full-screen screenshot and return a Gemini vision description of what is visible.
+    Minimized windows are not shown — call desktop_activate_window(title) first to restore them.
     Call before and after desktop_mouse/desktop_keyboard actions to verify the result.
     For click targets use desktop_suggest_click('description') first — it captures the screen
     and returns coordinates matched to the current layout.
@@ -657,7 +718,9 @@ def desktop_screenshot() -> str:
         if iw != screen_w or ih != screen_h:
             cap_note = f"  capture={iw}x{ih} (use desktop_suggest_click for scaled clicks)\n"
         return (
-            f"Screen: {screen_w}x{screen_h}  Cursor: ({cx},{cy})\n"
+            f"Screen: {screen_w}x{screen_h}  "
+            f"display_width_px={screen_w}  display_height_px={screen_h}  "
+            f"Cursor: ({cx},{cy})\n"
             f"{cap_note}"
             f"Visible: {vision}"
         )
@@ -887,7 +950,7 @@ def desktop_suggest_click(target: str) -> str:
             "Rules:\n"
             "- Put the click on the **actual interactive widget** (button rectangle, link, checkbox), "
             "not on static instructional text above/beside it.\n"
-            "- For a **labeled button** (e.g. text 'Hello' on a button): bbox must wrap only the "
+            "- For a **labeled button** (e.g. visible label text on the button face): bbox must wrap only the "
             "**raised/flat button chrome** that receives the click, not the whole window and not a "
             "separate caption line above the button. The center (x,y) must land **on the button face**.\n"
             "- Prefer a **tight** box; oversized boxes produce wrong centers.\n\n"
@@ -1001,6 +1064,28 @@ def desktop_suggest_click(target: str) -> str:
 
 
 @_register_tool
+def desktop_zoom_region(x1: int, y1: int, x2: int, y2: int, hint: str = "") -> str:
+    """Zoom into a rectangular screen region for detailed inspection before clicking.
+
+    Captures the current screen, crops the region [x1,y1] → [x2,y2] (screen pixel
+    coords), sends the crop to the vision model, and returns a detailed description
+    of every UI element visible inside that area.
+
+    Use this as STEP 2 of the computer-use loop when you cannot reliably identify a
+    click target from the full-screen screenshot — 'zoom in, then click'.
+
+    x1, y1: top-left corner of the region (screen coordinates)
+    x2, y2: bottom-right corner of the region (screen coordinates)
+    hint:   optional description of what you are looking for (e.g. 'Submit button')
+
+    If the vision model identifies a single best click target, CLICK_AT_CROP
+    coordinates are translated back to full-screen (sx, sy) for desktop_mouse.
+    Requires AGENT_DESKTOP_CONTROL_ENABLED=1."""
+    from .computer_use import zoom_region_impl  # deferred to avoid circular import
+    return zoom_region_impl(x1, y1, x2, y2, hint=hint)
+
+
+@_register_tool
 def validate_python(code: str) -> str:
     """Check Python code for syntax errors. Returns 'Python syntax OK' or a description of the error."""
     return _tool_validate_python(code)
@@ -1065,42 +1150,50 @@ _DASHBOARD_RO_TOOLS = ["check_dashboard", "message_teammate", "check_messages"] 
 
 _ROLE_TOOL_NAMES: Dict[str, List[str]] = {
     "system_designer":    ["create_ascii_diagram", "write_design_file", "read_file",
-                           "list_files", "search_codebase"] + _DASHBOARD_RO_TOOLS,
+                           "list_files", "search_codebase", "grep_codebase", "web_search",
+                           "recall_memory"] + _DASHBOARD_RO_TOOLS,
     "api_designer":       ["generate_endpoint_table", "validate_yaml", "write_design_file",
-                           "read_file", "list_files", "search_codebase"] + _DASHBOARD_RO_TOOLS,
+                           "read_file", "list_files", "search_codebase", "grep_codebase", "web_search",
+                           "recall_memory"] + _DASHBOARD_RO_TOOLS,
     "db_designer":        ["generate_er_diagram", "write_design_file", "read_file",
-                           "list_files", "search_codebase"] + _DASHBOARD_RO_TOOLS,
+                           "list_files", "search_codebase", "grep_codebase", "web_search",
+                           "recall_memory"] + _DASHBOARD_RO_TOOLS,
     "ux_researcher":      ["create_user_flow", "write_design_file", "read_file",
-                           "list_files", "search_codebase"] + _DASHBOARD_RO_TOOLS,
+                           "list_files", "search_codebase", "grep_codebase", "web_search",
+                           "recall_memory"] + _DASHBOARD_RO_TOOLS,
     "ui_designer":        ["create_wireframe", "write_design_file", "read_file",
-                           "list_files", "search_codebase"] + _DASHBOARD_RO_TOOLS,
+                           "list_files", "search_codebase", "grep_codebase", "web_search",
+                           "recall_memory"] + _DASHBOARD_RO_TOOLS,
     "visual_designer":    ["create_style_guide", "write_design_file", "read_file",
-                           "list_files", "search_codebase"] + _DASHBOARD_RO_TOOLS,
+                           "list_files", "search_codebase", "grep_codebase", "web_search",
+                           "recall_memory"] + _DASHBOARD_RO_TOOLS,
     "unit_tester":        ["write_test_file", "validate_python", "scan_vulnerabilities",
                            "web_search", "run_shell", "start_service", "stop_service", "http_request",
-                           "read_file", "list_files", "search_codebase",
+                           "read_file", "list_files", "search_codebase", "grep_codebase", "recall_memory",
                            "open_app", "browser_action", "close_browser", "launch_application",
                            *DESKTOP_AUTOMATION_TOOL_NAMES,
                            ] + _DASHBOARD_RO_TOOLS,
     "integration_tester": ["write_test_file", "validate_python", "validate_json", "web_search",
                            "run_shell", "start_service", "stop_service", "http_request",
-                           "read_file", "list_files", "search_codebase",
+                           "read_file", "list_files", "search_codebase", "grep_codebase", "recall_memory",
                            "open_app", "browser_action", "close_browser", "launch_application",
                            *DESKTOP_AUTOMATION_TOOL_NAMES,
                            ] + _DASHBOARD_RO_TOOLS,
     "security_auditor":   ["write_test_file", "scan_vulnerabilities", "check_owasp", "web_search",
                            "run_shell", "start_service", "stop_service", "http_request",
-                           "read_file", "list_files", "search_codebase",
+                           "read_file", "list_files", "search_codebase", "grep_codebase", "recall_memory",
                            "open_app", "browser_action", "close_browser", "launch_application",
                            *DESKTOP_AUTOMATION_TOOL_NAMES,
                            ] + _DASHBOARD_RO_TOOLS,
 }
-_DEV_TOOL_NAMES = ["write_code_file", "write_file_section", "write_test_file",
+_DEV_TOOL_NAMES = ["think",
+                   "write_code_file", "write_file_section", "write_test_file",
                    "validate_python", "validate_json",
                    "validate_yaml", "write_config_file", "read_file",
                    "create_directory", "delete_file", "remove_empty_directory",
                    "run_shell",
-                   "list_files", "search_codebase", "start_service", "stop_service",
+                   "list_files", "search_codebase", "grep_codebase", "recall_memory",
+                   "start_service", "stop_service",
                    "http_request", "download_url", "web_search",
                    "open_app", "browser_action", "close_browser", "launch_application",
                    *DESKTOP_AUTOMATION_TOOL_NAMES,
@@ -1133,7 +1226,7 @@ def _dev_tools_for_attempt(role_key: str, retry_count: int) -> List[str]:
 
 # Engineering manager gets full file access + service tools for integration pass
 _ENG_MANAGER_TOOL_NAMES = [
-    "read_file", "list_files", "search_codebase",
+    "read_file", "list_files", "search_codebase", "grep_codebase", "recall_memory",
     "write_code_file", "write_config_file",
     "create_directory", "delete_file", "remove_empty_directory",
     "validate_python", "validate_json", "validate_yaml",

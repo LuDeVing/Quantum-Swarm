@@ -64,6 +64,15 @@ Since you work in a parallel team, coordination is key to preventing integration
     3. If you changed component names or props, message_teammate the engineers.
 
 ═══════════════════════════════════════════════════════
+WEB RESEARCH
+═══════════════════════════════════════════════════════
+
+You have access to web_search(). Use it to look up current design patterns, component
+library docs, accessibility standards (WCAG), platform guidelines (Material Design,
+HIG, Fluent), or interaction best practices when you are uncertain. Searching before
+specifying is faster than revising after. Also use web_search() any time you get stuck.
+
+═══════════════════════════════════════════════════════
 ROUND 1 — INDEPENDENT DEEP WORK
 ═══════════════════════════════════════════════════════
 

@@ -46,6 +46,11 @@ from .tools_impl import (
 )
 from .prompts_loaded import _SYSTEM_CEO, _manager_system, _worker_system
 from .planning import run_team_planning
+from .computer_use import (
+    CUTripletTracker,
+    build_computer_use_loop_section,
+    get_screen_dims_hint,
+)
 
 logger = logging.getLogger("company")
 
@@ -1175,10 +1180,11 @@ def _run_test_gate(code_dir: Path) -> TestGateResult:
         # Important: run from cwd=code_dir with RELATIVE targets, because OUTPUT_DIR
         # can be relative (e.g., "eng_output") and absolute-looking relative paths
         # like "eng_output\\code\\tests" become invalid from inside code_dir.
+        _pyexe = f'"{sys.executable}"'  # quote for paths with spaces (e.g. "Quantum Swarm")
         if tests_dir.exists():
-            cmd = f"{sys.executable} -m pytest tests --tb=short -q"
+            cmd = f"{_pyexe} -m pytest tests --tb=short -q"
         else:
-            cmd = f"{sys.executable} -m pytest . --tb=short -q"
+            cmd = f"{_pyexe} -m pytest . --tb=short -q"
     elif _has_file("Cargo.toml"):
         cmd = "cargo test"
     elif _has_file("go.mod"):
@@ -1253,11 +1259,12 @@ def _run_self_verify(code_dir: Path, eng_task: "EngTask") -> SelfVerifyResult:
 
     checks: List[str] = []
     suffix = fpath.suffix.lower()
+    _pyexe = f'"{sys.executable}"'  # quote for paths with spaces (e.g. "Quantum Swarm")
 
     if suffix == ".py":
         # Syntax parse always (avoids flaky package import before app/__init__.py exists).
         checks.append(
-            f"{sys.executable} -c "
+            f"{_pyexe} -c "
             f"\"import ast, pathlib; ast.parse(pathlib.Path(r'{fpath}').read_text(encoding='utf-8'))\""
         )
         rel_slash = eng_task.file.replace("\\", "/")
@@ -1265,7 +1272,7 @@ def _run_self_verify(code_dir: Path, eng_task: "EngTask") -> SelfVerifyResult:
             mod_path = rel_slash
             if mod_path.endswith(".py"):
                 mod_path = mod_path[:-3]
-            checks.append(f"{sys.executable} -c \"import {mod_path}\"")
+            checks.append(f"{_pyexe} -c \"import {mod_path}\"")
         _test_candidates = [
             code_dir / "tests" / f"test_{fpath.name}",
             code_dir / "tests" / f"{fpath.stem}_test.py",
@@ -1273,7 +1280,7 @@ def _run_self_verify(code_dir: Path, eng_task: "EngTask") -> SelfVerifyResult:
         ]
         for tc in _test_candidates:
             if tc.exists():
-                checks.append(f"{sys.executable} -m pytest {str(tc)} -x -q --tb=short")
+                checks.append(f"{_pyexe} -m pytest {str(tc)} -x -q --tb=short")
                 break
     elif suffix in (".js", ".mjs", ".cjs"):
         checks.append(f"node --check {str(fpath)}")
@@ -1285,11 +1292,11 @@ def _run_self_verify(code_dir: Path, eng_task: "EngTask") -> SelfVerifyResult:
     elif suffix == ".go" and (code_dir / "go.mod").exists():
         checks.append("go vet ./...")
     elif suffix in (".json",):
-        checks.append(f"{sys.executable} -c \"import json, pathlib; json.loads(pathlib.Path(r'{fpath}').read_text())\"")
+        checks.append(f"{_pyexe} -c \"import json, pathlib; json.loads(pathlib.Path(r'{fpath}').read_text())\"")
     elif suffix in (".yml", ".yaml"):
-        checks.append(f"{sys.executable} -c \"import yaml, pathlib; yaml.safe_load(pathlib.Path(r'{fpath}').read_text())\"")
+        checks.append(f"{_pyexe} -c \"import yaml, pathlib; yaml.safe_load(pathlib.Path(r'{fpath}').read_text())\"")
     elif fpath.name == "Dockerfile":
-        checks.append(f"{sys.executable} -c \"p=open(r'{fpath}').read(); assert 'FROM' in p, 'no FROM in Dockerfile'\"")
+        checks.append(f"{_pyexe} -c \"p=open(r'{fpath}').read(); assert 'FROM' in p, 'no FROM in Dockerfile'\"")
 
     if not checks:
         return SelfVerifyResult(passed=True, output="(no applicable checks)", is_own_fault=False)
@@ -1636,17 +1643,18 @@ def _manager_fix_loop(
     """
     registry = get_contracts()
     _set_agent_ctx("eng_manager", _get_sprint_num())
+    # ── Computer-use triplet tracker (replaces 4 separate booleans) ──────
+    _cu = CUTripletTracker()
     manager_ran_start_service = False
     manager_ran_http_request = False
-    manager_ran_desktop_action = False
-    manager_desktop_screenshots = 0
     last_error_block = ""
     build_cmd_hint = registry.build_command or ""
     app_type = registry.app_type or registry._infer_app_type()
     _desktop_proof_required = app_type == "gui" and MANAGER_GUI_DESKTOP_PROOF
     logger.info(
         f"[ManagerFix] app_type={app_type!r}  "
-        f"gui_desktop_proof_required={_desktop_proof_required}"
+        f"gui_desktop_proof_required={_desktop_proof_required}  "
+        f"computer_use_triplet_required={COMPUTER_USE_REQUIRE_TRIPLET}"
     )
 
     # web/worker → start_service (mandatory); web also needs http_request (mandatory)
@@ -1657,7 +1665,8 @@ def _manager_fix_loop(
     # Load the team's test hints once at the start of the fix loop
     _agent_test_hints = _load_agent_test_hints()
     _hints_section = (
-        f"\n\nAGENT TEST CHECKLIST (features to verify in the running app):\n"
+        f"\n\nAGENT TEST CHECKLIST (each item should say what the feature is, where to find it, "
+        f"and how to test it — see design/agent_test_hints.md):\n"
         f"{_agent_test_hints}\n"
         if _agent_test_hints
         else ""
@@ -1696,9 +1705,15 @@ def _manager_fix_loop(
             last_error_block = "\n\n".join(errors)[-4000:]
 
         tests_build_ok = not errors
-        _desktop_ok = (not _desktop_proof_required) or (
-            manager_ran_desktop_action and manager_desktop_screenshots >= 2
-        )
+        # ── Triplet-aware GUI gate ──────────────────────────────────────
+        if _desktop_proof_required:
+            if COMPUTER_USE_REQUIRE_TRIPLET:
+                _desktop_ok = _cu.has_at_least_one_triplet()
+            else:
+                # Legacy mode: any action + 2 screenshots
+                _desktop_ok = _cu.actions >= 1 and _cu.screenshots >= 2
+        else:
+            _desktop_ok = True
         _web_ok = (app_type != "web") or manager_ran_http_request
         if tests_build_ok and manager_ran_start_service and _desktop_ok and _web_ok:
             logger.info(
@@ -1724,19 +1739,19 @@ def _manager_fix_loop(
 
         _gui_cumulative = ""
         if app_type == "gui":
+            _cu_section = build_computer_use_loop_section(_cu, _desktop_proof_required)
             if _desktop_proof_required:
+                _triplet_gate_note = (
+                    "(triplet gate: COMPUTER_USE_REQUIRE_TRIPLET=1)"
+                    if COMPUTER_USE_REQUIRE_TRIPLET
+                    else "(legacy gate: 2 screenshots + 1 action required)"
+                )
                 _gui_cumulative = (
-                    f"── GUI verification status (cumulative across manager rounds) ──\n"
+                    f"{_cu_section}"
+                    f"  Gate mode: {_triplet_gate_note}\n"
                     f"  start_service recorded: {'yes' if manager_ran_start_service else 'no'}\n"
-                    f"  successful desktop_screenshot: {manager_desktop_screenshots} (need ≥2)\n"
-                    f"  desktop_mouse OR desktop_keyboard OR desktop_uia_click (success): "
-                    f"{'yes' if manager_ran_desktop_action else 'NO — still required'}\n"
-                    f"  If boot is already yes: do NOT redo pip install/freeze, tasklist, or tkinter python -c checks — "
-                    f"they do not count. If the app may be in the background: desktop_list_windows() then "
-                    f"desktop_activate_window('title substring'). On Windows prefer desktop_uia_list_elements / "
-                    f"desktop_uia_click when control names are exposed; else desktop_suggest_click(...) for (x,y), "
-                    f"desktop_mouse('click', x, y), then another desktop_screenshot.\n"
-                    f"  Never use run_shell with `python main.py &` on Windows (times out); GUI runs via start_service / launch_application only.\n\n"
+                    f"  Never use run_shell with `python main.py &` on Windows (times out); "
+                    f"GUI runs via start_service / launch_application only.\n\n"
                 )
             else:
                 _gui_cumulative = (
@@ -1752,18 +1767,17 @@ def _manager_fix_loop(
             logger.warning(f"[ManagerFix] round {round_num} errors:\n{error_block[:500]}")
             _gui_extra = (
                 (
-                    "GUI-SPECIFIC REQUIREMENT (applies even during error rounds):\n"
-                    "  - Launch the desktop app; if focus is unclear use desktop_list_windows() then "
-                    "desktop_activate_window('substring').\n"
-                    "  - desktop_screenshot() before interaction and again after.\n"
-                    "  - On Windows try desktop_uia_read_text / desktop_uia_list_elements then desktop_uia_click when "
-                    "automation names exist; else desktop_suggest_click('what to click') for coordinates, then "
-                    "desktop_mouse('click', x, y); and/or desktop_keyboard() at least once — screenshot-only is not enough.\n"
-                    "  - If the post-click screenshot shows the click missed, **retry** suggest_click + mouse "
-                    "(narrower target) or desktop_uia_click — do not stop after one wrong coordinate; "
-                    "integration can still pass with a missed click, so you must verify visually.\n"
-                    "  - Prefer that flow over guessing coordinates or alt+tab window switching.\n"
-                    "  - Describe what changed on screen after each interaction.\n"
+                    "GUI-SPECIFIC REQUIREMENT — OpenClaw-style UIA-first (applies even during error rounds):\n"
+                    f"  {get_screen_dims_hint()}\n"
+                    "  - desktop_list_windows() → desktop_activate_window('title') to restore focus.\n"
+                    "  - STEP 1: desktop_screenshot() one baseline.\n"
+                    "  - STEP 2 LOCATE (fast — no vision): desktop_uia_list_elements('Win Title') → exact names.\n"
+                    "    Only fall back to desktop_suggest_click if UIA returns nothing.\n"
+                    "  - STEP 3 ACT (accurate): desktop_uia_click('Win Title', 'Name') preferred;\n"
+                    "    desktop_mouse/keyboard as pixel fallback.\n"
+                    "  - STEP 4 VERIFY (fast): desktop_uia_read_text('Win Title') to confirm change;\n"
+                    "    desktop_screenshot() only if UIA cannot read the result.\n"
+                    "  - ERROR-prefixed tool returns do NOT satisfy the loop gate.\n"
                     if _desktop_proof_required
                     else (
                         "GUI-SPECIFIC (headless mode — fix tests first):\n"
@@ -1830,24 +1844,26 @@ def _manager_fix_loop(
             elif app_type == "gui":
                 if _desktop_proof_required:
                     _run_instructions = (
-                        f"REQUIRED (use tools, not prose only):\n"
+                        f"REQUIRED — OpenClaw-style UIA-first verification (use tools, not prose):\n"
+                        f"  {get_screen_dims_hint()}\n"
                         f"  1. read_file() to identify the entry point and run command.\n"
                         f"  2. launch_application('<run command>') — opens the GUI window.\n"
-                        f"  3. desktop_list_windows() then desktop_activate_window('app title substring') if the window is not focused.\n"
-                        f"  4. desktop_screenshot() — baseline.\n"
-                        f"  5. On Windows: desktop_uia_list_elements('title substring') / desktop_uia_read_text, then "
-                        f"desktop_uia_click(...) when a unique control name matches; else desktop_suggest_click('visible control') "
-                        f"→ desktop_mouse('click', x, y); or desktop_keyboard() if typing fits.\n"
-                        f"  6. desktop_screenshot() again — proof the UI changed after interaction.\n"
-                        f"     (At least TWO successful screenshots this session, plus mouse, keyboard, or desktop_uia_click.)\n"
-                        f"  7. Avoid guessing (x,y); suggest_click uses a fresh capture so coordinates match the current layout. "
-                        f"If the click missed, retry suggest_click with a tighter target or desktop_uia_click "
-                        f"(e.g. window title substring + button name on Windows).\n"
-                        f"  8. Verify EACH checklist item using further screenshots as needed.\n"
-                        f"  NOTE: call start_service() with the run command too — the orchestrator \n"
-                        f"  tracks this to confirm you booted the app.\n"
-                        f"  Do NOT use run_shell() for the full GUI main script — it blocks until the window closes.\n"
-                        f"  FORBIDDEN as GUI proof: run_shell(tasklist), pip freeze, pip install loops, or python -c tkinter one-liners.\n"
+                        f"  3. desktop_list_windows() then desktop_activate_window('title substring').\n"
+                        f"  4. start_service('<name>', '<run command>') — records boot for the orchestrator.\n"
+                        f"  --- COMPUTER-USE LOOP (OpenClaw: UIA first, vision as fallback) ---\n"
+                        f"  5. OBSERVE:  desktop_screenshot() — one baseline screenshot.\n"
+                        f"  6. LOCATE (fast path — no vision API call):\n"
+                        f"       desktop_uia_list_elements('Window Title') → read exact control names.\n"
+                        f"       Only if UIA returns nothing: desktop_suggest_click('<description>').\n"
+                        f"  7. ACT (preferred — accurate, instant):\n"
+                        f"       desktop_uia_click('Window Title', 'Control Name') — click by name.\n"
+                        f"       Fallback: desktop_mouse('click', x, y) or desktop_keyboard().\n"
+                        f"  8. VERIFY (fast path — no screenshot needed when UIA can read state):\n"
+                        f"       desktop_uia_read_text('Window Title') — confirm label/field changed.\n"
+                        f"       Fallback: desktop_screenshot() — only if UIA cannot read the result.\n"
+                        f"  -------------------------------------------------------\n"
+                        f"  Repeat steps 5-8 for each checklist item. One complete loop is the minimum.\n"
+                        f"  FORBIDDEN as GUI proof: run_shell(tasklist), pip freeze, python -c tkinter only.\n"
                     )
                 else:
                     _run_instructions = (
@@ -1887,13 +1903,12 @@ def _manager_fix_loop(
 
             _mgr_session_note = "You have NOT yet completed mandatory application verification in this manager session.\n\n"
             if app_type == "gui" and _desktop_proof_required and (
-                manager_ran_start_service or manager_desktop_screenshots or manager_ran_desktop_action
+                manager_ran_start_service or _cu.screenshots > 0 or _cu.actions > 0
             ):
                 _mgr_session_note = (
-                    "Some verification tools already ran in a prior round — read the status block below. "
-                    "Complete only what is missing (usually desktop_uia_click or desktop_suggest_click + desktop_mouse, "
-                    "plus a second screenshot). "
-                    "Do not repeat environment audit commands (pip freeze, tasklist, tkinter -c) — they do not satisfy GUI rules.\n\n"
+                    "Some verification tools already ran in a prior round — read the computer-use status block below. "
+                    "Complete only what is missing (usually the ACT → VERIFY steps or a second screenshot after an action). "
+                    "Do not repeat environment audit commands (pip freeze, tasklist, tkinter -c) — they do not satisfy the loop gate.\n\n"
                 )
             elif app_type == "gui" and (not _desktop_proof_required) and manager_ran_start_service:
                 _mgr_session_note = (
@@ -1922,15 +1937,13 @@ def _manager_fix_loop(
             manager_ran_start_service = True
         if _manager_saw_http_request(tool_results):
             manager_ran_http_request = True
-        if _manager_saw_desktop_interaction(tool_results):
-            manager_ran_desktop_action = True
-        manager_desktop_screenshots += _count_desktop_screenshots(tool_results)
+        # Update computer-use triplet tracker
+        _cu.update_from_tool_results(tool_results)
         logger.info(
             f"[ManagerFix] round {round_num} — manager used {len(tool_results)} tool calls, "
             f"output {len(output)}c, app_verified={manager_ran_start_service}, "
             f"http_verified={manager_ran_http_request}, "
-            f"desktop_verified={manager_ran_desktop_action}, "
-            f"desktop_screenshots_total={manager_desktop_screenshots}"
+            f"cu_triplets={_cu.completed_triplets}, cu_screenshots={_cu.screenshots}, cu_actions={_cu.actions}"
         )
 
         try:
@@ -1955,9 +1968,14 @@ def _manager_fix_loop(
     tests_build_ok = not errors
     if errors:
         last_error_block = "\n\n".join(errors)[-4000:]
-    _desktop_ok = (not _desktop_proof_required) or (
-        manager_ran_desktop_action and manager_desktop_screenshots >= 2
-    )
+    # Triplet-aware final gate
+    if _desktop_proof_required:
+        if COMPUTER_USE_REQUIRE_TRIPLET:
+            _desktop_ok = _cu.has_at_least_one_triplet()
+        else:
+            _desktop_ok = _cu.actions >= 1 and _cu.screenshots >= 2
+    else:
+        _desktop_ok = True
     _web_ok = (app_type != "web") or manager_ran_http_request
     if tests_build_ok and manager_ran_start_service and _desktop_ok and _web_ok:
         logger.info("[ManagerFix] green + start_service after final round")
@@ -1988,11 +2006,13 @@ def _manager_fix_loop(
     ):
         msg = (
             "Tests/build passed and start_service was used, but GUI verification is incomplete: "
-            "the manager needs at least one successful desktop_mouse, desktop_keyboard, or desktop_uia_click call "
-            "(non-ERROR result) and at least two successful desktop_screenshot calls. "
+            "the computer-use loop requires at least one complete observe\u2192act\u2192verify triplet. "
+            "OpenClaw-style (fast): desktop_screenshot \u2192 desktop_uia_click \u2192 desktop_uia_read_text. "
+            "Pixel fallback: desktop_screenshot \u2192 desktop_mouse / desktop_keyboard \u2192 desktop_screenshot. "
+            f"Current counters: {_cu.status_line()}. "
             "If tools returned ERROR, set AGENT_DESKTOP_CONTROL_ENABLED=1, pip install pyautogui, and on Windows "
-            "optionally pip install uiautomation for UIA tools, then retry. "
-            "For CI/headless runs only, set MANAGER_GUI_DESKTOP_PROOF=0 so pytest + start_service suffice."
+            "pip install uiautomation for desktop_uia_click / desktop_uia_read_text; then retry. "
+            "For CI/headless runs only, set MANAGER_GUI_DESKTOP_PROOF=0 or COMPUTER_USE_REQUIRE_TRIPLET=0."
         )
         logger.warning(f"[ManagerFix] {msg}")
         return ManagerFixResult(
@@ -2227,6 +2247,15 @@ def run_engineering_team(
         # Add messages from teammates
         if messages_section:
             prompt += f"{messages_section}\n"
+        # Long-term memory — lessons learned from past sprints (role-scoped)
+        from .long_term_memory import get_role_memory as _get_role_memory
+        _ltm = _get_role_memory(dev_key).query(eng_task.description, top_k=5)
+        if _ltm:
+            prompt += (
+                "\n─── DOMAIN EXPERTISE FROM PAST SPRINTS ─────────────────────────\n"
+                + _ltm +
+                "\n─────────────────────────────────────────────────────────────────\n"
+            )
         # Rolling context from previous tasks
         _rolling = rolling_ctxs[dev_key].get()
         if _rolling and len(_rolling.strip()) > 20:
@@ -2264,8 +2293,14 @@ def run_engineering_team(
             )
         else:
             prompt += (
-                f"\nREMINDER: You MUST call write_code_file('{eng_task.file}', <code>) "
-                f"with complete working code. Prose-only = failure.\n"
+                f"\n─── THINKING PHASE (required before writing) ───────────────\n"
+                f"Call think(thought) FIRST with your ARCHITECTURE ANALYSIS (4-8 sentences):\n"
+                f"  a) Best design pattern / structure for '{eng_task.file}'\n"
+                f"  b) What makes this code excellent — not just functional\n"
+                f"  c) Integration risks with teammate code\n"
+                f"  d) Quality improvements beyond the minimum spec\n"
+                f"─────────────────────────────────────────────────────────────\n"
+                f"THEN call write_code_file('{eng_task.file}', <complete code>).\n"
                 f"End with: STANCE: [MINIMAL|ROBUST|SCALABLE|PRAGMATIC]"
             )
         logger.info(f"[{dev_key}] prompt built ({len(prompt)}c) — handing off to ReAct agent")
@@ -2296,6 +2331,12 @@ def run_engineering_team(
             f"output={len(output)}c  F={F:.3f}"
         )
         rolling_ctxs[dev_key].add(eng_task.description, output)
+        # Background lesson extraction — never blocks the pipeline
+        threading.Thread(
+            target=_get_role_memory(dev_key).extract_and_save,
+            args=(eng_task.description, output, sprint_num, not anomaly),
+            daemon=True,
+        ).start()
         return WorkerOutput(
             role=dev_key, title=f"Software Developer — {eng_task.description[:40]}",
             round=task_num, output=output, tool_results=tool_results,
@@ -2322,31 +2363,35 @@ def run_engineering_team(
         file_entry = registry.file_map.get(eng_task.file, {})
         exports = file_entry.get("exports", []) if isinstance(file_entry, dict) else []
 
-        # --- Build a brief 'how to test' hint from the task description + exports ---
+        # --- Structured hint: feature + where to find + how to test (manager checklist) ---
         hint_prompt = (
             f"You are {dev_key}. You just finished '{eng_task.file}'.\n"
-            f"Task: {eng_task.description[:400]}\n"
+            f"Task: {eng_task.description[:500]}\n"
             f"Exports: {exports}\n\n"
-            f"Write ONE concise sentence (≤120 chars) describing a single observable "
-            f"test that the engineering manager can perform on the running application "
-            f"to verify this feature works (e.g. 'GET /api/users returns a JSON list'). "
-            f"No explanations — just the test sentence."
+            "Write a short checklist block (max ~600 chars) the engineering manager can follow "
+            "on the running application. Use exactly these three lines, no preamble:\n"
+            "FEATURE: <what behavior or capability shipped>\n"
+            "FIND: <how to locate it: window title, button label, URL path, menu, CLI command, etc.>\n"
+            "TEST: <exact observable steps: HTTP method+path, clicks, keys, or pytest name>\n"
+            "Use real strings from the task/code (titles, routes, flags). Do not invent product names."
         )
         try:
             hint_sentence = _llm(hint_prompt, label=f"{dev_key}_test_hint").strip()
-            if len(hint_sentence) > 200:
-                hint_sentence = hint_sentence[:197] + "..."
+            if len(hint_sentence) > 800:
+                hint_sentence = hint_sentence[:797] + "..."
         except Exception:
-            hint_sentence = f"Verify that {eng_task.file} functions correctly."
+            hint_sentence = (
+                f"FEATURE: code in {eng_task.file}\n"
+                f"FIND: run the app entry from the contract/README\n"
+                f"TEST: exercise the behavior described in the task and confirm it matches."
+            )
 
         # --- Append hint to design/agent_test_hints.md ---
         hints_path = OUTPUT_DIR / "design" / "agent_test_hints.md"
         hints_path.parent.mkdir(parents=True, exist_ok=True)
         with _sprint_blockers_lock:  # reuse a handy lock; the file is small
             with open(hints_path, "a", encoding="utf-8") as _hf:
-                _hf.write(
-                    f"- [{dev_key}] **{eng_task.file}**: {hint_sentence}\n"
-                )
+                _hf.write(f"### [{dev_key}] `{eng_task.file}`\n{hint_sentence}\n\n")
         logger.info(f"[{dev_key}] test hint recorded: {hint_sentence[:100]}")
 
         # --- Broadcast to teammates so waiting agents are triggered ---

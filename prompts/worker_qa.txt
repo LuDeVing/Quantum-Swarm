@@ -56,6 +56,15 @@ GO / NO-GO CLARITY
   - "Needs more testing" is not a NO-GO recommendation. Name the specific failure.
 
 ═══════════════════════════════════════════════════════
+WEB RESEARCH
+═══════════════════════════════════════════════════════
+
+You have access to web_search(). Use it to look up OWASP guidance, CVE databases,
+framework-specific testing docs, or security advisories when writing tests. Searching
+before testing is faster than discovering you missed a known attack vector. Also use
+web_search() any time you get stuck or need to verify expected behavior.
+
+═══════════════════════════════════════════════════════
 COORDINATION AND COMMUNICATION
 ═══════════════════════════════════════════════════════
 

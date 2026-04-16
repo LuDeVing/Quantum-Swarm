@@ -18,10 +18,11 @@ To give any role desktop automation without copying tool name lists::
 Or assign ``list(base) + list(DESKTOP_AUTOMATION_TOOL_NAMES)`` if you prefer;
 ``merge_role_tools_with_desktop`` deduplicates while preserving order (base first).
 
-Recommended agent flow: ``desktop_list_windows`` → ``desktop_activate_window`` →
-(on Windows, prefer) ``desktop_uia_list_elements`` / ``desktop_uia_read_text`` →
-``desktop_uia_click`` when names are reliable → else ``desktop_screenshot`` →
-``desktop_suggest_click`` → ``desktop_mouse`` / ``desktop_keyboard``.
+Recommended flow (targets come from ``desktop_list_windows``, UIA output, and the live screenshot —
+nothing is hardcoded): ``desktop_list_windows`` → ``desktop_activate_window`` as needed →
+(on Windows, when useful) ``desktop_uia_list_elements`` / ``desktop_uia_read_text`` →
+``desktop_uia_click`` or ``desktop_screenshot`` → ``desktop_suggest_click`` → ``desktop_mouse`` /
+``desktop_keyboard``.
 """
 
 from __future__ import annotations
@@ -37,6 +38,7 @@ DESKTOP_AUTOMATION_TOOL_NAMES: tuple[str, ...] = (
     "desktop_uia_click",
     "desktop_screenshot",
     "desktop_suggest_click",
+    "desktop_zoom_region",
     "desktop_mouse",
     "desktop_keyboard",
 )

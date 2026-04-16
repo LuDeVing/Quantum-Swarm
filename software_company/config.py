@@ -54,6 +54,15 @@ MANAGER_GUI_DESKTOP_PROOF = os.getenv("MANAGER_GUI_DESKTOP_PROOF", "1").strip().
     "no",
     "off",
 )
+# Anthropic computer-use triplet gate: when True (default), GUI integration requires at
+# least one complete observe→act→verify triplet (screenshot → action → screenshot).
+# Set COMPUTER_USE_REQUIRE_TRIPLET=0 to revert to the old loose 2-screenshot requirement.
+COMPUTER_USE_REQUIRE_TRIPLET = os.getenv("COMPUTER_USE_REQUIRE_TRIPLET", "1").strip().lower() not in (
+    "0",
+    "false",
+    "no",
+    "off",
+)
 TEAMMATE_IDLE_HOOKS: List[str] = []
 TEAMMATE_IDLE_MAX_RETRIES: int = 3
 TASK_CREATED_HOOKS: List[str] = []
@@ -104,6 +113,7 @@ __all__ = [
     "AGENT_LAUNCH_APPS_ENABLED",
     "AGENT_DESKTOP_CONTROL_ENABLED",
     "MANAGER_GUI_DESKTOP_PROOF",
+    "COMPUTER_USE_REQUIRE_TRIPLET",
     "TEAMMATE_IDLE_HOOKS",
     "TEAMMATE_IDLE_MAX_RETRIES",
     "TASK_CREATED_HOOKS",

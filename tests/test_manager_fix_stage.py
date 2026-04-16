@@ -40,32 +40,34 @@ def _dummy_task_queue() -> MagicMock:
 
 
 def _gui_verified_tool_lines() -> list[str]:
-    """Matches what a successful GUI manager round must log for ``_manager_fix_loop``."""
+    """OpenClaw-style triplet: screenshot → uia_click → uia_read_text (fast, no extra screenshot)."""
     return [
         "[TOOL: start_service] {'name': 'app', 'command': 'python main.py'}",
         "[TOOL: desktop_screenshot|ok] {}",
-        "[TOOL: desktop_screenshot|ok] {}",
-        "[TOOL: desktop_mouse|ok] {'action': 'click', 'x': 10, 'y': 20}",
+        "[TOOL: desktop_uia_list_elements|ok] {'title_substring': 'Smoke GUI'}",
+        "[TOOL: desktop_uia_click|ok] {'title_substring': 'Smoke GUI', 'name_substring': 'Show'}",
+        "[TOOL: desktop_uia_read_text|ok] {'title_substring': 'Smoke GUI'}",
     ]
 
 
 def _gui_verified_keyboard_tool_lines() -> list[str]:
-    """GUI gate also accepts typing: ``desktop_keyboard`` counts as interaction."""
+    """Keyboard triplet: screenshot → keyboard → screenshot (UIA read may not see typed text)."""
     return [
         "[TOOL: start_service] {'name': 'app', 'command': 'python main.py'}",
         "[TOOL: desktop_screenshot|ok] {}",
-        "[TOOL: desktop_screenshot|ok] {}",
         "[TOOL: desktop_keyboard|ok] {'action': 'type', 'text': 'smoke'}",
+        "[TOOL: desktop_screenshot|ok] {}",
     ]
 
 
 def _gui_verified_uia_click_tool_lines() -> list[str]:
-    """GUI gate accepts ``desktop_uia_click`` as interaction (Windows UIA path)."""
+    """OpenClaw-style UIA triplet: screenshot → uia_click → uia_read_text (Windows UIA path)."""
     return [
         "[TOOL: start_service] {'name': 'app', 'command': 'python main.py'}",
         "[TOOL: desktop_screenshot|ok] {}",
-        "[TOOL: desktop_screenshot|ok] {}",
+        "[TOOL: desktop_uia_list_elements|ok] {'title_substring': 'App'}",
         "[TOOL: desktop_uia_click|ok] {'title_substring': 'App', 'name_substring': 'OK'}",
+        "[TOOL: desktop_uia_read_text|ok] {'title_substring': 'App'}",
     ]
 
 

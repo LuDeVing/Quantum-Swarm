@@ -11,10 +11,11 @@ Prerequisites
 - ``GEMINI_API_KEY`` in the environment (same as the rest of Quantum Swarm).
 - Optional but recommended for **real** GUI screen verification (default):
     ``AGENT_DESKTOP_CONTROL_ENABLED=1`` and ``pip install pyautogui``
-- For **reliable** clicks on this smoke Tk window (Windows): ``pip install uiautomation`` then
-    ``desktop_uia_click('Manager stage smoke', 'Hello')`` — vision-only ``desktop_suggest_click`` is
-    often wrong with *flash-lite* models; use ``DESKTOP_VISION_MODEL`` + a non-lite vision id and/or
-    ``DESKTOP_SUGGEST_CLICK_REFINE=1`` if you rely on pixels.
+- On **Windows**, ``pip install uiautomation`` enables ``desktop_uia_*`` — the manager should use
+    ``desktop_list_windows`` / ``desktop_uia_list_elements`` to read **live** titles and control names,
+    then ``desktop_uia_click`` or full-screen ``desktop_suggest_click`` + ``desktop_mouse`` for **any**
+    on-screen target (no fixed window name in tooling). Vision-only clicks are weaker with *flash-lite*
+    models; set ``DESKTOP_VISION_MODEL`` to a non-lite vision id and/or ``DESKTOP_SUGGEST_CLICK_REFINE=1``.
 - For **headless / CI-style** GUI projects (pytest only, no mouse):
     ``MANAGER_GUI_DESKTOP_PROOF=0`` — manager passes with ``start_service`` + green tests, no ``desktop_*`` proof.
 - Sharper **vision clicks** (optional): ``DESKTOP_VISION_MODEL=<stronger-gemini-vision-id>``;
@@ -45,6 +46,10 @@ Usage (cmd)::
 
 Output defaults to ``manager_smoke_output/`` (separate from ``eng_output/`` and ``company_output/``).
 
+Integration **phase 3** (after implementation sprints): use this script to exercise the real manager
+fix loop + desktop tools against the seeded Tk demo. The seed includes ``design/agent_test_hints.md``
+with FEATURE / FIND / TEST lines the manager should follow.
+
 What to watch in the log
 ------------------------
 - Lines like ``[TOOL: start_service]``, ``[TOOL: desktop_mouse|ok]``, ``[TOOL: write_code_file]``
@@ -69,6 +74,9 @@ from dotenv import load_dotenv
 _REPO_ROOT = Path(__file__).resolve().parent
 load_dotenv(_REPO_ROOT / ".env", override=True)
 load_dotenv(override=True)
+
+from manager_smoke_seed import seed_minimal_gui_project as _seed_minimal_gui_project
+from manager_smoke_seed import write_smoke_agent_test_hints as _write_smoke_agent_test_hints
 
 _SMOKE_DEFAULT_GEMINI = "gemini-3.1-flash-preview"
 
@@ -242,42 +250,6 @@ def _prepare_output_dir(out: Path) -> None:
         p.mkdir(parents=True, exist_ok=True)
 
 
-def _seed_minimal_gui_project(code_dir: Path) -> None:
-    """Tiny Tk app + passing pytest so the test gate is green without blocking forever."""
-    code_dir.mkdir(parents=True, exist_ok=True)
-    (code_dir / "main.py").write_text(
-        '''\
-"""Minimal Tk window for manager smoke — closes after a few seconds if run directly."""
-import tkinter as tk
-
-def main() -> None:
-    root = tk.Tk()
-    root.title("Manager stage smoke")
-    root.geometry("360x220")
-    lbl = tk.Label(root, text="Smoke target — manager may click the button", padx=12, pady=12)
-    lbl.pack()
-    btn = tk.Button(root, text="Hello", width=16)
-    btn.pack(pady=12)
-    # Auto-close so a blocking ``python main.py`` eventually exits (CI-friendly).
-    root.after(120_000, root.destroy)
-    root.mainloop()
-
-if __name__ == "__main__":
-    main()
-''',
-        encoding="utf-8",
-    )
-    (code_dir / "app").mkdir(exist_ok=True)
-    (code_dir / "app" / "__init__.py").write_text("", encoding="utf-8")
-    tests = code_dir / "tests"
-    tests.mkdir(exist_ok=True)
-    (tests / "test_smoke.py").write_text(
-        "def test_smoke():\n    assert True\n",
-        encoding="utf-8",
-    )
-    (tests / "__init__.py").write_text("", encoding="utf-8")
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description="Live manager fix-loop smoke (LLM + tools).")
     parser.add_argument(
@@ -307,6 +279,7 @@ def main() -> None:
 
     code_dir = out / "code"
     _seed_minimal_gui_project(code_dir)
+    _write_smoke_agent_test_hints(out)
 
     reg = sc.get_contracts()
     reg.app_type = "gui"

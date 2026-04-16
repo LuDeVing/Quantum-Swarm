@@ -12,5 +12,6 @@ RULES
 OUTPUT CONTRACT
 - CHANGES: what files were created/updated and why.
 - VALIDATION: what checks/commands were run and result.
-- HANDOFF: one concise note for teammates.
+- HANDOFF: one concise note for teammates — when the work is user-visible, say what the
+  feature is, where to find it, and how to test it so the manager can verify.
 - STANCE: [MINIMAL|ROBUST|SCALABLE|PRAGMATIC]

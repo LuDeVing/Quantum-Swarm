@@ -56,22 +56,38 @@ def fake_pygetwindow(monkeypatch: pytest.MonkeyPatch):
     """Inject a minimal pygetwindow-like module."""
 
     class Win:
-        __slots__ = ("title", "left", "top", "width", "height", "_activated")
+        __slots__ = ("title", "left", "top", "width", "height", "_activated", "_minimized")
 
-        def __init__(self, title: str, left: int = 0, top: int = 0, width: int = 100, height: int = 80):
+        def __init__(
+            self,
+            title: str,
+            left: int = 0,
+            top: int = 0,
+            width: int = 100,
+            height: int = 80,
+            minimized: bool = False,
+        ):
             self.title = title
             self.left = left
             self.top = top
             self.width = width
             self.height = height
             self._activated = False
+            self._minimized = minimized
+
+        @property
+        def isMinimized(self) -> bool:
+            return self._minimized
+
+        def restore(self) -> None:
+            self._minimized = False
 
         def activate(self) -> None:
             self._activated = True
 
     wins = [
         Win(""),
-        Win("Calculator"),
+        Win("Calculator", minimized=True),
         Win("My Test App — v1", 10, 20, 640, 480),
     ]
 
@@ -92,6 +108,7 @@ def test_desktop_list_windows_success(fake_pygetwindow, monkeypatch: pytest.Monk
     text = desktop_list_windows(limit=10)
     assert not text.upper().startswith("ERROR")
     assert "Calculator" in text
+    assert "[minimized]" in text
     assert "My Test App" in text
     assert "rect=" in text
 
@@ -104,6 +121,18 @@ def test_desktop_activate_window_success(fake_pygetwindow, monkeypatch: pytest.M
     assert not out.upper().startswith("ERROR")
     assert "My Test App" in out
     assert fake_pygetwindow[2]._activated is True
+
+
+def test_desktop_activate_window_restores_minimized_first(
+    fake_pygetwindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("software_company.tool_registry.AGENT_DESKTOP_CONTROL_ENABLED", True)
+    from software_company.tool_registry import desktop_activate_window
+
+    out = desktop_activate_window("Calculator")
+    assert not out.upper().startswith("ERROR")
+    assert fake_pygetwindow[1]._minimized is False
+    assert fake_pygetwindow[1]._activated is True
 
 
 def test_desktop_activate_window_no_match(fake_pygetwindow, monkeypatch: pytest.MonkeyPatch) -> None:

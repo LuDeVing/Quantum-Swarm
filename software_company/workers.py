@@ -93,6 +93,15 @@ def run_worker(
 
     dod_checklist = _get_dod(role_key)
 
+    # Long-term memory — lessons from past sprints for this role
+    from .long_term_memory import get_role_memory as _get_role_memory
+    _ltm = _get_role_memory(role_key).query(task, top_k=4)
+    ltm_section = (
+        "\n─── DOMAIN EXPERTISE FROM PAST SPRINTS ─────────────────────────\n"
+        + _ltm +
+        "\n─────────────────────────────────────────────────────────────────\n"
+    ) if _ltm else ""
+
     # Coordination instructions — mirror engineering's mandatory tool-use steps
     coord_instructions = ""
     if has_tools:
@@ -116,6 +125,7 @@ def run_worker(
             f"You are a {role['title']} at a software company.\n"
             f"Expertise: {role['expertise']}\n"
             f"Responsibility: {role['responsibility']}\n\n"
+            f"{ltm_section}"
             f"{ctx_text}"
             f"{manifest_snippet}"
             f"{dashboard_snippet}"
@@ -144,6 +154,7 @@ def run_worker(
             f"{goal_anchor}"
             f"You are a {role['title']} at a software company.\n"
             f"Expertise: {role['expertise']}\n\n"
+            f"{ltm_section}"
             f"{ctx_text}"
             f"{manifest_snippet}"
             f"{dashboard_snippet}"
@@ -184,6 +195,14 @@ def run_worker(
 
     m      = re.search(r"STANCE:\s*(MINIMAL|ROBUST|SCALABLE|PRAGMATIC)", output, re.IGNORECASE)
     stance = m.group(1).lower() if m else "pragmatic"
+
+    # Background lesson extraction — never blocks
+    import threading as _threading
+    _threading.Thread(
+        target=_get_role_memory(role_key).extract_and_save,
+        args=(task, output, sprint_num, not anomaly),
+        daemon=True,
+    ).start()
 
     return WorkerOutput(
         role=role_key,
