@@ -9,7 +9,19 @@ import os
 import subprocess
 import sys
 import threading
-from typing import Callable, Dict, List
+from dataclasses import dataclass
+from typing import Callable, Dict, List, Optional
+
+
+@dataclass
+class ScreenshotResult:
+    """Returned by desktop_screenshot() — carries both the metadata text and the raw PNG bytes.
+    The agent loop injects png_bytes as an inline image part so the model sees actual pixels."""
+    text: str
+    png_bytes: Optional[bytes]
+
+    def __str__(self) -> str:
+        return self.text
 
 from .config import (
     AGENT_DESKTOP_CONTROL_ENABLED,
@@ -431,6 +443,11 @@ def close_browser() -> str:
     ALWAYS call this when done — not calling it blocks other agents from getting a browser."""
     return get_browser_pool().release()
 
+# pid → command string for all processes started via launch_application
+_launched_apps: dict = {}
+_launched_apps_lock = __import__("threading").Lock()
+
+
 @_register_tool
 def launch_application(command: str) -> str:
     """Start a desktop program or OS \"open\" command without waiting for it to exit.
@@ -485,13 +502,64 @@ def launch_application(command: str) -> str:
                 start_new_session=True,
             )
         logger.info(f"[launch_application] pid={proc.pid} cmd={cmd[:300]!r}")
+        with _launched_apps_lock:
+            _launched_apps[proc.pid] = cmd
         return (
             f"Started detached process pid={proc.pid}. "
             f"No output captured; the agent cannot see the app window. "
-            f"For web UIs use open_app + browser_action."
+            f"For web UIs use open_app + browser_action. "
+            f"To kill it later: close_application({proc.pid})."
         )
     except Exception as e:
         logger.warning(f"[launch_application] failed: {e}", exc_info=True)
+        return f"ERROR: {e}"
+
+
+@_register_tool
+def close_application(pid: int) -> str:
+    """Kill a running application by its process ID (PID).
+
+    Use when a launched app is frozen, not responding, or needs to be restarted.
+    pid: the integer PID returned by launch_application() or listed by desktop_list_windows().
+
+    Returns a confirmation or error string.
+    Requires AGENT_LAUNCH_APPS_ENABLED=1."""
+    if not AGENT_LAUNCH_APPS_ENABLED:
+        return (
+            "ERROR: close_application is disabled. Set AGENT_LAUNCH_APPS_ENABLED=1 in the environment."
+        )
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return "ERROR: pid must be an integer"
+    try:
+        if sys.platform == "win32":
+            import subprocess as _sp
+            r = _sp.call(
+                ["taskkill", "/F", "/T", "/PID", str(pid)],
+                stdout=_sp.DEVNULL, stderr=_sp.DEVNULL,
+            )
+            ok = r == 0
+        else:
+            import os as _os, signal as _sig
+            try:
+                _os.killpg(_os.getpgid(pid), _sig.SIGKILL)
+                ok = True
+            except ProcessLookupError:
+                _os.kill(pid, _sig.SIGKILL)
+                ok = True
+        with _launched_apps_lock:
+            cmd = _launched_apps.pop(pid, "<unknown>")
+        if ok:
+            logger.info(f"[close_application] killed pid={pid} cmd={cmd[:200]!r}")
+            return f"Killed pid={pid} ({cmd[:120]!r})."
+        return f"taskkill returned non-zero for pid={pid} — process may have already exited."
+    except ProcessLookupError:
+        with _launched_apps_lock:
+            _launched_apps.pop(pid, None)
+        return f"pid={pid} not found — already exited."
+    except Exception as e:
+        logger.warning(f"[close_application] pid={pid}: {e}", exc_info=True)
         return f"ERROR: {e}"
 
 
@@ -600,10 +668,15 @@ def desktop_activate_window(title_substring: str) -> str:
         _maybe_windows_desktop_dpi_aware()
         _restore_window_if_minimized(win)
         _activate_window_robust(win)
-        time.sleep(0.12)
-        logger.info(f"[desktop_activate_window] activated {win.title!r}")
+        # Maximize so the full window is visible in screenshots
+        try:
+            win.maximize()
+        except Exception:
+            pass
+        time.sleep(0.20)
+        logger.info(f"[desktop_activate_window] activated+maximized {win.title!r}")
         return (
-            f"Activated window: {win.title!r} (restored if it was minimized). "
+            f"Activated and maximized window: {win.title!r}. "
             "Next: desktop_screenshot() then desktop_suggest_click / desktop_mouse / desktop_keyboard."
         )
     except Exception as e:
@@ -672,13 +745,13 @@ def desktop_uia_click(
 
 @_register_tool
 def desktop_screenshot() -> str:
-    """Take a full-screen screenshot and return a Gemini vision description of what is visible.
+    """Take a full-screen screenshot and return it as an image for direct visual inspection.
     Minimized windows are not shown — call desktop_activate_window(title) first to restore them.
     Call before and after desktop_mouse/desktop_keyboard actions to verify the result.
     For click targets use desktop_suggest_click('description') first — it captures the screen
     and returns coordinates matched to the current layout.
-    Returns: resolution, cursor position, and a natural-language description of the screen.
-    Uses ``DESKTOP_VISION_MODEL`` when set, else ``GEMINI_MODEL``.
+    Returns the screenshot image directly (you will see it as a visual); metadata includes
+    resolution and cursor position.
     Requires AGENT_DESKTOP_CONTROL_ENABLED=1 in the environment."""
     if not AGENT_DESKTOP_CONTROL_ENABLED:
         return (
@@ -687,7 +760,7 @@ def desktop_screenshot() -> str:
         )
     try:
         import pyautogui
-        import base64, io
+        import io
 
         _maybe_windows_desktop_dpi_aware()
         screen_w, screen_h = pyautogui.size()
@@ -695,35 +768,18 @@ def desktop_screenshot() -> str:
         img = pyautogui.screenshot()
         buf = io.BytesIO()
         img.save(buf, format="PNG")
-        img_b64 = base64.b64encode(buf.getvalue()).decode()
-        try:
-            resp = get_client().models.generate_content(
-                model=_desktop_vision_model(),
-                contents=[{
-                    "parts": [
-                        {"text": (
-                            "Describe what is visible on this screenshot in detail: "
-                            "list all open windows, visible text, UI elements, and their positions. "
-                            "If you see an application, name it. Be specific and concise."
-                        )},
-                        {"inline_data": {"mime_type": "image/png", "data": img_b64}},
-                    ]
-                }],
-            )
-            vision = resp.text.strip()
-        except Exception as e:
-            vision = f"(vision unavailable: {e})"
+        png_bytes = buf.getvalue()
         iw, ih = img.size
         cap_note = ""
         if iw != screen_w or ih != screen_h:
             cap_note = f"  capture={iw}x{ih} (use desktop_suggest_click for scaled clicks)\n"
-        return (
-            f"Screen: {screen_w}x{screen_h}  "
-            f"display_width_px={screen_w}  display_height_px={screen_h}  "
-            f"Cursor: ({cx},{cy})\n"
-            f"{cap_note}"
-            f"Visible: {vision}"
+        text = (
+            f"Screenshot taken. Screen: {screen_w}x{screen_h}  "
+            f"Cursor: ({cx},{cy}){chr(10) + cap_note if cap_note else ''}"
+            f"The PNG image is attached inline — look at it directly to see what is on screen."
         )
+        logger.info(f"[desktop_screenshot] {iw}x{ih} PNG ({len(png_bytes)} bytes) captured")
+        return ScreenshotResult(text=text, png_bytes=png_bytes)
     except ImportError:
         return (
             "ERROR: pyautogui is not installed. Run: pip install pyautogui\n"
@@ -1170,19 +1226,19 @@ _ROLE_TOOL_NAMES: Dict[str, List[str]] = {
     "unit_tester":        ["write_test_file", "validate_python", "scan_vulnerabilities",
                            "web_search", "run_shell", "start_service", "stop_service", "http_request",
                            "read_file", "list_files", "search_codebase", "grep_codebase", "recall_memory",
-                           "open_app", "browser_action", "close_browser", "launch_application",
+                           "open_app", "browser_action", "close_browser", "launch_application", "close_application",
                            *DESKTOP_AUTOMATION_TOOL_NAMES,
                            ] + _DASHBOARD_RO_TOOLS,
     "integration_tester": ["write_test_file", "validate_python", "validate_json", "web_search",
                            "run_shell", "start_service", "stop_service", "http_request",
                            "read_file", "list_files", "search_codebase", "grep_codebase", "recall_memory",
-                           "open_app", "browser_action", "close_browser", "launch_application",
+                           "open_app", "browser_action", "close_browser", "launch_application", "close_application",
                            *DESKTOP_AUTOMATION_TOOL_NAMES,
                            ] + _DASHBOARD_RO_TOOLS,
     "security_auditor":   ["write_test_file", "scan_vulnerabilities", "check_owasp", "web_search",
                            "run_shell", "start_service", "stop_service", "http_request",
                            "read_file", "list_files", "search_codebase", "grep_codebase", "recall_memory",
-                           "open_app", "browser_action", "close_browser", "launch_application",
+                           "open_app", "browser_action", "close_browser", "launch_application", "close_application",
                            *DESKTOP_AUTOMATION_TOOL_NAMES,
                            ] + _DASHBOARD_RO_TOOLS,
 }
@@ -1195,7 +1251,7 @@ _DEV_TOOL_NAMES = ["think",
                    "list_files", "search_codebase", "grep_codebase", "recall_memory",
                    "start_service", "stop_service",
                    "http_request", "download_url", "web_search",
-                   "open_app", "browser_action", "close_browser", "launch_application",
+                   "open_app", "browser_action", "close_browser", "launch_application", "close_application",
                    *DESKTOP_AUTOMATION_TOOL_NAMES,
                    # Full dashboard / messaging suite — Gemini SDK raises KeyError
                    # if the model tries to call a function that isn't in the tool list,
@@ -1231,7 +1287,7 @@ _ENG_MANAGER_TOOL_NAMES = [
     "create_directory", "delete_file", "remove_empty_directory",
     "validate_python", "validate_json", "validate_yaml",
     "run_shell", "start_service", "stop_service", "http_request", "download_url", "web_search",
-    "launch_application",
+    "launch_application", "close_application",
     *DESKTOP_AUTOMATION_TOOL_NAMES,
 ] + _DASHBOARD_RO_TOOLS
 

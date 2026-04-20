@@ -831,9 +831,25 @@ def _registry_wants_pythonpath() -> bool:
 
 
 def _subprocess_env_for_project(code_dir: Path) -> Dict[str, str]:
-    """Environment for child processes: copy os.environ; optionally prepend *code_dir* to PYTHONPATH."""
+    """Environment for child processes: copy os.environ; inject the active venv into PATH
+    so agents use the same python/pip that runs this process, not the system Python."""
+    import sys as _sys
     cwd_s = str(Path(code_dir).resolve())
     env: Dict[str, str] = dict(os.environ)
+
+    # Inject the active venv's Scripts/bin dir so `pip` and `python` resolve correctly.
+    # sys.executable is e.g. C:\project\.venv\Scripts\python.exe — its parent is Scripts/.
+    venv_bin = Path(_sys.executable).parent
+    if venv_bin.exists():
+        sep = os.pathsep
+        current_path = env.get("PATH", "")
+        venv_bin_s = str(venv_bin)
+        if venv_bin_s not in current_path:
+            env["PATH"] = venv_bin_s + sep + current_path
+        # Also set VIRTUAL_ENV so pip knows it's inside a venv
+        env["VIRTUAL_ENV"] = str(venv_bin.parent)
+        env.pop("PYTHONHOME", None)  # PYTHONHOME confuses venv Python
+
     if not _registry_wants_pythonpath():
         return env
     sep = os.pathsep
@@ -880,13 +896,32 @@ def _run_shell_segment_blocks_gui(seg: str) -> Optional[str]:
         return None
     low = c.lower()
     safe_markers = (
-        "--help", "-h ", " -h", "--version", " -v", "-c ", " -c ", " -m ", "py_compile",
+        "--help", "-h ", " -h", "--version", " -v", "-c ", " -c ", "py_compile",
         "pytest", "unittest", "__integration__", "pip ", "npm ", "docker build",
         "flake8", "mypy", "black ", "ruff ", "echo ", "type ", "dir ", "ls ",
         "chmod ", "git ", "curl ", "wget ", "tasklist", "findstr",
         "cargo ", "rustc ", "go ", "clang", "gcc ", "g++ ", "make ", "cmake ",
         "dotnet ", "mvn ", "gradle ", "bundle ", "rspec ",
     )
+    # -m is only safe for known non-GUI modules; do NOT blanket-allow it
+    # because `python -m src.engine` / `python -m app` starts a blocking GUI loop
+    _SAFE_M_MODULES = (
+        "pytest", "unittest", "py_compile", "pip", "venv", "ensurepip",
+        "compileall", "flake8", "mypy", "black", "ruff", "isort",
+        "coverage", "http.server", "json.tool", "pydoc",
+    )
+    _m_match = re.search(r"\bpython\w*\s+-m\s+(\S+)", low)
+    if _m_match:
+        mod = _m_match.group(1).split(".")[0]
+        if not any(mod == s or mod.startswith(s) for s in _SAFE_M_MODULES):
+            return (
+                f"ERROR: run_shell cannot run 'python -m {_m_match.group(1)}' — "
+                "it may start a blocking event loop. "
+                "Use start_service() to launch it in the background instead.\n\n"
+                "Use instead:\n"
+                "  start_service('app', 'python -m " + _m_match.group(1) + "')\n"
+                "  then desktop_list_windows() / desktop_activate_window()."
+            )
     if any(m in low for m in safe_markers):
         return None
     if re.search(r"(?:^|[\s;|&])-h(?:\s|$)", low) or re.search(

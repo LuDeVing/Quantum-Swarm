@@ -24,7 +24,7 @@ from .engineering import (
     run_sprint_planning,
 )
 from .teams import run_team
-from .engineering import run_engineering_team
+from .engineering import run_engineering_team, run_sprint_retrospective
 
 logger = logging.getLogger("company")
 

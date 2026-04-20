@@ -117,9 +117,14 @@ class InterfaceContractRegistry:
             self.dependencies = parsed.get("dependencies", [])
             self.init_order = parsed.get("init_order", [])
             self.app_type = parsed.get("app_type", "") or self._infer_app_type()
-            # LLM contracts often label tkinter/Qt/wx apps as "cli"; upgrade so manager must use desktop_mouse/keyboard.
-            if self.app_type in ("cli", "script") and self._file_map_suggests_gui():
-                self.app_type = "gui"
+            # Contract LLM sees only the task description, not actual code — re-verify when it says "cli"
+            # because GUI apps (pygame, tkinter, etc.) are commonly misclassified.
+            if self.app_type in ("cli", "script"):
+                _code_inferred = self._infer_app_type()
+                if _code_inferred not in ("cli", "script", "library"):
+                    self.app_type = _code_inferred
+                elif self._file_map_suggests_gui():
+                    self.app_type = "gui"
             _pl = parsed.get("primary_language", "")
             if isinstance(_pl, str) and _pl.strip():
                 self.primary_language = _pl.strip().lower()
@@ -202,39 +207,50 @@ class InterfaceContractRegistry:
         return False
 
     def _infer_app_type(self) -> str:
-        """Infer app type from contract signals when not explicitly set."""
-        # Has HTTP endpoints → web API/server
+        """Use LLM to infer app type by reading the actual generated code.
+        Falls back to 'cli' only if the LLM call fails."""
+        from pathlib import Path
+        from .config import OUTPUT_DIR
+
+        # Has HTTP endpoints in contracts → definitely web
         if self.endpoints:
             return "web"
-        cmd = (self.build_command or "").lower()
-        deps = [d.lower() for d in self.dependencies]
-        # Explicit server frameworks
-        _web_signals = {"uvicorn", "gunicorn", "flask", "fastapi", "django", "express",
-                        "http.server", "aiohttp", "tornado", "starlette", "bottle",
-                        "rails", "sinatra", "spring", "quarkus", "actix", "axum"}
-        if any(s in cmd or s in " ".join(deps) for s in _web_signals):
-            return "web"
-        # GUI frameworks
-        _gui_signals = {"tkinter", "pyqt", "pyside", "wxpython", "kivy",
-                        "electron", "tauri", "gtk", "qt", "swing", "javafx"}
-        if any(s in cmd or s in " ".join(deps) for s in _gui_signals):
-            return "gui"
-        if self._file_map_suggests_gui():
-            return "gui"
-        # CLI runners / argparse-heavy tools
-        _cli_signals = {"click", "typer", "argparse", "docopt", "clap", "cobra", "oclif"}
-        if any(s in " ".join(deps) for s in _cli_signals):
+
+        # Sample the entry point and dependencies file so the LLM can see what was built
+        code_dir = OUTPUT_DIR / "code"
+        samples: list[str] = []
+        for fname in ["main.py", "app.py", "server.py", "index.js",
+                      "requirements.txt", "package.json", "Cargo.toml"]:
+            f = code_dir / fname
+            if f.exists():
+                try:
+                    samples.append(f"=== {fname} ===\n{f.read_text(encoding='utf-8', errors='replace')[:600]}")
+                except OSError:
+                    pass
+            if len(samples) >= 3:
+                break
+
+        if not samples:
             return "cli"
-        # Background workers / queues
-        _worker_signals = {"celery", "rq", "dramatiq", "kafka", "rabbitmq", "redis"}
-        if any(s in " ".join(deps) for s in _worker_signals):
-            return "worker"
-        # If build_command is just a compile step, it's a library/script
-        _compile_signals = {"cargo build", "go build", "mvn package", "gradle build",
-                            "npm run build", "tsc", "make"}
-        if any(s in cmd for s in _compile_signals) and "run" not in cmd and "start" not in cmd:
-            return "library"
-        # Default: treat as CLI script (run once, check exit code)
+
+        prompt = (
+            "Read the following project files and classify the application type.\n\n"
+            + "\n\n".join(samples)
+            + "\n\nReply with ONLY one word from this list:\n"
+            "  web      — HTTP server or API (FastAPI, Flask, Express, etc.)\n"
+            "  gui      — opens a visual window (pygame, tkinter, OpenGL, Qt, Electron, etc.)\n"
+            "  cli      — runs in a terminal and exits (argparse, click, shell scripts)\n"
+            "  worker   — background daemon or queue processor\n"
+            "  library  — importable module with no main loop\n\n"
+            "One word only."
+        )
+        try:
+            import software_company as _sc
+            result = _sc.llm_call(prompt, label="infer_app_type").strip().lower().split()[0]
+            if result in ("web", "gui", "cli", "worker", "library"):
+                return result
+        except Exception:
+            pass
         return "cli"
 
     def get_contract_for_dev(self, dev_key: str) -> str:

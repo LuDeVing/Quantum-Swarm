@@ -1,0 +1,372 @@
+{
+  "sprint": 1,
+  "goal": "Build a 2D space shooter game in pygame with a player ship, enemy waves, bullets, collision detection, score tracking, and a game over screen",
+  "nodes": {
+    "comp_001": {
+      "id": "comp_001",
+      "name": "Constants",
+      "file_path": "src/config.py",
+      "description": "Centralizes all game configuration parameters, including screen dimensions, frame rates, color constants, player speed, enemy spawn rates, and scoring mechanics. It acts as the single source of truth for tuning game balance and appearance without modifying core logic.",
+      "public_interface": {
+        "classes": [],
+        "functions": [],
+        "constants": [
+          "SCREEN_WIDTH: int = 800",
+          "SCREEN_HEIGHT: int = 600",
+          "FPS: int = 60",
+          "PLAYER_SPEED: float = 5.0",
+          "ENEMY_SPEED: float = 2.0",
+          "BULLET_SPEED: float = 7.0",
+          "WHITE: tuple[int, int, int] = (255, 255, 255)",
+          "BLACK: tuple[int, int, int] = (0, 0, 0)",
+          "RED: tuple[int, int, int] = (255, 0, 0)"
+        ]
+      },
+      "depends_on": [],
+      "consumers": [
+        "comp_003",
+        "comp_004",
+        "comp_005",
+        "comp_006",
+        "comp_007",
+        "comp_008",
+        "comp_009",
+        "comp_010",
+        "comp_011",
+        "comp_012"
+      ],
+      "complexity": "low",
+      "depth": 0
+    },
+    "comp_002": {
+      "id": "comp_002",
+      "name": "GameData",
+      "file_path": "src/models.py",
+      "description": "Defines data structures using Python dataclasses for game entities such as Player, Enemy, and Bullet. These models serve as the serialization layer and shared state object for the ECS pattern, ensuring consistent data representation across the game's systems.",
+      "public_interface": {
+        "classes": [
+          "EntityState"
+        ],
+        "functions": [
+          "EntityState.__init__(self, x: float, y: float, width: int, height: int) -> None"
+        ],
+        "constants": []
+      },
+      "depends_on": [],
+      "consumers": [
+        "comp_003"
+      ],
+      "complexity": "low",
+      "depth": 0
+    },
+    "comp_003": {
+      "id": "comp_003",
+      "name": "BaseSprite",
+      "file_path": "src/entities/base.py",
+      "description": "Provides an abstract base class for all game entities by extending pygame.sprite.Sprite. It integrates common functionality like position tracking and surface rendering, ensuring that all game objects can be managed by pygame sprite groups.",
+      "public_interface": {
+        "classes": [
+          "BaseEntity"
+        ],
+        "functions": [
+          "BaseEntity.__init__(self, x: float, y: float, image_path: str = None) -> None",
+          "BaseEntity.update(self) -> None"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_001",
+        "comp_002",
+        "comp_012"
+      ],
+      "consumers": [
+        "comp_004",
+        "comp_005",
+        "comp_006"
+      ],
+      "complexity": "medium",
+      "depth": 2
+    },
+    "comp_004": {
+      "id": "comp_004",
+      "name": "Player",
+      "file_path": "src/entities/player.py",
+      "description": "Represents the user-controlled spaceship, handling input detection and movement constraints within the game screen boundaries. It maintains the current state of the player, including health and shooting capability, and interfaces with the bullet factory.",
+      "public_interface": {
+        "classes": [
+          "Player"
+        ],
+        "functions": [
+          "Player.__init__(self, x: float, y: float) -> None",
+          "Player.move(self, dx: float, dy: float) -> None",
+          "Player.shoot(self) -> Bullet"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_001",
+        "comp_003",
+        "comp_005"
+      ],
+      "consumers": [
+        "comp_007",
+        "comp_008"
+      ],
+      "complexity": "medium",
+      "depth": 4
+    },
+    "comp_005": {
+      "id": "comp_005",
+      "name": "Bullet",
+      "file_path": "src/entities/bullet.py",
+      "description": "Defines projectile entities fired by the player, responsible for moving upward and removing themselves from the game world once they leave the screen bounds or impact a target.",
+      "public_interface": {
+        "classes": [
+          "Bullet"
+        ],
+        "functions": [
+          "Bullet.__init__(self, x: float, y: float) -> None",
+          "Bullet.update(self) -> None"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_001",
+        "comp_003"
+      ],
+      "consumers": [
+        "comp_004",
+        "comp_007",
+        "comp_008"
+      ],
+      "complexity": "low",
+      "depth": 3
+    },
+    "comp_006": {
+      "id": "comp_006",
+      "name": "Enemy",
+      "file_path": "src/entities/enemy.py",
+      "description": "Represents hostile alien ships that descend down the screen. It manages enemy-specific logic like movement patterns and identifying when the enemy has reached the bottom or been destroyed.",
+      "public_interface": {
+        "classes": [
+          "Enemy"
+        ],
+        "functions": [
+          "Enemy.__init__(self, x: float, y: float) -> None",
+          "Enemy.update(self) -> None"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_001",
+        "comp_003"
+      ],
+      "consumers": [
+        "comp_007",
+        "comp_008"
+      ],
+      "complexity": "medium",
+      "depth": 3
+    },
+    "comp_007": {
+      "id": "comp_007",
+      "name": "EntityManager",
+      "file_path": "src/managers/entity_manager.py",
+      "description": "Acts as the controller for all sprite groups in the game, facilitating mass updates, rendering, and lifecycle management for player, enemy, and bullet entities.",
+      "public_interface": {
+        "classes": [
+          "EntityManager"
+        ],
+        "functions": [
+          "EntityManager.__init__(self) -> None",
+          "EntityManager.add_enemy(self, enemy: Enemy) -> None",
+          "EntityManager.update_all(self) -> None",
+          "EntityManager.draw_all(self, surface: pygame.Surface) -> None"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_001",
+        "comp_004",
+        "comp_005",
+        "comp_006"
+      ],
+      "consumers": [
+        "comp_011"
+      ],
+      "complexity": "medium",
+      "depth": 5
+    },
+    "comp_008": {
+      "id": "comp_008",
+      "name": "CollisionSystem",
+      "file_path": "src/systems/collision.py",
+      "description": "Handles the physics interactions between entities, specifically checking for bullet-enemy and player-enemy collisions using pygame's sprite collision masks. It updates score and entity health through direct orchestration with the ScoreManager.",
+      "public_interface": {
+        "classes": [
+          "CollisionSystem"
+        ],
+        "functions": [
+          "CollisionSystem.__init__(self) -> None",
+          "CollisionSystem.check_collisions(self, player: Player, enemies: pygame.sprite.Group, bullets: pygame.sprite.Group, score_manager: ScoreManager) -> int"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_001",
+        "comp_004",
+        "comp_005",
+        "comp_006",
+        "comp_009"
+      ],
+      "consumers": [
+        "comp_011"
+      ],
+      "complexity": "high",
+      "depth": 5
+    },
+    "comp_009": {
+      "id": "comp_009",
+      "name": "ScoreManager",
+      "file_path": "src/managers/score_manager.py",
+      "description": "Tracks the player's score throughout the session and handles rendering the score display to the screen, providing methods to increment points and reset the counter.",
+      "public_interface": {
+        "classes": [
+          "ScoreManager"
+        ],
+        "functions": [
+          "ScoreManager.__init__(self) -> None",
+          "ScoreManager.add_score(self, amount: int) -> None",
+          "ScoreManager.draw(self, surface: pygame.Surface) -> None",
+          "ScoreManager.score: int"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_001"
+      ],
+      "consumers": [
+        "comp_008",
+        "comp_011"
+      ],
+      "complexity": "low",
+      "depth": 1
+    },
+    "comp_010": {
+      "id": "comp_010",
+      "name": "UIComponents",
+      "file_path": "src/ui/components.py",
+      "description": "Provides utility methods for rendering text, game over screens, and other non-entity user interface elements to the screen surface.",
+      "public_interface": {
+        "classes": [],
+        "functions": [
+          "draw_text(surface: pygame.Surface, text: str, size: int, x: int, y: int) -> None",
+          "draw_game_over(surface: pygame.Surface, score: int) -> None"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_001"
+      ],
+      "consumers": [
+        "comp_011"
+      ],
+      "complexity": "low",
+      "depth": 1
+    },
+    "comp_011": {
+      "id": "comp_011",
+      "name": "GameEngine",
+      "file_path": "src/engine.py",
+      "description": "The main controller class that initializes pygame, handles the primary game loop, processes inputs, updates the game state, and coordinates between managers for a seamless gaming experience.",
+      "public_interface": {
+        "classes": [
+          "Game"
+        ],
+        "functions": [
+          "Game.__init__(self) -> None",
+          "Game.run(self) -> None",
+          "Game.handle_events(self) -> None",
+          "Game.update(self, dt: float) -> None",
+          "Game.render(self) -> None",
+          "Game.is_game_over: bool"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_001",
+        "comp_007",
+        "comp_008",
+        "comp_009",
+        "comp_010",
+        "comp_012",
+        "comp_013"
+      ],
+      "consumers": [],
+      "complexity": "high",
+      "depth": 6
+    },
+    "comp_012": {
+      "id": "comp_012",
+      "name": "ResourceManager",
+      "file_path": "src/managers/resource_manager.py",
+      "description": "Caches game assets such as images and audio files to prevent redundant disk I/O. It provides a centralized interface for retrieving pre-loaded surfaces and sounds required by entities.",
+      "public_interface": {
+        "classes": [
+          "ResourceManager"
+        ],
+        "functions": [
+          "ResourceManager.load_image(self, path: str) -> pygame.Surface",
+          "ResourceManager.load_sound(self, path: str) -> pygame.mixer.Sound"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_001"
+      ],
+      "consumers": [
+        "comp_003",
+        "comp_011"
+      ],
+      "complexity": "medium",
+      "depth": 1
+    },
+    "comp_013": {
+      "id": "comp_013",
+      "name": "InputHandler",
+      "file_path": "src/systems/input.py",
+      "description": "Decouples input processing from the main engine. It translates raw pygame events into game-specific actions, such as player movement vectors or firing commands.",
+      "public_interface": {
+        "classes": [
+          "InputHandler"
+        ],
+        "functions": [
+          "InputHandler.get_input() -> dict[str, bool]",
+          "InputHandler.is_quit_event(event: pygame.event.Event) -> bool"
+        ],
+        "constants": []
+      },
+      "depends_on": [],
+      "consumers": [
+        "comp_011"
+      ],
+      "complexity": "low",
+      "depth": 0
+    }
+  },
+  "topological_order": [
+    "comp_001",
+    "comp_002",
+    "comp_013",
+    "comp_009",
+    "comp_010",
+    "comp_012",
+    "comp_003",
+    "comp_005",
+    "comp_006",
+    "comp_004",
+    "comp_007",
+    "comp_008",
+    "comp_011"
+  ]
+}

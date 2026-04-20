@@ -14,7 +14,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 from hamiltonian_swarm.quantum.active_inference import ActiveInferenceState
@@ -401,19 +401,52 @@ def run_sprint_planning(
     task: str,
     health_states: Dict[str, ActiveInferenceState],
     rolling_ctxs: Dict[str, RollingContext],
-) -> Tuple[Dict[str, str], Dict[str, str]]:
+) -> Tuple[Dict[str, str], Dict[str, str], Optional[Any]]:
     """
     Engineering sprint planning: assign work items via blackboard,
     then generate typed interface contracts for all agents.
+    Returns (dev_assignments, pool, component_graph).
     """
+    from .task_decomposition import run_recursive_decomposition, run_component_graph_generation
+
+    sprint_num = _get_sprint_num()
+    logger.info(f"  [eng] Recursively decomposing sprint goal (sprint {sprint_num})...")
+    tree = run_recursive_decomposition(task, sprint_num)
+    tree_text = tree.format_tree()
+    leaf_count = len(tree.get_leaf_tasks())
+    logger.info(f"  [eng] Decomposition complete — {leaf_count} atomic tasks identified")
+
+    # ComponentGraph: single LLM call for typed dependency graph
+    component_graph = None
+    try:
+        logger.info(f"  [eng] Generating ComponentGraph (sprint {sprint_num})...")
+        component_graph = run_component_graph_generation(task, sprint_num)
+        if not component_graph or len(component_graph.nodes) < 2:
+            component_graph = None
+            logger.info("  [eng] ComponentGraph skipped (< 2 nodes) — TaskTree fallback")
+        else:
+            logger.info(f"  [eng] ComponentGraph ready — {len(component_graph.nodes)} components")
+    except Exception as exc:
+        logger.warning(f"  [eng] ComponentGraph failed ({exc}) — TaskTree fallback")
+        component_graph = None
+
+    enriched_task = (
+        task
+        + "\n\n\u2500\u2500\u2500 PRE-DECOMPOSED TASK TREE \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n"
+        + tree_text
+        + "\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n"
+        "The tree above shows the full file breakdown. Write blackboard items that align\n"
+        "with these atomic files so developers can claim and implement them directly."
+    )
+
     dev_assignments, pool = run_team_planning(
-        "Engineering", "eng_manager", ENG_WORKERS, task, rolling_ctxs, health_states
+        "Engineering", "eng_manager", ENG_WORKERS, enriched_task, rolling_ctxs, health_states
     )
 
     # Generate typed contracts so agents share exact signatures
-    _generate_contracts(task, dev_assignments, pool)
+    _generate_contracts(enriched_task, dev_assignments, pool)
 
-    return dev_assignments, pool
+    return dev_assignments, pool, component_graph
 
 
 def run_ceo_summary(
@@ -524,15 +557,71 @@ class EngTaskQueue:
         registry: InterfaceContractRegistry,
         dev_assignments: Dict[str, str],
         pool_tasks: Dict[str, str] = None,
+        component_graph: Optional[Any] = None,
     ):
         self._lock = threading.RLock()
         self.tasks: Dict[str, EngTask] = {}
         self._completed_tasks: set = set()
         pool_tasks = pool_tasks or {}
+        self._component_graph = component_graph
 
         def _is_valid_fname(fname: str) -> bool:
             """Reject wildcard/glob paths the LLM sometimes generates (e.g. migrations/versions/*)."""
             return not any(c in fname for c in ("*", "?", "<", ">", "|"))
+
+        # ── ComponentGraph path ────────────────────────────────────────────
+        if component_graph and len(component_graph.nodes) >= 2:
+            try:
+                import json as _json
+                _graph_snapshot = _json.loads(
+                    component_graph.SAVE_PATH.read_text(encoding="utf-8")
+                ) if component_graph.SAVE_PATH.exists() else None
+
+                for cid in component_graph.topological_order:
+                    comp = component_graph.nodes.get(cid)
+                    if not comp or not comp.file_path:
+                        continue
+                    tid = f"task_comp_{cid}_p1"
+                    dep_ids = [
+                        f"task_comp_{dep}_p1"
+                        for dep in comp.depends_on
+                        if dep in component_graph.nodes
+                    ]
+                    # Build description including public interface
+                    pi = comp.public_interface
+                    iface_lines = []
+                    if pi.get("classes"):
+                        iface_lines.append("Classes: " + ", ".join(pi["classes"]))
+                    if pi.get("functions"):
+                        iface_lines.append("Functions:\n  " + "\n  ".join(pi["functions"]))
+                    if pi.get("constants"):
+                        iface_lines.append("Constants: " + ", ".join(pi["constants"]))
+                    iface_text = ("\n".join(iface_lines)) if iface_lines else "none specified"
+                    description = (
+                        f"PHASE 1: Implement {comp.name} ({comp.file_path})\n"
+                        f"{comp.description}\n\n"
+                        f"REQUIRED PUBLIC INTERFACE:\n{iface_text}"
+                    )
+                    self.tasks[tid] = EngTask(
+                        id=tid,
+                        file=comp.file_path,
+                        description=description,
+                        depends_on=dep_ids,
+                        status="pending" if not dep_ids else "blocked",
+                        phase=PHASE_IMPLEMENTATION,
+                        component_id=cid,
+                        component_graph_snapshot=_graph_snapshot,
+                        depth=comp.depth,
+                    )
+
+                logger.info(
+                    f"[TaskQueue] ComponentGraph mode: {len(self.tasks)} tasks from "
+                    f"{len(component_graph.nodes)} components (topological order)"
+                )
+            except Exception as _cg_err:
+                logger.warning(f"[TaskQueue] ComponentGraph task build failed ({_cg_err}) — falling back")
+                self.tasks.clear()
+        # ── End ComponentGraph path ────────────────────────────────────────
 
         file_to_task_id = {}
         for fname, fc in registry.file_map.items():
@@ -544,28 +633,29 @@ class EngTaskQueue:
             tid = f"task_{fname.replace('/', '_').replace('.', '_')}"
             file_to_task_id[fname] = tid
 
-        # Phase 1: Implementation (Drafting)
-        for fname, fc in registry.file_map.items():
-            if fname == registry.entry_point:
-                continue
-            if not _is_valid_fname(fname):
-                continue
-            tid = f"task_{fname.replace('/', '_').replace('.', '_')}_p1"
-            dep_ids = [
-                f"task_{d.replace('/', '_').replace('.', '_')}_p1" for d in fc.depends_on
-                if d in file_to_task_id
-            ]
-            desc = f"PHASE 1: Implementation and local drafting for {fname}"
-            for dk, assignment in dev_assignments.items():
-                if fname in assignment:
-                    desc = f"PHASE 1: {assignment}"
-                    break
+        # Phase 1: Implementation (Drafting)  — skipped when ComponentGraph already populated tasks
+        if not any(t.phase == PHASE_IMPLEMENTATION for t in self.tasks.values()):
+            for fname, fc in registry.file_map.items():
+                if fname == registry.entry_point:
+                    continue
+                if not _is_valid_fname(fname):
+                    continue
+                tid = f"task_{fname.replace('/', '_').replace('.', '_')}_p1"
+                dep_ids = [
+                    f"task_{d.replace('/', '_').replace('.', '_')}_p1" for d in fc.depends_on
+                    if d in file_to_task_id
+                ]
+                desc = f"PHASE 1: Implementation and local drafting for {fname}"
+                for dk, assignment in dev_assignments.items():
+                    if fname in assignment:
+                        desc = f"PHASE 1: {assignment}"
+                        break
 
-            self.tasks[tid] = EngTask(
-                id=tid, file=fname, description=desc,
-                depends_on=dep_ids, status="pending" if not dep_ids else "blocked",
-                phase=PHASE_IMPLEMENTATION
-            )
+                self.tasks[tid] = EngTask(
+                    id=tid, file=fname, description=desc,
+                    depends_on=dep_ids, status="pending" if not dep_ids else "blocked",
+                    phase=PHASE_IMPLEMENTATION
+                )
 
         # No typed contracts → derive per-file tasks from blackboard text so the queue is not
         # only __integration__ (which would let a single dev claim integration immediately).
@@ -668,17 +758,18 @@ class EngTaskQueue:
             logger.warning(f"[TaskQueue] load failed: {e}")
 
     def claim_next(self, dev_key: str) -> Optional[EngTask]:
-        """Claim the next available pending task from the shared pool."""
+        """Claim the next available pending task — leaf components (depth=0) first."""
         with self._lock:
-            for t in self.tasks.values():
-                if t.status != "pending":
-                    continue
-                t.status = "in_progress"
-                t.assigned_to = dev_key
-                logger.info(f"[TaskQueue] {dev_key} claimed task '{t.id}' ({t.file})")
-                self._persist()
-                return t
-            return None
+            pending = [t for t in self.tasks.values() if t.status == "pending"]
+            if not pending:
+                return None
+            pending.sort(key=lambda t: (t.depth, t.id))
+            task = pending[0]
+            task.status = "in_progress"
+            task.assigned_to = dev_key
+            logger.info(f"[TaskQueue] {dev_key} claimed '{task.id}' (depth={task.depth}, {task.file})")
+            self._persist()
+            return task
 
     def complete(self, task_id: str) -> None:
         """Mark a task completed and unblock dependents.
@@ -1650,17 +1741,33 @@ def _manager_fix_loop(
     last_error_block = ""
     build_cmd_hint = registry.build_command or ""
     app_type = registry.app_type or registry._infer_app_type()
-    _desktop_proof_required = app_type == "gui" and MANAGER_GUI_DESKTOP_PROOF
+    # Contract LLM commonly labels GUI apps (pygame, tkinter, etc.) as "cli".
+    # Re-infer from actual code when app_type is "cli" to avoid sending --help to a blocking window.
+    if app_type in ("cli", "script"):
+        _re_inferred = registry._infer_app_type()
+        if _re_inferred != app_type:
+            logger.info(f"[ManagerFix] app_type upgraded {app_type!r} -> {_re_inferred!r} via code inspection")
+            app_type = _re_inferred
+    # Every app type with a visible interface requires desktop proof.
+    # cli/library are exempt (they have no window to screenshot).
+    _desktop_proof_required = (
+        app_type in ("gui",) and MANAGER_GUI_DESKTOP_PROOF
+    )
+    # Every app type must produce functional proof:
+    #   gui    → launch + screenshot triplet
+    #   web    → launch + http_request
+    #   cli    → run and produce non-empty meaningful output
+    #   worker → launch + confirm process is running
+    _functional_proof_required = app_type not in ("library",)
     logger.info(
         f"[ManagerFix] app_type={app_type!r}  "
         f"gui_desktop_proof_required={_desktop_proof_required}  "
+        f"functional_proof_required={_functional_proof_required}  "
         f"computer_use_triplet_required={COMPUTER_USE_REQUIRE_TRIPLET}"
     )
 
-    # web/worker → start_service (mandatory); web also needs http_request (mandatory)
-    # gui        → start_service + (desktop proof OR headless: see MANAGER_GUI_DESKTOP_PROOF)
-    # cli/script/library → start_service still required for orchestration tracking
-    _needs_start_service = app_type in ("web", "worker")
+    # All runnable app types need start_service or an explicit run
+    _needs_start_service = app_type in ("web", "worker", "gui")
 
     # Load the team's test hints once at the start of the fix loop
     _agent_test_hints = _load_agent_test_hints()
@@ -1864,6 +1971,7 @@ def _manager_fix_loop(
                         f"  -------------------------------------------------------\n"
                         f"  Repeat steps 5-8 for each checklist item. One complete loop is the minimum.\n"
                         f"  FORBIDDEN as GUI proof: run_shell(tasklist), pip freeze, python -c tkinter only.\n"
+                        f"  If the app is frozen or not responding: close_application(<pid>) then fix and re-launch.\n"
                     )
                 else:
                     _run_instructions = (
@@ -2045,6 +2153,60 @@ def _manager_fix_loop(
     )
 
 
+def run_sprint_retrospective(
+    original_goal: str,
+    prev_result: "TeamResult",
+    sprint_num: int,
+) -> str:
+    """
+    Manager agent reviews the current codebase after sprint_num and returns
+    an enriched goal for sprint_num+1: bug fixes + missing features + improvements.
+    Uses tools (list_files, read_file, run_shell, web_search) to inspect actual code.
+    """
+    from .agent_loop import _run_with_tools
+
+    _set_agent_ctx("eng_manager", sprint_num)
+    logger.info(f"\n{'='*56}\n  SPRINT {sprint_num} RETROSPECTIVE\n{'='*56}")
+
+    prompt = (
+        f"You are the Engineering Manager running a sprint {sprint_num} retrospective.\n\n"
+        f"ORIGINAL GOAL:\n{original_goal[:600]}\n\n"
+        f"SPRINT {sprint_num} SYNTHESIS:\n{prev_result.manager_synthesis[:800]}\n\n"
+        f"YOUR JOB: Define the goal for sprint {sprint_num + 1}.\n\n"
+        f"STEPS (use your tools):\n"
+        f"  1. list_files() — see every file in the codebase.\n"
+        f"  2. read_file() on key files — understand what was ACTUALLY implemented vs what was promised.\n"
+        f"  3. run_shell('python -m py_compile <file>') — spot syntax errors in critical files.\n"
+        f"  4. web_search() if you want to research better approaches or missing features.\n"
+        f"  5. Identify ALL of:\n"
+        f"       - Bugs and incomplete implementations from sprint {sprint_num}\n"
+        f"       - Features from the original goal that are missing or broken\n"
+        f"       - Quality/robustness improvements (error handling, edge cases)\n"
+        f"       - New features that would meaningfully advance the project\n\n"
+        f"OUTPUT FORMAT (required):\n"
+        f"Write a detailed sprint {sprint_num + 1} goal. Be specific: name the exact files\n"
+        f"to change, the exact bugs to fix, and the exact features to add or improve.\n"
+        f"Do NOT just restate the original goal — describe what to BUILD ON top of what exists.\n\n"
+        f"End your response with this exact marker followed by the goal text:\n"
+        f"SPRINT {sprint_num + 1} GOAL:\n<detailed goal here>"
+    )
+
+    final_text, _, _ = _run_with_tools(
+        prompt=prompt,
+        role_key="eng_manager",
+        label=f"retrospective_s{sprint_num}",
+    )
+
+    marker = f"SPRINT {sprint_num + 1} GOAL:"
+    if marker in final_text:
+        new_goal = final_text.split(marker, 1)[1].strip()
+    else:
+        new_goal = final_text.strip() or original_goal
+
+    logger.info(f"[Retrospective] Sprint {sprint_num + 1} goal ({len(new_goal)}c): {new_goal[:120]}...")
+    return new_goal
+
+
 def run_engineering_team(
     task: str,
     rolling_ctxs: Dict[str, RollingContext],
@@ -2063,7 +2225,7 @@ def run_engineering_team(
     logger.info(f"\n{'─'*55}\nTEAM: ENGINEERING ({n} devs, async mode)\n{'─'*55}")
     clear_sprint_files()   # reset file tracking for this sprint
 
-    dev_assignments, pool = run_sprint_planning(task, health_states, rolling_ctxs)
+    dev_assignments, pool, component_graph = run_sprint_planning(task, health_states, rolling_ctxs)
     emit_skeleton(dev_assignments, sprint_num)
 
     code_dir = OUTPUT_DIR / "code"
@@ -2079,7 +2241,7 @@ def run_engineering_team(
 
     _setup_project(code_dir)
 
-    task_queue = EngTaskQueue(get_contracts(), dev_assignments, pool)
+    task_queue = EngTaskQueue(get_contracts(), dev_assignments, pool, component_graph=component_graph)
     built: Dict[str, WorkerOutput] = {}
     _tasks_completed_by: Dict[str, int] = {d: 0 for d in ENG_WORKERS}
     _merge_lock = threading.Lock()
@@ -2193,8 +2355,15 @@ def run_engineering_team(
             ) if build_cmd else (
                 "  3. Verify your file is syntactically correct (e.g. validate_python if applicable).\n"
             )
+            _leaf_note = (
+                "\nSTART HERE: This is a leaf component — no project dependencies. "
+                "Implement it fully on its own without importing from other project files.\n"
+                if eng_task.depth == 0 and eng_task.component_id
+                else ""
+            )
             task_instruction = (
                 f"TASK: Implement '{eng_task.file}'\n"
+                f"{_leaf_note}"
                 f"Description: {eng_task.description}\n\n"
                 f"STEPS:\n"
                 f"  1. list_files() and read_file() to see existing code from teammates\n"
@@ -2207,6 +2376,67 @@ def run_engineering_team(
                 f"code breaks something, you will be asked to fix it. Write carefully.\n"
             )
 
+
+        # ── ComponentGraph context injection ──────────────────────────────
+        component_graph_section = ""
+        if eng_task.component_id and eng_task.component_graph_snapshot:
+            try:
+                from .task_decomposition import ComponentGraph as _CG
+                _cg = _CG()
+                _cg.sprint = eng_task.component_graph_snapshot.get("sprint", 1)
+                _cg.goal = eng_task.component_graph_snapshot.get("goal", "")
+                from .task_decomposition import Component as _Comp
+                _cg.nodes = {
+                    cid: _Comp.from_dict(cd)
+                    for cid, cd in eng_task.component_graph_snapshot.get("nodes", {}).items()
+                }
+                _cg.topological_order = eng_task.component_graph_snapshot.get(
+                    "topological_order", list(_cg.nodes.keys())
+                )
+                _this_comp = _cg.nodes.get(eng_task.component_id)
+                if _this_comp:
+                    _completed = task_queue.get_completed_files()
+                    dep_lines = []
+                    for dep_id in _this_comp.depends_on:
+                        dep_comp = _cg.nodes.get(dep_id)
+                        if dep_comp:
+                            _done = dep_comp.file_path in _completed
+                            dep_lines.append(
+                                f"    [{dep_comp.name}] {dep_comp.file_path} "
+                                f"{'[DONE]' if _done else '[PENDING]'}"
+                            )
+                    consumer_lines = [
+                        f"    [{_cg.nodes[c].name}] {_cg.nodes[c].file_path}"
+                        for c in _this_comp.consumers if c in _cg.nodes
+                    ]
+                    pi = _this_comp.public_interface
+                    pi_classes = ", ".join(pi.get("classes", [])) or "none"
+                    pi_fns = "\n      ".join(pi.get("functions", [])) or "none"
+                    pi_consts = ", ".join(pi.get("constants", [])) or "none"
+                    _position = (
+                        "LEAF COMPONENT — no dependencies, implement from scratch independently."
+                        if not _this_comp.depends_on
+                        else f"INTERMEDIATE COMPONENT (depth={_this_comp.depth}) — your dependencies must be built before you."
+                        if _this_comp.consumers
+                        else f"ROOT COMPONENT (depth={_this_comp.depth}) — top of the graph; all other components serve you."
+                    )
+                    component_graph_section = (
+                        f"\n╔══ COMPONENT GRAPH CONTEXT ═══════════════════════════╗\n"
+                        f"║  {_position}\n"
+                        f"║  Implementing: {_this_comp.name} ({_this_comp.file_path})\n"
+                        + (f"  CONSUMERS (will call YOUR code):\n" + "\n".join(consumer_lines) + "\n" if consumer_lines else "  CONSUMERS: none — this is a leaf component\n")
+                        + f"  YOUR DEPENDENCIES:\n"
+                        + ("\n".join(dep_lines) + "\n" if dep_lines else "    None — implement independently.\n")
+                        + f"  YOUR REQUIRED PUBLIC INTERFACE:\n"
+                        + f"    Classes: {pi_classes}\n"
+                        + f"    Functions:\n      {pi_fns}\n"
+                        + f"    Constants: {pi_consts}\n"
+                        + f"  FULL GRAPH:\n{_cg.format_ascii(max_lines=20)}\n"
+                        + f"╚══════════════════════════════════════════════════════╝\n"
+                    )
+            except Exception as _cg_err:
+                logger.warning(f"[{dev_key}] ComponentGraph injection failed: {_cg_err}")
+        # ── End ComponentGraph context ─────────────────────────────────────
 
         team_files = _read_team_files()
         team_files_section = (
@@ -2241,6 +2471,9 @@ def run_engineering_team(
         # Add contract if available (concise)
         if contract_section:
             prompt += f"YOUR CONTRACT:{contract_section}\n"
+        # Add component graph context (typed interface + dependency map)
+        if component_graph_section:
+            prompt += component_graph_section
         # Add peer context (what's already built)
         if peer_context:
             prompt += f"{peer_context}\n"

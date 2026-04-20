@@ -1,0 +1,5338 @@
+{
+  "role": "dev_engineer",
+  "facts": [
+    {
+      "id": "f20557c0",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:36:14.666841+00:00",
+      "task": "PHASE 1: Implement Constants (src/config.py)\nCentralizes all game configuration parameters, including screen dimensions,",
+      "lesson": "Centralize configuration in dedicated modules to decouple environment-specific constants from game logic, preventing magic number proliferation and ensuring consistent parameter injection across decoupled engine components.",
+      "tags": [
+        "architecture",
+        "configuration",
+        "best-practices"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "9595c8fd",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:36:14.668012+00:00",
+      "task": "PHASE 1: Implement Constants (src/config.py)\nCentralizes all game configuration parameters, including screen dimensions,",
+      "lesson": "Enforce explicit type hinting in configuration files to prevent runtime type mismatch errors when constants are consumed by external systems like UI or physics engines.",
+      "tags": [
+        "python",
+        "typing",
+        "stability"
+      ],
+      "success": true,
+      "confidence": 0.9
+    },
+    {
+      "id": "2de0ddde",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:36:15.384051+00:00",
+      "task": "PHASE 1: Implement InputHandler (src/systems/input.py)\nDecouples input processing from the main engine. It translates ra",
+      "lesson": "Decouple input polling from game logic by mapping raw hardware events to abstract action identifiers before passing them to state managers.",
+      "tags": [
+        "architecture",
+        "input-handling",
+        "decoupling"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "002a1226",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:36:15.385234+00:00",
+      "task": "PHASE 1: Implement InputHandler (src/systems/input.py)\nDecouples input processing from the main engine. It translates ra",
+      "lesson": "Implement an interface-based event dispatcher to prevent tight coupling between the event loop and individual game systems.",
+      "tags": [
+        "design-patterns",
+        "decoupling",
+        "events"
+      ],
+      "success": true,
+      "confidence": 0.9
+    },
+    {
+      "id": "a37b464d",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:36:15.754833+00:00",
+      "task": "PHASE 1: Implement GameData (src/models.py)\nDefines data structures using Python dataclasses for game entities such as P",
+      "lesson": "Use Python dataclasses for serialization layers to ensure explicit structure; enforce strict type hinting to prevent silent data corruption during state serialization.",
+      "tags": [
+        "python",
+        "dataclasses",
+        "serialization"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "ecb6dccb",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:36:15.758641+00:00",
+      "task": "PHASE 1: Implement GameData (src/models.py)\nDefines data structures using Python dataclasses for game entities such as P",
+      "lesson": "Decouple game entity state from rendering logic by using data-only classes; this facilitates unit testing of core mechanics without initializing graphical environments or complex dependencies.",
+      "tags": [
+        "game-dev",
+        "architecture",
+        "testing"
+      ],
+      "success": true,
+      "confidence": 0.98
+    },
+    {
+      "id": "78e84bb4",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:36:23.173332+00:00",
+      "task": "PHASE 1: Implement InputHandler (src/systems/input.py)\nDecouples input processing from the main engine. It translates ra",
+      "lesson": "Decouple raw input events from application logic by mapping Pygame events to an abstraction layer (Action enum); this prevents tight coupling between hardware interfaces and game state.",
+      "tags": [
+        "pygame",
+        "abstraction",
+        "input-handling"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "4be5dfc3",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:36:23.175448+00:00",
+      "task": "PHASE 1: Implement InputHandler (src/systems/input.py)\nDecouples input processing from the main engine. It translates ra",
+      "lesson": "Implement an event-driven mapping table (dictionary) in InputHandler to avoid complex if-else or match blocks, improving maintainability and readability when scaling input bindings.",
+      "tags": [
+        "design-patterns",
+        "refactoring"
+      ],
+      "success": true,
+      "confidence": 0.92
+    },
+    {
+      "id": "a71927de",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:36:23.585210+00:00",
+      "task": "PHASE 1: Implement Constants (src/config.py)\nCentralizes all game configuration parameters, including screen dimensions,",
+      "lesson": "Centralize configuration in a dedicated module using TypeDict or Typed constants to prevent magic number proliferation across game logic.",
+      "tags": [
+        "config",
+        "architecture",
+        "maintainability"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "def4f4af",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:36:23.589972+00:00",
+      "task": "PHASE 1: Implement Constants (src/config.py)\nCentralizes all game configuration parameters, including screen dimensions,",
+      "lesson": "Use Environment Variables for environment-specific settings (e.g., debug mode) while keeping static game constants in local configuration files.",
+      "tags": [
+        "security",
+        "configuration",
+        "environment"
+      ],
+      "success": true,
+      "confidence": 0.92
+    },
+    {
+      "id": "8480cdb6",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:36:24.112348+00:00",
+      "task": "PHASE 1: Implement GameData (src/models.py)\nDefines data structures using Python dataclasses for game entities such as P",
+      "lesson": "Use Python dataclasses for serialization layers to enforce structured state representation; avoid using unstructured dictionaries for game entities to prevent runtime attribute errors.",
+      "tags": [
+        "dataclasses",
+        "serialization",
+        "models"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "11dfe758",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:36:24.114207+00:00",
+      "task": "PHASE 1: Implement GameData (src/models.py)\nDefines data structures using Python dataclasses for game entities such as P",
+      "lesson": "Implement explicit type-hinting in entity definitions to ensure static analysis compatibility; use 'typing' module imports to catch interface contract mismatches before runtime.",
+      "tags": [
+        "typing",
+        "static-analysis",
+        "interface-contract"
+      ],
+      "success": true,
+      "confidence": 0.98
+    },
+    {
+      "id": "fbcae358",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:36:24.115836+00:00",
+      "task": "PHASE 1: Implement GameData (src/models.py)\nDefines data structures using Python dataclasses for game entities such as P",
+      "lesson": "Encapsulate shared data models in dedicated modules; keep them free of side effects to ensure they remain lightweight and reusable across different system components.",
+      "tags": [
+        "architecture",
+        "modularity",
+        "clean-code"
+      ],
+      "success": true,
+      "confidence": 0.92
+    },
+    {
+      "id": "96e9fb6f",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:37:16.932718+00:00",
+      "task": "PHASE 1: Implement ScoreManager (src/managers/score_manager.py)\nTracks the player's score throughout the session and han",
+      "lesson": "Decouple state logic from render logic in UI managers by passing a surface target to draw methods rather than binding the manager to a global display state.",
+      "tags": [
+        "pygame",
+        "architecture",
+        "decoupling"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "9afa1769",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:37:16.935867+00:00",
+      "task": "PHASE 1: Implement ScoreManager (src/managers/score_manager.py)\nTracks the player's score throughout the session and han",
+      "lesson": "Expose state via public properties or getters rather than allowing direct mutation of internal counters to maintain strict control over business logic transitions.",
+      "tags": [
+        "encapsulation",
+        "python",
+        "api_design"
+      ],
+      "success": true,
+      "confidence": 0.9
+    },
+    {
+      "id": "0b8bb576",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:37:19.731870+00:00",
+      "task": "PHASE 1: Implement UIComponents (src/ui/components.py)\nProvides utility methods for rendering text, game over screens, a",
+      "lesson": "Decouple UI rendering logic from game state by passing only the surface and configuration objects to static helper functions.",
+      "tags": [
+        "architecture",
+        "pygame",
+        "ui"
+      ],
+      "success": false,
+      "confidence": 0.95
+    },
+    {
+      "id": "71066345",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:37:19.733234+00:00",
+      "task": "PHASE 1: Implement UIComponents (src/ui/components.py)\nProvides utility methods for rendering text, game over screens, a",
+      "lesson": "Define shared visual constants in a central config file to prevent hardcoding magic numbers and ensure consistency across rendering modules.",
+      "tags": [
+        "config",
+        "maintainability",
+        "refactoring"
+      ],
+      "success": false,
+      "confidence": 0.98
+    },
+    {
+      "id": "91a25dab",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:37:19.736459+00:00",
+      "task": "PHASE 1: Implement UIComponents (src/ui/components.py)\nProvides utility methods for rendering text, game over screens, a",
+      "lesson": "Validate surface availability before drawing calls to prevent pygame.error exceptions when the display surface is not properly initialized or has been lost.",
+      "tags": [
+        "error-handling",
+        "pygame",
+        "robustness"
+      ],
+      "success": false,
+      "confidence": 0.92
+    },
+    {
+      "id": "0e5b9db6",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:37:23.283911+00:00",
+      "task": "PHASE 1: Implement ResourceManager (src/managers/resource_manager.py)\nCaches game assets such as images and audio files ",
+      "lesson": "Pre-convert assets (e.g., Pygame convert_alpha()) during the caching phase to shift performance costs from the render loop to the initialization phase.",
+      "tags": [
+        "pygame",
+        "performance",
+        "caching"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "ba6383bf",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:37:23.289301+00:00",
+      "task": "PHASE 1: Implement ResourceManager (src/managers/resource_manager.py)\nCaches game assets such as images and audio files ",
+      "lesson": "Implement a centralized Singleton or Dependency Injection pattern for asset management to prevent redundant disk I/O and memory fragmentation.",
+      "tags": [
+        "architecture",
+        "resource-management",
+        "caching"
+      ],
+      "success": true,
+      "confidence": 0.9
+    },
+    {
+      "id": "0bcfa783",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:37:29.646253+00:00",
+      "task": "PHASE 1: Implement UIComponents (src/ui/components.py)\nProvides utility methods for rendering text, game over screens, a",
+      "lesson": "Pre-initialize pygame font modules before rendering UI components to avoid 'font not initialized' runtime errors.",
+      "tags": [
+        "pygame",
+        "ui",
+        "initialization"
+      ],
+      "success": false,
+      "confidence": 0.95
+    },
+    {
+      "id": "d03f6f77",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:37:29.652918+00:00",
+      "task": "PHASE 1: Implement UIComponents (src/ui/components.py)\nProvides utility methods for rendering text, game over screens, a",
+      "lesson": "Inject surface objects into rendering functions rather than referencing global display variables to keep UI components decoupled and testable.",
+      "tags": [
+        "architecture",
+        "dependency-injection"
+      ],
+      "success": false,
+      "confidence": 0.92
+    },
+    {
+      "id": "4b163a29",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:37:29.660566+00:00",
+      "task": "PHASE 1: Implement UIComponents (src/ui/components.py)\nProvides utility methods for rendering text, game over screens, a",
+      "lesson": "Wrap font rendering calls in try-except blocks to catch 'pygame.error' when system fonts fail to load, providing fallback text or silent failure.",
+      "tags": [
+        "error-handling",
+        "pygame"
+      ],
+      "success": false,
+      "confidence": 0.88
+    },
+    {
+      "id": "1e03e158",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:37:30.137342+00:00",
+      "task": "PHASE 1: Implement ScoreManager (src/managers/score_manager.py)\nTracks the player's score throughout the session and han",
+      "lesson": "Decouple state management logic from rendering routines by separating the data storage from the pygame.Surface drawing instructions within the class.",
+      "tags": [
+        "pygame",
+        "separation-of-concerns",
+        "architecture"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "487ca123",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:37:30.138939+00:00",
+      "task": "PHASE 1: Implement ScoreManager (src/managers/score_manager.py)\nTracks the player's score throughout the session and han",
+      "lesson": "Centralize configuration constants like colors and fonts in a shared config module to ensure consistency across different managers and prevent hardcoded magic values.",
+      "tags": [
+        "config",
+        "maintainability",
+        "refactoring"
+      ],
+      "success": true,
+      "confidence": 0.98
+    },
+    {
+      "id": "107e1386",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:37:30.140348+00:00",
+      "task": "PHASE 1: Implement ScoreManager (src/managers/score_manager.py)\nTracks the player's score throughout the session and han",
+      "lesson": "Require engine initialization states to be explicitly checked before rendering calls to prevent NullPointerExceptions when game components are accessed before the Pygame display mode is set.",
+      "tags": [
+        "error-handling",
+        "pygame",
+        "initialization"
+      ],
+      "success": true,
+      "confidence": 0.92
+    },
+    {
+      "id": "a90252d2",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:37:31.265857+00:00",
+      "task": "PHASE 1: Implement ResourceManager (src/managers/resource_manager.py)\nCaches game assets such as images and audio files ",
+      "lesson": "Use LRU caching for game asset managers to prevent memory bloat while minimizing redundant I/O during heavy render loops.",
+      "tags": [
+        "python",
+        "caching",
+        "performance"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "e5126e05",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:37:31.268510+00:00",
+      "task": "PHASE 1: Implement ResourceManager (src/managers/resource_manager.py)\nCaches game assets such as images and audio files ",
+      "lesson": "Initialize global resource managers with lazy loading to avoid dependency failures if assets are missing or hardware drivers are unavailable during startup.",
+      "tags": [
+        "pygame",
+        "initialization",
+        "error-handling"
+      ],
+      "success": true,
+      "confidence": 0.9
+    },
+    {
+      "id": "3baa4881",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:37:52.774721+00:00",
+      "task": "PHASE 1: Implement BaseSprite (src/entities/base.py)\nProvides an abstract base class for all game entities by extending ",
+      "lesson": "Inherit from pygame.sprite.Sprite for all game entities to leverage built-in collision detection and update cycle management in Pygame projects.",
+      "tags": [
+        "pygame",
+        "architecture"
+      ],
+      "success": false,
+      "confidence": 0.95
+    },
+    {
+      "id": "447c6ba7",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:37:52.780800+00:00",
+      "task": "PHASE 1: Implement BaseSprite (src/entities/base.py)\nProvides an abstract base class for all game entities by extending ",
+      "lesson": "Decouple entity state from rendering by implementing a data-class or dedicated state object; this simplifies serialization and debug inspection.",
+      "tags": [
+        "architecture",
+        "data-modeling"
+      ],
+      "success": false,
+      "confidence": 0.85
+    },
+    {
+      "id": "c1613447",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:37:52.785979+00:00",
+      "task": "PHASE 1: Implement BaseSprite (src/entities/base.py)\nProvides an abstract base class for all game entities by extending ",
+      "lesson": "Avoid hardcoded resource paths in BaseEntity; utilize a ResourceManager pattern to inject assets, ensuring portability and easing unit test mocking.",
+      "tags": [
+        "testing",
+        "resource-management"
+      ],
+      "success": false,
+      "confidence": 0.9
+    },
+    {
+      "id": "2c6c576a",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:38:09.365183+00:00",
+      "task": "PHASE 1: Implement BaseSprite (src/entities/base.py)\nProvides an abstract base class for all game entities by extending ",
+      "lesson": "Inherit from pygame.sprite.Sprite for base game entities to leverage built-in rendering groups and efficient collision detection logic via Sprite.update() and Sprite.draw() methods.",
+      "tags": [
+        "pygame",
+        "architecture",
+        "game-dev"
+      ],
+      "success": false,
+      "confidence": 0.95
+    },
+    {
+      "id": "9703934b",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:38:09.370324+00:00",
+      "task": "PHASE 1: Implement BaseSprite (src/entities/base.py)\nProvides an abstract base class for all game entities by extending ",
+      "lesson": "Decouple resource management from entity instantiation by using a dedicated ResourceManager; inject dependencies rather than hardcoding file paths to ensure testability and asset reuse.",
+      "tags": [
+        "dependency-injection",
+        "resource-management",
+        "refactoring"
+      ],
+      "success": false,
+      "confidence": 0.9
+    },
+    {
+      "id": "ef72eb53",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:38:09.377894+00:00",
+      "task": "PHASE 1: Implement BaseSprite (src/entities/base.py)\nProvides an abstract base class for all game entities by extending ",
+      "lesson": "Maintain state via dedicated data objects (e.g., EntityState) to ensure separation between entity logic and visual position data, facilitating easier serialization for save-states.",
+      "tags": [
+        "state-management",
+        "design-patterns"
+      ],
+      "success": false,
+      "confidence": 0.85
+    },
+    {
+      "id": "82d2f462",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:38:59.946426+00:00",
+      "task": "PHASE 1: Implement Bullet (src/entities/bullet.py)\nDefines projectile entities fired by the player, responsible for movi",
+      "lesson": "In Pygame, utilize the built-in `self.kill()` method within an entity's `update` logic to handle lifecycle cleanup automatically, preventing memory leaks and unnecessary sprite group processing for off-screen objects.",
+      "tags": [
+        "pygame",
+        "memory-management",
+        "sprite-lifecycle"
+      ],
+      "success": true,
+      "confidence": 1.0
+    },
+    {
+      "id": "69948bef",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:38:59.950818+00:00",
+      "task": "PHASE 1: Implement Bullet (src/entities/bullet.py)\nDefines projectile entities fired by the player, responsible for movi",
+      "lesson": "Encapsulate constant physics parameters like `BULLET_SPEED` in a configuration module to ensure consistency across entity movement logic and facilitate easier game balance adjustments.",
+      "tags": [
+        "design-patterns",
+        "configuration",
+        "physics"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "1a20b1aa",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:39:10.091683+00:00",
+      "task": "PHASE 1: Implement Bullet (src/entities/bullet.py)\nDefines projectile entities fired by the player, responsible for movi",
+      "lesson": "Implement self-destruct logic within the entity's update loop to decouple cleanup responsibilities from the main game engine, preventing memory leaks and stale object processing.",
+      "tags": [
+        "game-dev",
+        "memory-management",
+        "clean-code"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "20788846",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:39:10.098492+00:00",
+      "task": "PHASE 1: Implement Bullet (src/entities/bullet.py)\nDefines projectile entities fired by the player, responsible for movi",
+      "lesson": "Abstract movement physics into constant-driven velocity vectors to ensure consistent frame-rate independent updates across different hardware profiles.",
+      "tags": [
+        "physics",
+        "configuration",
+        "performance"
+      ],
+      "success": true,
+      "confidence": 0.9
+    },
+    {
+      "id": "81c64be0",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:39:10.106415+00:00",
+      "task": "PHASE 1: Implement Bullet (src/entities/bullet.py)\nDefines projectile entities fired by the player, responsible for movi",
+      "lesson": "Enforce strict dependency injection for configuration parameters (e.g., speed, bounds) to allow for easier unit testing of entity movement logic without requiring a full engine state.",
+      "tags": [
+        "testing",
+        "dependency-injection",
+        "architecture"
+      ],
+      "success": true,
+      "confidence": 0.85
+    },
+    {
+      "id": "50aeef3e",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:39:22.357041+00:00",
+      "task": "PHASE 1: Implement Player (src/entities/player.py)\nRepresents the user-controlled spaceship, handling input detection an",
+      "lesson": "Encapsulate boundary logic within the entity update method to decouple screen constraints from the main game loop, ensuring consistency across different screen resolutions.",
+      "tags": [
+        "game-dev",
+        "encapsulation",
+        "refactoring"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "bd2e7ec2",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:39:22.359359+00:00",
+      "task": "PHASE 1: Implement Player (src/entities/player.py)\nRepresents the user-controlled spaceship, handling input detection an",
+      "lesson": "Implement factory-style methods for spawning projectile entities within the parent entity, using cooldown timestamps to prevent fire-rate abuse without blocking the main event thread.",
+      "tags": [
+        "design-pattern",
+        "cooldown",
+        "event-loop"
+      ],
+      "success": true,
+      "confidence": 0.92
+    },
+    {
+      "id": "35447793",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:39:31.913166+00:00",
+      "task": "PHASE 1: Implement Player (src/entities/player.py)\nRepresents the user-controlled spaceship, handling input detection an",
+      "lesson": "Enforce screen boundary constraints in the update method using clamp logic to prevent entity clipping outside the game viewport.",
+      "tags": [
+        "game-development",
+        "geometry",
+        "constraints"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "cb290f86",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:39:31.916681+00:00",
+      "task": "PHASE 1: Implement Player (src/entities/player.py)\nRepresents the user-controlled spaceship, handling input detection an",
+      "lesson": "Implement cooldown management for shooting mechanics using timestamp comparison rather than frame counting to ensure consistent behavior across different hardware refresh rates.",
+      "tags": [
+        "performance",
+        "timing",
+        "mechanics"
+      ],
+      "success": true,
+      "confidence": 0.98
+    },
+    {
+      "id": "d213aa6d",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:39:31.919646+00:00",
+      "task": "PHASE 1: Implement Player (src/entities/player.py)\nRepresents the user-controlled spaceship, handling input detection an",
+      "lesson": "Design base classes to act as strict interfaces by enforcing inheritance, ensuring all entity types maintain uniform update and draw signatures.",
+      "tags": [
+        "oop",
+        "architecture",
+        "interface"
+      ],
+      "success": true,
+      "confidence": 0.92
+    },
+    {
+      "id": "8870efa7",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:40:34.495124+00:00",
+      "task": "PHASE 1: Implement Enemy (src/entities/enemy.py)\nRepresents hostile alien ships that descend down the screen. It manages",
+      "lesson": "Decouple movement logic from state management by using a dedicated update method that consumes delta time, ensuring frame-independent motion across different hardware.",
+      "tags": [
+        "game-dev",
+        "physics",
+        "refactoring"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "9046cb14",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:40:34.497344+00:00",
+      "task": "PHASE 1: Implement Enemy (src/entities/enemy.py)\nRepresents hostile alien ships that descend down the screen. It manages",
+      "lesson": "Encapsulate screen boundary checks within entity methods to maintain self-contained game objects, allowing entities to trigger their own removal via signaling rather than external polling.",
+      "tags": [
+        "encapsulation",
+        "game-objects",
+        "architecture"
+      ],
+      "success": true,
+      "confidence": 0.92
+    },
+    {
+      "id": "6fcaaec7",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:40:43.596703+00:00",
+      "task": "PHASE 1: Implement Enemy (src/entities/enemy.py)\nRepresents hostile alien ships that descend down the screen. It manages",
+      "lesson": "Encapsulate screen-bound destruction logic within the entity's update method to ensure memory safety and prevent off-screen processing overhead.",
+      "tags": [
+        "game-dev",
+        "optimization",
+        "pygame"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "ace16432",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:40:43.600687+00:00",
+      "task": "PHASE 1: Implement Enemy (src/entities/enemy.py)\nRepresents hostile alien ships that descend down the screen. It manages",
+      "lesson": "Externalize entity configuration variables to a centralized config module rather than hardcoding movement speeds or dimensions within class initializers.",
+      "tags": [
+        "configuration",
+        "clean-code",
+        "refactoring"
+      ],
+      "success": true,
+      "confidence": 0.9
+    },
+    {
+      "id": "fe31c0bf",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:40:58.833306+00:00",
+      "task": "PHASE 1: Implement CollisionSystem (src/systems/collision.py)\nHandles the physics interactions between entities, specifi",
+      "lesson": "Use pygame.sprite.Group for optimized batch collision detection rather than manual loops, leveraging collide_mask for high-fidelity, pixel-perfect interactions.",
+      "tags": [
+        "pygame",
+        "collision",
+        "performance"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "7eeead82",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:40:58.835731+00:00",
+      "task": "PHASE 1: Implement CollisionSystem (src/systems/collision.py)\nHandles the physics interactions between entities, specifi",
+      "lesson": "Ensure collision callback parameters match the expected API signature exactly; using named arguments like 'dokill' can lead to unexpected behavior if not aligned with the specific pygame version requirements.",
+      "tags": [
+        "pygame",
+        "api",
+        "debug"
+      ],
+      "success": true,
+      "confidence": 0.9
+    },
+    {
+      "id": "6054b7c0",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:41:18.294786+00:00",
+      "task": "PHASE 1: Implement EntityManager (src/managers/entity_manager.py)\nActs as the controller for all sprite groups in the ga",
+      "lesson": "Use pygame.sprite.Group for batch entity management to simplify lifecycle handling, collision detection, and rendering updates across disparate entity types like Players, Enemies, and Bullets.",
+      "tags": [
+        "pygame",
+        "game-dev",
+        "architecture"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "23c1f270",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:41:18.297519+00:00",
+      "task": "PHASE 1: Implement EntityManager (src/managers/entity_manager.py)\nActs as the controller for all sprite groups in the ga",
+      "lesson": "Enforce strict base class inheritance from pygame.sprite.Sprite for all managed objects to ensure compatibility with group-level update() and draw() methods, preventing runtime AttributeErrors.",
+      "tags": [
+        "pygame",
+        "typing",
+        "oop"
+      ],
+      "success": true,
+      "confidence": 0.9
+    },
+    {
+      "id": "80816f18",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:41:29.941409+00:00",
+      "task": "PHASE 1: Implement EntityManager (src/managers/entity_manager.py)\nActs as the controller for all sprite groups in the ga",
+      "lesson": "Use pygame.sprite.Group for batch lifecycle management; it prevents manual iteration overhead and ensures efficient rendering and update cycles across disparate entity types.",
+      "tags": [
+        "pygame",
+        "sprite",
+        "optimization"
+      ],
+      "success": true,
+      "confidence": 1.0
+    },
+    {
+      "id": "6ff4a55f",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:41:29.949408+00:00",
+      "task": "PHASE 1: Implement EntityManager (src/managers/entity_manager.py)\nActs as the controller for all sprite groups in the ga",
+      "lesson": "Decouple entity management from specific entity implementation by enforcing inheritance from pygame.sprite.Sprite, allowing the manager to treat players, enemies, and bullets as polymorphic members of a collective group.",
+      "tags": [
+        "oop",
+        "polymorphism",
+        "pygame"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "79b61ec7",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:41:41.433519+00:00",
+      "task": "PHASE 1: Implement CollisionSystem (src/systems/collision.py)\nHandles the physics interactions between entities, specifi",
+      "lesson": "Use pygame.sprite.groupcollide with 'dokill' flags to efficiently handle bullet-entity destruction and cleanup in a single pass without manual iteration.",
+      "tags": [
+        "pygame",
+        "performance",
+        "physics"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "6f13606c",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:41:41.439399+00:00",
+      "task": "PHASE 1: Implement CollisionSystem (src/systems/collision.py)\nHandles the physics interactions between entities, specifi",
+      "lesson": "Always enable pixel-perfect collision by assigning a mask attribute to your Sprite subclasses; pygame's default bounding box check is often too imprecise for fast-paced action games.",
+      "tags": [
+        "pygame",
+        "collision",
+        "math"
+      ],
+      "success": true,
+      "confidence": 0.98
+    },
+    {
+      "id": "60efe345",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:41:41.446419+00:00",
+      "task": "PHASE 1: Implement CollisionSystem (src/systems/collision.py)\nHandles the physics interactions between entities, specifi",
+      "lesson": "Decouple collision resolution from physics calculation by using observer-like callbacks; this prevents your physics systems from becoming tightly coupled to game-state managers like ScoreManager.",
+      "tags": [
+        "architecture",
+        "decoupling",
+        "design_patterns"
+      ],
+      "success": true,
+      "confidence": 0.92
+    },
+    {
+      "id": "ec48e49e",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:41:56.791205+00:00",
+      "task": "PHASE 1: Implement GameEngine (src/engine.py)\nThe main controller class that initializes pygame, handles the primary gam",
+      "lesson": "Encapsulate game state updates within a dedicated update() method to decouple frame-rate logic from component-specific state logic.",
+      "tags": [
+        "pygame",
+        "architecture",
+        "game-loop"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "0702b56e",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:41:56.794192+00:00",
+      "task": "PHASE 1: Implement GameEngine (src/engine.py)\nThe main controller class that initializes pygame, handles the primary gam",
+      "lesson": "Initialize system managers before the main loop to prevent null pointer exceptions and ensure resource availability during the first frame.",
+      "tags": [
+        "initialization",
+        "dependency-injection"
+      ],
+      "success": true,
+      "confidence": 0.98
+    },
+    {
+      "id": "2d6414a0",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:42:10.624039+00:00",
+      "task": "PHASE 1: Implement GameEngine (src/engine.py)\nThe main controller class that initializes pygame, handles the primary gam",
+      "lesson": "Decouple game engine logic from systems by using dependency injection; pass InputHandler, EntityManager, and other controllers as constructor arguments to the Game class for easier unit testing.",
+      "tags": [
+        "pygame",
+        "architecture",
+        "dependency-injection"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "781fd694",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:42:10.634261+00:00",
+      "task": "PHASE 1: Implement GameEngine (src/engine.py)\nThe main controller class that initializes pygame, handles the primary gam",
+      "lesson": "Ensure the game loop maintains a fixed time step or uses delta time in the update cycle to prevent physics inconsistencies across varying hardware performance.",
+      "tags": [
+        "pygame",
+        "performance",
+        "timing"
+      ],
+      "success": true,
+      "confidence": 0.9
+    },
+    {
+      "id": "3f0b5689",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:42:10.644416+00:00",
+      "task": "PHASE 1: Implement GameEngine (src/engine.py)\nThe main controller class that initializes pygame, handles the primary gam",
+      "lesson": "Validate interface contracts early; define abstract base classes for managers (EntityManager, InputHandler) to ensure the GameEngine can interact with components safely during runtime execution.",
+      "tags": [
+        "python",
+        "typing",
+        "interface-segregation"
+      ],
+      "success": true,
+      "confidence": 0.85
+    },
+    {
+      "id": "3b7e3ee9",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:42:55.361804+00:00",
+      "task": "Final integration: final build check and smoke tests",
+      "lesson": "Use headless display configurations when running GUI-dependent libraries like Pygame in CI/CD pipelines to prevent initialization errors in environments without graphical interfaces.",
+      "tags": [
+        "testing",
+        "pygame",
+        "ci/cd"
+      ],
+      "success": true,
+      "confidence": 1.0
+    },
+    {
+      "id": "bfa5b249",
+      "sprint": 1,
+      "timestamp": "2026-04-19T18:42:55.365021+00:00",
+      "task": "Final integration: final build check and smoke tests",
+      "lesson": "Inject state-management dependencies, such as ScoreManager, directly into logic-heavy systems like CollisionSystem to ensure decoupled testing and easier verification of side-effect interactions.",
+      "tags": [
+        "architecture",
+        "testing",
+        "dependency_injection"
+      ],
+      "success": true,
+      "confidence": 0.95
+    }
+  ],
+  "graph": {
+    "directed": true,
+    "multigraph": false,
+    "graph": {},
+    "nodes": [
+      {
+        "type": "fact",
+        "lesson": "Centralize configuration in dedicated modules to decouple environment-specific constants from game logic, preventing magic number proliferation and ensuring consistent parameter injection across decoupled engine components.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:f20557c0"
+      },
+      {
+        "type": "concept",
+        "label": "config.py",
+        "freq": 4,
+        "id": "concept:config.py"
+      },
+      {
+        "type": "concept",
+        "label": "magic_numbers",
+        "freq": 6,
+        "id": "concept:magic_numbers"
+      },
+      {
+        "type": "concept",
+        "label": "dependency_injection",
+        "freq": 11,
+        "id": "concept:dependency_injection"
+      },
+      {
+        "type": "concept",
+        "label": "centralized_config",
+        "freq": 3,
+        "id": "concept:centralized_config"
+      },
+      {
+        "type": "concept",
+        "label": "config_module",
+        "freq": 1,
+        "id": "concept:config_module"
+      },
+      {
+        "type": "concept",
+        "label": "engine_components",
+        "freq": 1,
+        "id": "concept:engine_components"
+      },
+      {
+        "type": "fact",
+        "lesson": "Enforce explicit type hinting in configuration files to prevent runtime type mismatch errors when constants are consumed by external systems like UI or physics engines.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.9,
+        "id": "fact:9595c8fd"
+      },
+      {
+        "type": "concept",
+        "label": "typing",
+        "freq": 2,
+        "id": "concept:typing"
+      },
+      {
+        "type": "concept",
+        "label": "runtime_error",
+        "freq": 4,
+        "id": "concept:runtime_error"
+      },
+      {
+        "type": "concept",
+        "label": "static_analysis",
+        "freq": 3,
+        "id": "concept:static_analysis"
+      },
+      {
+        "type": "concept",
+        "label": "type_hints",
+        "freq": 5,
+        "id": "concept:type_hints"
+      },
+      {
+        "type": "fact",
+        "lesson": "Decouple input polling from game logic by mapping raw hardware events to abstract action identifiers before passing them to state managers.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:2de0ddde"
+      },
+      {
+        "type": "concept",
+        "label": "pygame",
+        "freq": 5,
+        "id": "concept:pygame"
+      },
+      {
+        "type": "concept",
+        "label": "inputhandler",
+        "freq": 3,
+        "id": "concept:inputhandler"
+      },
+      {
+        "type": "concept",
+        "label": "commandpattern",
+        "freq": 1,
+        "id": "concept:commandpattern"
+      },
+      {
+        "type": "concept",
+        "label": "raw_pygame_events",
+        "freq": 1,
+        "id": "concept:raw_pygame_events"
+      },
+      {
+        "type": "concept",
+        "label": "abstract_actions",
+        "freq": 1,
+        "id": "concept:abstract_actions"
+      },
+      {
+        "type": "fact",
+        "lesson": "Implement an interface-based event dispatcher to prevent tight coupling between the event loop and individual game systems.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.9,
+        "id": "fact:002a1226"
+      },
+      {
+        "type": "concept",
+        "label": "eventdispatcher",
+        "freq": 2,
+        "id": "concept:eventdispatcher"
+      },
+      {
+        "type": "concept",
+        "label": "systems",
+        "freq": 1,
+        "id": "concept:systems"
+      },
+      {
+        "type": "concept",
+        "label": "interface",
+        "freq": 1,
+        "id": "concept:interface"
+      },
+      {
+        "type": "concept",
+        "label": "hardcoded_dependencies",
+        "freq": 1,
+        "id": "concept:hardcoded_dependencies"
+      },
+      {
+        "type": "fact",
+        "lesson": "Use Python dataclasses for serialization layers to ensure explicit structure; enforce strict type hinting to prevent silent data corruption during state serialization.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:a37b464d"
+      },
+      {
+        "type": "concept",
+        "label": "dataclasses",
+        "freq": 4,
+        "id": "concept:dataclasses"
+      },
+      {
+        "type": "concept",
+        "label": "serialization_layer",
+        "freq": 1,
+        "id": "concept:serialization_layer"
+      },
+      {
+        "type": "concept",
+        "label": "structural_integrity",
+        "freq": 1,
+        "id": "concept:structural_integrity"
+      },
+      {
+        "type": "concept",
+        "label": "data_corruption",
+        "freq": 1,
+        "id": "concept:data_corruption"
+      },
+      {
+        "type": "fact",
+        "lesson": "Decouple game entity state from rendering logic by using data-only classes; this facilitates unit testing of core mechanics without initializing graphical environments or complex dependencies.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.98,
+        "id": "fact:ecb6dccb"
+      },
+      {
+        "type": "concept",
+        "label": "entitystate",
+        "freq": 8,
+        "id": "concept:entitystate"
+      },
+      {
+        "type": "concept",
+        "label": "gamelogic",
+        "freq": 1,
+        "id": "concept:gamelogic"
+      },
+      {
+        "type": "concept",
+        "label": "renderingengine",
+        "freq": 2,
+        "id": "concept:renderingengine"
+      },
+      {
+        "type": "concept",
+        "label": "unit_testing",
+        "freq": 3,
+        "id": "concept:unit_testing"
+      },
+      {
+        "type": "fact",
+        "lesson": "Decouple raw input events from application logic by mapping Pygame events to an abstraction layer (Action enum); this prevents tight coupling between hardware interfaces and game state.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:78e84bb4"
+      },
+      {
+        "type": "concept",
+        "label": "enum",
+        "freq": 1,
+        "id": "concept:enum"
+      },
+      {
+        "type": "concept",
+        "label": "statepattern",
+        "freq": 1,
+        "id": "concept:statepattern"
+      },
+      {
+        "type": "concept",
+        "label": "action",
+        "freq": 2,
+        "id": "concept:action"
+      },
+      {
+        "type": "concept",
+        "label": "enginelogic",
+        "freq": 1,
+        "id": "concept:enginelogic"
+      },
+      {
+        "type": "fact",
+        "lesson": "Implement an event-driven mapping table (dictionary) in InputHandler to avoid complex if-else or match blocks, improving maintainability and readability when scaling input bindings.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.92,
+        "id": "fact:4be5dfc3"
+      },
+      {
+        "type": "concept",
+        "label": "dictionary",
+        "freq": 2,
+        "id": "concept:dictionary"
+      },
+      {
+        "type": "concept",
+        "label": "inputmapping",
+        "freq": 1,
+        "id": "concept:inputmapping"
+      },
+      {
+        "type": "concept",
+        "label": "matchblocks",
+        "freq": 2,
+        "id": "concept:matchblocks"
+      },
+      {
+        "type": "fact",
+        "lesson": "Centralize configuration in a dedicated module using TypeDict or Typed constants to prevent magic number proliferation across game logic.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:a71927de"
+      },
+      {
+        "type": "concept",
+        "label": "typeddict",
+        "freq": 1,
+        "id": "concept:typeddict"
+      },
+      {
+        "type": "concept",
+        "label": "technical_debt",
+        "freq": 3,
+        "id": "concept:technical_debt"
+      },
+      {
+        "type": "fact",
+        "lesson": "Use Environment Variables for environment-specific settings (e.g., debug mode) while keeping static game constants in local configuration files.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.92,
+        "id": "fact:def4f4af"
+      },
+      {
+        "type": "concept",
+        "label": "os.environ",
+        "freq": 2,
+        "id": "concept:os.environ"
+      },
+      {
+        "type": "concept",
+        "label": "dotenv",
+        "freq": 1,
+        "id": "concept:dotenv"
+      },
+      {
+        "type": "concept",
+        "label": "environment_settings",
+        "freq": 1,
+        "id": "concept:environment_settings"
+      },
+      {
+        "type": "fact",
+        "lesson": "Use Python dataclasses for serialization layers to enforce structured state representation; avoid using unstructured dictionaries for game entities to prevent runtime attribute errors.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:8480cdb6"
+      },
+      {
+        "type": "concept",
+        "label": "runtime_errors",
+        "freq": 2,
+        "id": "concept:runtime_errors"
+      },
+      {
+        "type": "concept",
+        "label": "schema_consistency",
+        "freq": 1,
+        "id": "concept:schema_consistency"
+      },
+      {
+        "type": "fact",
+        "lesson": "Implement explicit type-hinting in entity definitions to ensure static analysis compatibility; use 'typing' module imports to catch interface contract mismatches before runtime.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.98,
+        "id": "fact:11dfe758"
+      },
+      {
+        "type": "fact",
+        "lesson": "Encapsulate shared data models in dedicated modules; keep them free of side effects to ensure they remain lightweight and reusable across different system components.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.92,
+        "id": "fact:fbcae358"
+      },
+      {
+        "type": "concept",
+        "label": "data_models",
+        "freq": 1,
+        "id": "concept:data_models"
+      },
+      {
+        "type": "concept",
+        "label": "side_effects",
+        "freq": 1,
+        "id": "concept:side_effects"
+      },
+      {
+        "type": "concept",
+        "label": "modularity",
+        "freq": 2,
+        "id": "concept:modularity"
+      },
+      {
+        "type": "concept",
+        "label": "reusability",
+        "freq": 1,
+        "id": "concept:reusability"
+      },
+      {
+        "type": "fact",
+        "lesson": "Decouple state logic from render logic in UI managers by passing a surface target to draw methods rather than binding the manager to a global display state.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:96e9fb6f"
+      },
+      {
+        "type": "concept",
+        "label": "pygame.surface",
+        "freq": 4,
+        "id": "concept:pygame.surface"
+      },
+      {
+        "type": "concept",
+        "label": "scoremanager",
+        "freq": 4,
+        "id": "concept:scoremanager"
+      },
+      {
+        "type": "concept",
+        "label": "testability",
+        "freq": 4,
+        "id": "concept:testability"
+      },
+      {
+        "type": "fact",
+        "lesson": "Expose state via public properties or getters rather than allowing direct mutation of internal counters to maintain strict control over business logic transitions.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.9,
+        "id": "fact:9afa1769"
+      },
+      {
+        "type": "concept",
+        "label": "property_decorator",
+        "freq": 1,
+        "id": "concept:property_decorator"
+      },
+      {
+        "type": "concept",
+        "label": "encapsulation",
+        "freq": 2,
+        "id": "concept:encapsulation"
+      },
+      {
+        "type": "concept",
+        "label": "state_machine",
+        "freq": 1,
+        "id": "concept:state_machine"
+      },
+      {
+        "type": "concept",
+        "label": "invalid_state_transitions",
+        "freq": 1,
+        "id": "concept:invalid_state_transitions"
+      },
+      {
+        "type": "fact",
+        "lesson": "Decouple UI rendering logic from game state by passing only the surface and configuration objects to static helper functions.",
+        "sprint": 1,
+        "success": false,
+        "confidence": 0.95,
+        "id": "fact:0b8bb576"
+      },
+      {
+        "type": "concept",
+        "label": "uicomponents",
+        "freq": 1,
+        "id": "concept:uicomponents"
+      },
+      {
+        "type": "fact",
+        "lesson": "Define shared visual constants in a central config file to prevent hardcoding magic numbers and ensure consistency across rendering modules.",
+        "sprint": 1,
+        "success": false,
+        "confidence": 0.98,
+        "id": "fact:71066345"
+      },
+      {
+        "type": "concept",
+        "label": "src.config",
+        "freq": 2,
+        "id": "concept:src.config"
+      },
+      {
+        "type": "concept",
+        "label": "consistency",
+        "freq": 1,
+        "id": "concept:consistency"
+      },
+      {
+        "type": "fact",
+        "lesson": "Validate surface availability before drawing calls to prevent pygame.error exceptions when the display surface is not properly initialized or has been lost.",
+        "sprint": 1,
+        "success": false,
+        "confidence": 0.92,
+        "id": "fact:91a25dab"
+      },
+      {
+        "type": "concept",
+        "label": "pygame.error",
+        "freq": 3,
+        "id": "concept:pygame.error"
+      },
+      {
+        "type": "concept",
+        "label": "surface_validation",
+        "freq": 2,
+        "id": "concept:surface_validation"
+      },
+      {
+        "type": "concept",
+        "label": "runtime_safety",
+        "freq": 1,
+        "id": "concept:runtime_safety"
+      },
+      {
+        "type": "fact",
+        "lesson": "Pre-convert assets (e.g., Pygame convert_alpha()) during the caching phase to shift performance costs from the render loop to the initialization phase.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:0e5b9db6"
+      },
+      {
+        "type": "concept",
+        "label": "resourcemanager",
+        "freq": 6,
+        "id": "concept:resourcemanager"
+      },
+      {
+        "type": "concept",
+        "label": "convert_alpha",
+        "freq": 2,
+        "id": "concept:convert_alpha"
+      },
+      {
+        "type": "concept",
+        "label": "renderinglatency",
+        "freq": 2,
+        "id": "concept:renderinglatency"
+      },
+      {
+        "type": "fact",
+        "lesson": "Implement a centralized Singleton or Dependency Injection pattern for asset management to prevent redundant disk I/O and memory fragmentation.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.9,
+        "id": "fact:ba6383bf"
+      },
+      {
+        "type": "concept",
+        "label": "diskio",
+        "freq": 1,
+        "id": "concept:diskio"
+      },
+      {
+        "type": "concept",
+        "label": "memorymanagement",
+        "freq": 1,
+        "id": "concept:memorymanagement"
+      },
+      {
+        "type": "concept",
+        "label": "centralizedresourcemanager",
+        "freq": 1,
+        "id": "concept:centralizedresourcemanager"
+      },
+      {
+        "type": "concept",
+        "label": "redundantdiskio",
+        "freq": 1,
+        "id": "concept:redundantdiskio"
+      },
+      {
+        "type": "fact",
+        "lesson": "Pre-initialize pygame font modules before rendering UI components to avoid 'font not initialized' runtime errors.",
+        "sprint": 1,
+        "success": false,
+        "confidence": 0.95,
+        "id": "fact:0bcfa783"
+      },
+      {
+        "type": "concept",
+        "label": "pygame.font",
+        "freq": 2,
+        "id": "concept:pygame.font"
+      },
+      {
+        "type": "concept",
+        "label": "pygame.init",
+        "freq": 2,
+        "id": "concept:pygame.init"
+      },
+      {
+        "type": "concept",
+        "label": "runtimeerror",
+        "freq": 1,
+        "id": "concept:runtimeerror"
+      },
+      {
+        "type": "concept",
+        "label": "pygame.font.sysfont",
+        "freq": 1,
+        "id": "concept:pygame.font.sysfont"
+      },
+      {
+        "type": "fact",
+        "lesson": "Inject surface objects into rendering functions rather than referencing global display variables to keep UI components decoupled and testable.",
+        "sprint": 1,
+        "success": false,
+        "confidence": 0.92,
+        "id": "fact:d03f6f77"
+      },
+      {
+        "type": "concept",
+        "label": "decoupling",
+        "freq": 2,
+        "id": "concept:decoupling"
+      },
+      {
+        "type": "fact",
+        "lesson": "Wrap font rendering calls in try-except blocks to catch 'pygame.error' when system fonts fail to load, providing fallback text or silent failure.",
+        "sprint": 1,
+        "success": false,
+        "confidence": 0.88,
+        "id": "fact:4b163a29"
+      },
+      {
+        "type": "concept",
+        "label": "try-except",
+        "freq": 2,
+        "id": "concept:try-except"
+      },
+      {
+        "type": "concept",
+        "label": "font_rendering",
+        "freq": 1,
+        "id": "concept:font_rendering"
+      },
+      {
+        "type": "concept",
+        "label": "crash_on_font_load_failure",
+        "freq": 1,
+        "id": "concept:crash_on_font_load_failure"
+      },
+      {
+        "type": "fact",
+        "lesson": "Decouple state management logic from rendering routines by separating the data storage from the pygame.Surface drawing instructions within the class.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:1e03e158"
+      },
+      {
+        "type": "concept",
+        "label": "render_logic",
+        "freq": 1,
+        "id": "concept:render_logic"
+      },
+      {
+        "type": "concept",
+        "label": "state_logic",
+        "freq": 1,
+        "id": "concept:state_logic"
+      },
+      {
+        "type": "concept",
+        "label": "rendering_logic",
+        "freq": 1,
+        "id": "concept:rendering_logic"
+      },
+      {
+        "type": "fact",
+        "lesson": "Centralize configuration constants like colors and fonts in a shared config module to ensure consistency across different managers and prevent hardcoded magic values.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.98,
+        "id": "fact:487ca123"
+      },
+      {
+        "type": "concept",
+        "label": "magic_values",
+        "freq": 1,
+        "id": "concept:magic_values"
+      },
+      {
+        "type": "concept",
+        "label": "maintenance_overhead",
+        "freq": 1,
+        "id": "concept:maintenance_overhead"
+      },
+      {
+        "type": "fact",
+        "lesson": "Require engine initialization states to be explicitly checked before rendering calls to prevent NullPointerExceptions when game components are accessed before the Pygame display mode is set.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.92,
+        "id": "fact:107e1386"
+      },
+      {
+        "type": "concept",
+        "label": "pygame.display",
+        "freq": 1,
+        "id": "concept:pygame.display"
+      },
+      {
+        "type": "concept",
+        "label": "nullpointerexception",
+        "freq": 1,
+        "id": "concept:nullpointerexception"
+      },
+      {
+        "type": "concept",
+        "label": "engine_state",
+        "freq": 1,
+        "id": "concept:engine_state"
+      },
+      {
+        "type": "concept",
+        "label": "missing_engine_check",
+        "freq": 1,
+        "id": "concept:missing_engine_check"
+      },
+      {
+        "type": "concept",
+        "label": "runtime_crash",
+        "freq": 1,
+        "id": "concept:runtime_crash"
+      },
+      {
+        "type": "fact",
+        "lesson": "Use LRU caching for game asset managers to prevent memory bloat while minimizing redundant I/O during heavy render loops.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:a90252d2"
+      },
+      {
+        "type": "concept",
+        "label": "functools.lru_cache",
+        "freq": 1,
+        "id": "concept:functools.lru_cache"
+      },
+      {
+        "type": "concept",
+        "label": "disk_io",
+        "freq": 2,
+        "id": "concept:disk_io"
+      },
+      {
+        "type": "concept",
+        "label": "memory_management",
+        "freq": 1,
+        "id": "concept:memory_management"
+      },
+      {
+        "type": "concept",
+        "label": "lru_caching",
+        "freq": 2,
+        "id": "concept:lru_caching"
+      },
+      {
+        "type": "concept",
+        "label": "memory_usage",
+        "freq": 1,
+        "id": "concept:memory_usage"
+      },
+      {
+        "type": "fact",
+        "lesson": "Initialize global resource managers with lazy loading to avoid dependency failures if assets are missing or hardware drivers are unavailable during startup.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.9,
+        "id": "fact:e5126e05"
+      },
+      {
+        "type": "concept",
+        "label": "pygame.mixer",
+        "freq": 1,
+        "id": "concept:pygame.mixer"
+      },
+      {
+        "type": "concept",
+        "label": "lazy_initialization",
+        "freq": 2,
+        "id": "concept:lazy_initialization"
+      },
+      {
+        "type": "fact",
+        "lesson": "Inherit from pygame.sprite.Sprite for all game entities to leverage built-in collision detection and update cycle management in Pygame projects.",
+        "sprint": 1,
+        "success": false,
+        "confidence": 0.95,
+        "id": "fact:3baa4881"
+      },
+      {
+        "type": "concept",
+        "label": "pygame.sprite.sprite",
+        "freq": 10,
+        "id": "concept:pygame.sprite.sprite"
+      },
+      {
+        "type": "concept",
+        "label": "baseentity",
+        "freq": 10,
+        "id": "concept:baseentity"
+      },
+      {
+        "type": "concept",
+        "label": "game_loop",
+        "freq": 1,
+        "id": "concept:game_loop"
+      },
+      {
+        "type": "fact",
+        "lesson": "Decouple entity state from rendering by implementing a data-class or dedicated state object; this simplifies serialization and debug inspection.",
+        "sprint": 1,
+        "success": false,
+        "confidence": 0.85,
+        "id": "fact:447c6ba7"
+      },
+      {
+        "type": "concept",
+        "label": "serialization",
+        "freq": 3,
+        "id": "concept:serialization"
+      },
+      {
+        "type": "fact",
+        "lesson": "Avoid hardcoded resource paths in BaseEntity; utilize a ResourceManager pattern to inject assets, ensuring portability and easing unit test mocking.",
+        "sprint": 1,
+        "success": false,
+        "confidence": 0.9,
+        "id": "fact:c1613447"
+      },
+      {
+        "type": "concept",
+        "label": "mocking",
+        "freq": 1,
+        "id": "concept:mocking"
+      },
+      {
+        "type": "fact",
+        "lesson": "Inherit from pygame.sprite.Sprite for base game entities to leverage built-in rendering groups and efficient collision detection logic via Sprite.update() and Sprite.draw() methods.",
+        "sprint": 1,
+        "success": false,
+        "confidence": 0.95,
+        "id": "fact:2c6c576a"
+      },
+      {
+        "type": "concept",
+        "label": "sprite.update",
+        "freq": 1,
+        "id": "concept:sprite.update"
+      },
+      {
+        "type": "concept",
+        "label": "sprite.draw",
+        "freq": 1,
+        "id": "concept:sprite.draw"
+      },
+      {
+        "type": "concept",
+        "label": "collision_detection",
+        "freq": 2,
+        "id": "concept:collision_detection"
+      },
+      {
+        "type": "fact",
+        "lesson": "Decouple resource management from entity instantiation by using a dedicated ResourceManager; inject dependencies rather than hardcoding file paths to ensure testability and asset reuse.",
+        "sprint": 1,
+        "success": false,
+        "confidence": 0.9,
+        "id": "fact:9703934b"
+      },
+      {
+        "type": "concept",
+        "label": "coupling",
+        "freq": 2,
+        "id": "concept:coupling"
+      },
+      {
+        "type": "fact",
+        "lesson": "Maintain state via dedicated data objects (e.g., EntityState) to ensure separation between entity logic and visual position data, facilitating easier serialization for save-states.",
+        "sprint": 1,
+        "success": false,
+        "confidence": 0.85,
+        "id": "fact:ef72eb53"
+      },
+      {
+        "type": "concept",
+        "label": "data-logic-separation",
+        "freq": 1,
+        "id": "concept:data-logic-separation"
+      },
+      {
+        "type": "fact",
+        "lesson": "In Pygame, utilize the built-in `self.kill()` method within an entity's `update` logic to handle lifecycle cleanup automatically, preventing memory leaks and unnecessary sprite group processing for off-screen objects.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 1.0,
+        "id": "fact:82d2f462"
+      },
+      {
+        "type": "concept",
+        "label": "update_loop",
+        "freq": 2,
+        "id": "concept:update_loop"
+      },
+      {
+        "type": "concept",
+        "label": "self.kill()",
+        "freq": 2,
+        "id": "concept:self.kill()"
+      },
+      {
+        "type": "concept",
+        "label": "sprite_groups",
+        "freq": 1,
+        "id": "concept:sprite_groups"
+      },
+      {
+        "type": "fact",
+        "lesson": "Encapsulate constant physics parameters like `BULLET_SPEED` in a configuration module to ensure consistency across entity movement logic and facilitate easier game balance adjustments.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:69948bef"
+      },
+      {
+        "type": "concept",
+        "label": "bullet_speed",
+        "freq": 2,
+        "id": "concept:bullet_speed"
+      },
+      {
+        "type": "concept",
+        "label": "constants.py",
+        "freq": 1,
+        "id": "concept:constants.py"
+      },
+      {
+        "type": "concept",
+        "label": "hardcoded_constants",
+        "freq": 1,
+        "id": "concept:hardcoded_constants"
+      },
+      {
+        "type": "concept",
+        "label": "balancing",
+        "freq": 1,
+        "id": "concept:balancing"
+      },
+      {
+        "type": "fact",
+        "lesson": "Implement self-destruct logic within the entity's update loop to decouple cleanup responsibilities from the main game engine, preventing memory leaks and stale object processing.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:1a20b1aa"
+      },
+      {
+        "type": "concept",
+        "label": "kill()",
+        "freq": 3,
+        "id": "concept:kill()"
+      },
+      {
+        "type": "concept",
+        "label": "self_cleanup",
+        "freq": 1,
+        "id": "concept:self_cleanup"
+      },
+      {
+        "type": "concept",
+        "label": "memory_leak",
+        "freq": 1,
+        "id": "concept:memory_leak"
+      },
+      {
+        "type": "fact",
+        "lesson": "Abstract movement physics into constant-driven velocity vectors to ensure consistent frame-rate independent updates across different hardware profiles.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.9,
+        "id": "fact:20788846"
+      },
+      {
+        "type": "concept",
+        "label": "velocity_vector",
+        "freq": 1,
+        "id": "concept:velocity_vector"
+      },
+      {
+        "type": "concept",
+        "label": "frame-rate_independence",
+        "freq": 2,
+        "id": "concept:frame-rate_independence"
+      },
+      {
+        "type": "concept",
+        "label": "constant_driven_velocity",
+        "freq": 1,
+        "id": "concept:constant_driven_velocity"
+      },
+      {
+        "type": "fact",
+        "lesson": "Enforce strict dependency injection for configuration parameters (e.g., speed, bounds) to allow for easier unit testing of entity movement logic without requiring a full engine state.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.85,
+        "id": "fact:81c64be0"
+      },
+      {
+        "type": "concept",
+        "label": "configuration_object",
+        "freq": 1,
+        "id": "concept:configuration_object"
+      },
+      {
+        "type": "concept",
+        "label": "entity_state",
+        "freq": 1,
+        "id": "concept:entity_state"
+      },
+      {
+        "type": "fact",
+        "lesson": "Encapsulate boundary logic within the entity update method to decouple screen constraints from the main game loop, ensuring consistency across different screen resolutions.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:50aeef3e"
+      },
+      {
+        "type": "concept",
+        "label": "player",
+        "freq": 3,
+        "id": "concept:player"
+      },
+      {
+        "type": "concept",
+        "label": "boundary_logic",
+        "freq": 2,
+        "id": "concept:boundary_logic"
+      },
+      {
+        "type": "concept",
+        "label": "update_method",
+        "freq": 1,
+        "id": "concept:update_method"
+      },
+      {
+        "type": "fact",
+        "lesson": "Implement factory-style methods for spawning projectile entities within the parent entity, using cooldown timestamps to prevent fire-rate abuse without blocking the main event thread.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.92,
+        "id": "fact:bd2e7ec2"
+      },
+      {
+        "type": "concept",
+        "label": "bullet",
+        "freq": 1,
+        "id": "concept:bullet"
+      },
+      {
+        "type": "concept",
+        "label": "cooldown_mechanism",
+        "freq": 2,
+        "id": "concept:cooldown_mechanism"
+      },
+      {
+        "type": "concept",
+        "label": "factory_pattern",
+        "freq": 1,
+        "id": "concept:factory_pattern"
+      },
+      {
+        "type": "concept",
+        "label": "fire_rate_abuse",
+        "freq": 1,
+        "id": "concept:fire_rate_abuse"
+      },
+      {
+        "type": "fact",
+        "lesson": "Enforce screen boundary constraints in the update method using clamp logic to prevent entity clipping outside the game viewport.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:35447793"
+      },
+      {
+        "type": "concept",
+        "label": "boundary_clamping",
+        "freq": 2,
+        "id": "concept:boundary_clamping"
+      },
+      {
+        "type": "concept",
+        "label": "screen_coordinates",
+        "freq": 1,
+        "id": "concept:screen_coordinates"
+      },
+      {
+        "type": "concept",
+        "label": "player_position_validity",
+        "freq": 1,
+        "id": "concept:player_position_validity"
+      },
+      {
+        "type": "fact",
+        "lesson": "Implement cooldown management for shooting mechanics using timestamp comparison rather than frame counting to ensure consistent behavior across different hardware refresh rates.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.98,
+        "id": "fact:cb290f86"
+      },
+      {
+        "type": "concept",
+        "label": "cooldown_manager",
+        "freq": 1,
+        "id": "concept:cooldown_manager"
+      },
+      {
+        "type": "concept",
+        "label": "timestamp",
+        "freq": 2,
+        "id": "concept:timestamp"
+      },
+      {
+        "type": "concept",
+        "label": "frame_rate_independence",
+        "freq": 2,
+        "id": "concept:frame_rate_independence"
+      },
+      {
+        "type": "fact",
+        "lesson": "Design base classes to act as strict interfaces by enforcing inheritance, ensuring all entity types maintain uniform update and draw signatures.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.92,
+        "id": "fact:d213aa6d"
+      },
+      {
+        "type": "concept",
+        "label": "inheritance",
+        "freq": 2,
+        "id": "concept:inheritance"
+      },
+      {
+        "type": "concept",
+        "label": "polymorphism",
+        "freq": 1,
+        "id": "concept:polymorphism"
+      },
+      {
+        "type": "concept",
+        "label": "game_entities",
+        "freq": 1,
+        "id": "concept:game_entities"
+      },
+      {
+        "type": "fact",
+        "lesson": "Decouple movement logic from state management by using a dedicated update method that consumes delta time, ensuring frame-independent motion across different hardware.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:8870efa7"
+      },
+      {
+        "type": "concept",
+        "label": "delta_time",
+        "freq": 2,
+        "id": "concept:delta_time"
+      },
+      {
+        "type": "concept",
+        "label": "movement_logic",
+        "freq": 1,
+        "id": "concept:movement_logic"
+      },
+      {
+        "type": "concept",
+        "label": "frame_independent_motion",
+        "freq": 1,
+        "id": "concept:frame_independent_motion"
+      },
+      {
+        "type": "fact",
+        "lesson": "Encapsulate screen boundary checks within entity methods to maintain self-contained game objects, allowing entities to trigger their own removal via signaling rather than external polling.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.92,
+        "id": "fact:9046cb14"
+      },
+      {
+        "type": "concept",
+        "label": "boundary_checks",
+        "freq": 2,
+        "id": "concept:boundary_checks"
+      },
+      {
+        "type": "concept",
+        "label": "kill_signal",
+        "freq": 1,
+        "id": "concept:kill_signal"
+      },
+      {
+        "type": "concept",
+        "label": "self_removal",
+        "freq": 1,
+        "id": "concept:self_removal"
+      },
+      {
+        "type": "fact",
+        "lesson": "Encapsulate screen-bound destruction logic within the entity's update method to ensure memory safety and prevent off-screen processing overhead.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:6fcaaec7"
+      },
+      {
+        "type": "concept",
+        "label": "update()",
+        "freq": 2,
+        "id": "concept:update()"
+      },
+      {
+        "type": "concept",
+        "label": "screen_height",
+        "freq": 1,
+        "id": "concept:screen_height"
+      },
+      {
+        "type": "concept",
+        "label": "out-of-bounds-position",
+        "freq": 1,
+        "id": "concept:out-of-bounds-position"
+      },
+      {
+        "type": "fact",
+        "lesson": "Externalize entity configuration variables to a centralized config module rather than hardcoding movement speeds or dimensions within class initializers.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.9,
+        "id": "fact:ace16432"
+      },
+      {
+        "type": "concept",
+        "label": "enemy",
+        "freq": 1,
+        "id": "concept:enemy"
+      },
+      {
+        "type": "concept",
+        "label": "hardcoding",
+        "freq": 1,
+        "id": "concept:hardcoding"
+      },
+      {
+        "type": "concept",
+        "label": "centralized-config",
+        "freq": 1,
+        "id": "concept:centralized-config"
+      },
+      {
+        "type": "concept",
+        "label": "modular-balancing",
+        "freq": 1,
+        "id": "concept:modular-balancing"
+      },
+      {
+        "type": "fact",
+        "lesson": "Use pygame.sprite.Group for optimized batch collision detection rather than manual loops, leveraging collide_mask for high-fidelity, pixel-perfect interactions.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:fe31c0bf"
+      },
+      {
+        "type": "concept",
+        "label": "pygame.sprite.group",
+        "freq": 6,
+        "id": "concept:pygame.sprite.group"
+      },
+      {
+        "type": "concept",
+        "label": "pygame.sprite.groupcollide",
+        "freq": 2,
+        "id": "concept:pygame.sprite.groupcollide"
+      },
+      {
+        "type": "concept",
+        "label": "collide_mask",
+        "freq": 2,
+        "id": "concept:collide_mask"
+      },
+      {
+        "type": "concept",
+        "label": "pixel-perfect detection",
+        "freq": 1,
+        "id": "concept:pixel-perfect detection"
+      },
+      {
+        "type": "concept",
+        "label": "group",
+        "freq": 1,
+        "id": "concept:group"
+      },
+      {
+        "type": "concept",
+        "label": "collision processing speed",
+        "freq": 1,
+        "id": "concept:collision processing speed"
+      },
+      {
+        "type": "fact",
+        "lesson": "Ensure collision callback parameters match the expected API signature exactly; using named arguments like 'dokill' can lead to unexpected behavior if not aligned with the specific pygame version requirements.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.9,
+        "id": "fact:7eeead82"
+      },
+      {
+        "type": "concept",
+        "label": "pygame.sprite",
+        "freq": 1,
+        "id": "concept:pygame.sprite"
+      },
+      {
+        "type": "concept",
+        "label": "dokill",
+        "freq": 2,
+        "id": "concept:dokill"
+      },
+      {
+        "type": "concept",
+        "label": "api_signature",
+        "freq": 1,
+        "id": "concept:api_signature"
+      },
+      {
+        "type": "concept",
+        "label": "mismatched_parameters",
+        "freq": 1,
+        "id": "concept:mismatched_parameters"
+      },
+      {
+        "type": "fact",
+        "lesson": "Use pygame.sprite.Group for batch entity management to simplify lifecycle handling, collision detection, and rendering updates across disparate entity types like Players, Enemies, and Bullets.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:6054b7c0"
+      },
+      {
+        "type": "concept",
+        "label": "entity lifecycle",
+        "freq": 2,
+        "id": "concept:entity lifecycle"
+      },
+      {
+        "type": "concept",
+        "label": "rendering",
+        "freq": 2,
+        "id": "concept:rendering"
+      },
+      {
+        "type": "fact",
+        "lesson": "Enforce strict base class inheritance from pygame.sprite.Sprite for all managed objects to ensure compatibility with group-level update() and draw() methods, preventing runtime AttributeErrors.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.9,
+        "id": "fact:23c1f270"
+      },
+      {
+        "type": "concept",
+        "label": "attributeerror",
+        "freq": 3,
+        "id": "concept:attributeerror"
+      },
+      {
+        "type": "concept",
+        "label": "group-level update()",
+        "freq": 1,
+        "id": "concept:group-level update()"
+      },
+      {
+        "type": "concept",
+        "label": "missing_inheritance",
+        "freq": 1,
+        "id": "concept:missing_inheritance"
+      },
+      {
+        "type": "fact",
+        "lesson": "Use pygame.sprite.Group for batch lifecycle management; it prevents manual iteration overhead and ensures efficient rendering and update cycles across disparate entity types.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 1.0,
+        "id": "fact:80816f18"
+      },
+      {
+        "type": "concept",
+        "label": "draw()",
+        "freq": 1,
+        "id": "concept:draw()"
+      },
+      {
+        "type": "concept",
+        "label": "rendering_cycle",
+        "freq": 1,
+        "id": "concept:rendering_cycle"
+      },
+      {
+        "type": "fact",
+        "lesson": "Decouple entity management from specific entity implementation by enforcing inheritance from pygame.sprite.Sprite, allowing the manager to treat players, enemies, and bullets as polymorphic members of a collective group.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:6ff4a55f"
+      },
+      {
+        "type": "concept",
+        "label": "entitymanager",
+        "freq": 5,
+        "id": "concept:entitymanager"
+      },
+      {
+        "type": "concept",
+        "label": "ducktyping",
+        "freq": 1,
+        "id": "concept:ducktyping"
+      },
+      {
+        "type": "concept",
+        "label": "polymorphic_management",
+        "freq": 1,
+        "id": "concept:polymorphic_management"
+      },
+      {
+        "type": "fact",
+        "lesson": "Use pygame.sprite.groupcollide with 'dokill' flags to efficiently handle bullet-entity destruction and cleanup in a single pass without manual iteration.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:79b61ec7"
+      },
+      {
+        "type": "concept",
+        "label": "groupcollide",
+        "freq": 1,
+        "id": "concept:groupcollide"
+      },
+      {
+        "type": "concept",
+        "label": "manual_iteration_logic",
+        "freq": 1,
+        "id": "concept:manual_iteration_logic"
+      },
+      {
+        "type": "fact",
+        "lesson": "Always enable pixel-perfect collision by assigning a mask attribute to your Sprite subclasses; pygame's default bounding box check is often too imprecise for fast-paced action games.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.98,
+        "id": "fact:6f13606c"
+      },
+      {
+        "type": "concept",
+        "label": "pygame.mask",
+        "freq": 2,
+        "id": "concept:pygame.mask"
+      },
+      {
+        "type": "concept",
+        "label": "bounding_box",
+        "freq": 1,
+        "id": "concept:bounding_box"
+      },
+      {
+        "type": "concept",
+        "label": "collision_precision",
+        "freq": 1,
+        "id": "concept:collision_precision"
+      },
+      {
+        "type": "fact",
+        "lesson": "Decouple collision resolution from physics calculation by using observer-like callbacks; this prevents your physics systems from becoming tightly coupled to game-state managers like ScoreManager.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.92,
+        "id": "fact:60efe345"
+      },
+      {
+        "type": "concept",
+        "label": "collisionsystem",
+        "freq": 3,
+        "id": "concept:collisionsystem"
+      },
+      {
+        "type": "concept",
+        "label": "observerpattern",
+        "freq": 2,
+        "id": "concept:observerpattern"
+      },
+      {
+        "type": "concept",
+        "label": "system_coupling",
+        "freq": 1,
+        "id": "concept:system_coupling"
+      },
+      {
+        "type": "fact",
+        "lesson": "Encapsulate game state updates within a dedicated update() method to decouple frame-rate logic from component-specific state logic.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:ec48e49e"
+      },
+      {
+        "type": "concept",
+        "label": "pygame.time.clock",
+        "freq": 1,
+        "id": "concept:pygame.time.clock"
+      },
+      {
+        "type": "concept",
+        "label": "gameloop",
+        "freq": 2,
+        "id": "concept:gameloop"
+      },
+      {
+        "type": "fact",
+        "lesson": "Initialize system managers before the main loop to prevent null pointer exceptions and ensure resource availability during the first frame.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.98,
+        "id": "fact:0702b56e"
+      },
+      {
+        "type": "concept",
+        "label": "initializationphase",
+        "freq": 1,
+        "id": "concept:initializationphase"
+      },
+      {
+        "type": "concept",
+        "label": "systemmanagers",
+        "freq": 1,
+        "id": "concept:systemmanagers"
+      },
+      {
+        "type": "concept",
+        "label": "mainloop",
+        "freq": 1,
+        "id": "concept:mainloop"
+      },
+      {
+        "type": "fact",
+        "lesson": "Decouple game engine logic from systems by using dependency injection; pass InputHandler, EntityManager, and other controllers as constructor arguments to the Game class for easier unit testing.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:2d6414a0"
+      },
+      {
+        "type": "concept",
+        "label": "gameengine",
+        "freq": 3,
+        "id": "concept:gameengine"
+      },
+      {
+        "type": "concept",
+        "label": "dependency injection",
+        "freq": 2,
+        "id": "concept:dependency injection"
+      },
+      {
+        "type": "concept",
+        "label": "unit testing",
+        "freq": 1,
+        "id": "concept:unit testing"
+      },
+      {
+        "type": "fact",
+        "lesson": "Ensure the game loop maintains a fixed time step or uses delta time in the update cycle to prevent physics inconsistencies across varying hardware performance.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.9,
+        "id": "fact:781fd694"
+      },
+      {
+        "type": "concept",
+        "label": "game loop",
+        "freq": 1,
+        "id": "concept:game loop"
+      },
+      {
+        "type": "concept",
+        "label": "delta time",
+        "freq": 2,
+        "id": "concept:delta time"
+      },
+      {
+        "type": "concept",
+        "label": "fps",
+        "freq": 1,
+        "id": "concept:fps"
+      },
+      {
+        "type": "concept",
+        "label": "hardware variability",
+        "freq": 1,
+        "id": "concept:hardware variability"
+      },
+      {
+        "type": "concept",
+        "label": "physics consistency",
+        "freq": 1,
+        "id": "concept:physics consistency"
+      },
+      {
+        "type": "fact",
+        "lesson": "Validate interface contracts early; define abstract base classes for managers (EntityManager, InputHandler) to ensure the GameEngine can interact with components safely during runtime execution.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.85,
+        "id": "fact:3f0b5689"
+      },
+      {
+        "type": "concept",
+        "label": "abstract base classes",
+        "freq": 2,
+        "id": "concept:abstract base classes"
+      },
+      {
+        "type": "concept",
+        "label": "runtime error",
+        "freq": 1,
+        "id": "concept:runtime error"
+      },
+      {
+        "type": "fact",
+        "lesson": "Use headless display configurations when running GUI-dependent libraries like Pygame in CI/CD pipelines to prevent initialization errors in environments without graphical interfaces.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 1.0,
+        "id": "fact:3b7e3ee9"
+      },
+      {
+        "type": "concept",
+        "label": "sdl_videodriver",
+        "freq": 1,
+        "id": "concept:sdl_videodriver"
+      },
+      {
+        "type": "concept",
+        "label": "headless_mode",
+        "freq": 2,
+        "id": "concept:headless_mode"
+      },
+      {
+        "type": "concept",
+        "label": "display_initialization_error",
+        "freq": 1,
+        "id": "concept:display_initialization_error"
+      },
+      {
+        "type": "fact",
+        "lesson": "Inject state-management dependencies, such as ScoreManager, directly into logic-heavy systems like CollisionSystem to ensure decoupled testing and easier verification of side-effect interactions.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:bfa5b249"
+      },
+      {
+        "type": "concept",
+        "label": "dependencyinjection",
+        "freq": 2,
+        "id": "concept:dependencyinjection"
+      }
+    ],
+    "edges": [
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:f20557c0",
+        "target": "concept:config.py"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:f20557c0",
+        "target": "concept:magic_numbers"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:f20557c0",
+        "target": "concept:dependency_injection"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:config.py",
+        "target": "fact:f20557c0"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:config.py",
+        "target": "fact:a71927de"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:config.py",
+        "target": "fact:def4f4af"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:config.py",
+        "target": "fact:ace16432"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:magic_numbers",
+        "target": "fact:f20557c0"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:magic_numbers",
+        "target": "fact:a71927de"
+      },
+      {
+        "rel": "increases",
+        "weight": 1.5,
+        "source": "concept:magic_numbers",
+        "target": "concept:technical_debt"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:magic_numbers",
+        "target": "fact:71066345"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:dependency_injection",
+        "target": "fact:f20557c0"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:dependency_injection",
+        "target": "fact:96e9fb6f"
+      },
+      {
+        "rel": "enables",
+        "weight": 2.0,
+        "source": "concept:dependency_injection",
+        "target": "concept:testability"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:dependency_injection",
+        "target": "fact:0b8bb576"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:dependency_injection",
+        "target": "fact:d03f6f77"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:dependency_injection",
+        "target": "fact:c1613447"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:dependency_injection",
+        "target": "fact:9703934b"
+      },
+      {
+        "rel": "reduces",
+        "weight": 1.0,
+        "source": "concept:dependency_injection",
+        "target": "concept:coupling"
+      },
+      {
+        "rel": "facilitates",
+        "weight": 1.0,
+        "source": "concept:dependency_injection",
+        "target": "concept:unit_testing"
+      },
+      {
+        "rel": "reduces",
+        "weight": 1.0,
+        "source": "concept:centralized_config",
+        "target": "concept:magic_numbers"
+      },
+      {
+        "rel": "reduces",
+        "weight": 1.0,
+        "source": "concept:centralized_config",
+        "target": "concept:technical_debt"
+      },
+      {
+        "rel": "reduces",
+        "weight": 1.0,
+        "source": "concept:centralized_config",
+        "target": "concept:maintenance_overhead"
+      },
+      {
+        "rel": "decouples",
+        "weight": 1.0,
+        "source": "concept:config_module",
+        "target": "concept:engine_components"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:9595c8fd",
+        "target": "concept:typing"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:9595c8fd",
+        "target": "concept:runtime_error"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:9595c8fd",
+        "target": "concept:static_analysis"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:typing",
+        "target": "fact:9595c8fd"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:typing",
+        "target": "fact:11dfe758"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:runtime_error",
+        "target": "fact:9595c8fd"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:runtime_error",
+        "target": "fact:e5126e05"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:static_analysis",
+        "target": "fact:9595c8fd"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:static_analysis",
+        "target": "fact:11dfe758"
+      },
+      {
+        "rel": "mitigates",
+        "weight": 1.0,
+        "source": "concept:type_hints",
+        "target": "concept:runtime_error"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:type_hints",
+        "target": "fact:a37b464d"
+      },
+      {
+        "rel": "prevents",
+        "weight": 1.0,
+        "source": "concept:type_hints",
+        "target": "concept:data_corruption"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:type_hints",
+        "target": "fact:11dfe758"
+      },
+      {
+        "rel": "enables",
+        "weight": 1.0,
+        "source": "concept:type_hints",
+        "target": "concept:static_analysis"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:2de0ddde",
+        "target": "concept:pygame"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:2de0ddde",
+        "target": "concept:inputhandler"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:2de0ddde",
+        "target": "concept:commandpattern"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame",
+        "target": "fact:2de0ddde"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame",
+        "target": "fact:78e84bb4"
+      },
+      {
+        "rel": "translates_to",
+        "weight": 1.0,
+        "source": "concept:pygame",
+        "target": "concept:action"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame",
+        "target": "fact:0e5b9db6"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame",
+        "target": "fact:3b7e3ee9"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:inputhandler",
+        "target": "fact:2de0ddde"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:inputhandler",
+        "target": "fact:78e84bb4"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:inputhandler",
+        "target": "fact:2d6414a0"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:commandpattern",
+        "target": "fact:2de0ddde"
+      },
+      {
+        "rel": "translates_to",
+        "weight": 1.0,
+        "source": "concept:raw_pygame_events",
+        "target": "concept:abstract_actions"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:002a1226",
+        "target": "concept:eventdispatcher"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:002a1226",
+        "target": "concept:systems"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:002a1226",
+        "target": "concept:interface"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:eventdispatcher",
+        "target": "fact:002a1226"
+      },
+      {
+        "rel": "eliminates",
+        "weight": 1.0,
+        "source": "concept:eventdispatcher",
+        "target": "concept:hardcoded_dependencies"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:systems",
+        "target": "fact:002a1226"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:interface",
+        "target": "fact:002a1226"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a37b464d",
+        "target": "concept:dataclasses"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a37b464d",
+        "target": "concept:type_hints"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a37b464d",
+        "target": "concept:serialization_layer"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:dataclasses",
+        "target": "fact:a37b464d"
+      },
+      {
+        "rel": "enables",
+        "weight": 1.0,
+        "source": "concept:dataclasses",
+        "target": "concept:structural_integrity"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:dataclasses",
+        "target": "fact:8480cdb6"
+      },
+      {
+        "rel": "enforces",
+        "weight": 1.0,
+        "source": "concept:dataclasses",
+        "target": "concept:schema_consistency"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:serialization_layer",
+        "target": "fact:a37b464d"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ecb6dccb",
+        "target": "concept:entitystate"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ecb6dccb",
+        "target": "concept:gamelogic"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ecb6dccb",
+        "target": "concept:renderingengine"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:entitystate",
+        "target": "fact:ecb6dccb"
+      },
+      {
+        "rel": "decouples",
+        "weight": 1.0,
+        "source": "concept:entitystate",
+        "target": "concept:renderingengine"
+      },
+      {
+        "rel": "simplifies",
+        "weight": 1.0,
+        "source": "concept:entitystate",
+        "target": "concept:unit_testing"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:entitystate",
+        "target": "fact:8480cdb6"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:entitystate",
+        "target": "fact:447c6ba7"
+      },
+      {
+        "rel": "manages",
+        "weight": 1.0,
+        "source": "concept:entitystate",
+        "target": "concept:baseentity"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:entitystate",
+        "target": "fact:ef72eb53"
+      },
+      {
+        "rel": "simplifies",
+        "weight": 1.0,
+        "source": "concept:entitystate",
+        "target": "concept:serialization"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:gamelogic",
+        "target": "fact:ecb6dccb"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:renderingengine",
+        "target": "fact:ecb6dccb"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:unit_testing",
+        "target": "fact:81c64be0"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:78e84bb4",
+        "target": "concept:pygame"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:78e84bb4",
+        "target": "concept:inputhandler"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:78e84bb4",
+        "target": "concept:enum"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:78e84bb4",
+        "target": "concept:statepattern"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:enum",
+        "target": "fact:78e84bb4"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:statepattern",
+        "target": "fact:78e84bb4"
+      },
+      {
+        "rel": "decouples",
+        "weight": 1.0,
+        "source": "concept:action",
+        "target": "concept:enginelogic"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:4be5dfc3",
+        "target": "concept:dictionary"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:4be5dfc3",
+        "target": "concept:inputmapping"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:4be5dfc3",
+        "target": "concept:matchblocks"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:dictionary",
+        "target": "fact:4be5dfc3"
+      },
+      {
+        "rel": "replaces",
+        "weight": 1.0,
+        "source": "concept:dictionary",
+        "target": "concept:matchblocks"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:inputmapping",
+        "target": "fact:4be5dfc3"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:matchblocks",
+        "target": "fact:4be5dfc3"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a71927de",
+        "target": "concept:config.py"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a71927de",
+        "target": "concept:typeddict"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a71927de",
+        "target": "concept:magic_numbers"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:typeddict",
+        "target": "fact:a71927de"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:def4f4af",
+        "target": "concept:os.environ"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:def4f4af",
+        "target": "concept:dotenv"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:def4f4af",
+        "target": "concept:config.py"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:os.environ",
+        "target": "fact:def4f4af"
+      },
+      {
+        "rel": "secures",
+        "weight": 1.0,
+        "source": "concept:os.environ",
+        "target": "concept:environment_settings"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:dotenv",
+        "target": "fact:def4f4af"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:8480cdb6",
+        "target": "concept:dataclasses"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:8480cdb6",
+        "target": "concept:entitystate"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:8480cdb6",
+        "target": "concept:runtime_errors"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:runtime_errors",
+        "target": "fact:8480cdb6"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:11dfe758",
+        "target": "concept:typing"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:11dfe758",
+        "target": "concept:static_analysis"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:11dfe758",
+        "target": "concept:type_hints"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:fbcae358",
+        "target": "concept:data_models"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:fbcae358",
+        "target": "concept:side_effects"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:fbcae358",
+        "target": "concept:modularity"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:data_models",
+        "target": "fact:fbcae358"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:side_effects",
+        "target": "fact:fbcae358"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:modularity",
+        "target": "fact:fbcae358"
+      },
+      {
+        "rel": "promotes",
+        "weight": 1.0,
+        "source": "concept:modularity",
+        "target": "concept:reusability"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:96e9fb6f",
+        "target": "concept:pygame.surface"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:96e9fb6f",
+        "target": "concept:scoremanager"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:96e9fb6f",
+        "target": "concept:dependency_injection"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame.surface",
+        "target": "fact:96e9fb6f"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame.surface",
+        "target": "fact:0b8bb576"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame.surface",
+        "target": "fact:d03f6f77"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame.surface",
+        "target": "fact:1e03e158"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:scoremanager",
+        "target": "fact:96e9fb6f"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:scoremanager",
+        "target": "fact:1e03e158"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:scoremanager",
+        "target": "fact:60efe345"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:scoremanager",
+        "target": "fact:bfa5b249"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:9afa1769",
+        "target": "concept:property_decorator"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:9afa1769",
+        "target": "concept:encapsulation"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:9afa1769",
+        "target": "concept:state_machine"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:property_decorator",
+        "target": "fact:9afa1769"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:encapsulation",
+        "target": "fact:9afa1769"
+      },
+      {
+        "rel": "prevents",
+        "weight": 1.0,
+        "source": "concept:encapsulation",
+        "target": "concept:invalid_state_transitions"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:state_machine",
+        "target": "fact:9afa1769"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:0b8bb576",
+        "target": "concept:pygame.surface"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:0b8bb576",
+        "target": "concept:dependency_injection"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:0b8bb576",
+        "target": "concept:uicomponents"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:uicomponents",
+        "target": "fact:0b8bb576"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:71066345",
+        "target": "concept:src.config"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:71066345",
+        "target": "concept:magic_numbers"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:71066345",
+        "target": "concept:consistency"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:src.config",
+        "target": "fact:71066345"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:src.config",
+        "target": "fact:487ca123"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:consistency",
+        "target": "fact:71066345"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:91a25dab",
+        "target": "concept:pygame.error"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:91a25dab",
+        "target": "concept:surface_validation"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:91a25dab",
+        "target": "concept:runtime_safety"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame.error",
+        "target": "fact:91a25dab"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame.error",
+        "target": "fact:4b163a29"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:surface_validation",
+        "target": "fact:91a25dab"
+      },
+      {
+        "rel": "prevents",
+        "weight": 1.0,
+        "source": "concept:surface_validation",
+        "target": "concept:pygame.error"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:runtime_safety",
+        "target": "fact:91a25dab"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:0e5b9db6",
+        "target": "concept:resourcemanager"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:0e5b9db6",
+        "target": "concept:pygame"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:0e5b9db6",
+        "target": "concept:convert_alpha"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:0e5b9db6",
+        "target": "concept:renderinglatency"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:resourcemanager",
+        "target": "fact:0e5b9db6"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:resourcemanager",
+        "target": "fact:ba6383bf"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:resourcemanager",
+        "target": "fact:c1613447"
+      },
+      {
+        "rel": "supplies",
+        "weight": 1.0,
+        "source": "concept:resourcemanager",
+        "target": "concept:baseentity"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:resourcemanager",
+        "target": "fact:9703934b"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:resourcemanager",
+        "target": "fact:0702b56e"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:convert_alpha",
+        "target": "fact:0e5b9db6"
+      },
+      {
+        "rel": "reduces",
+        "weight": 1.0,
+        "source": "concept:convert_alpha",
+        "target": "concept:renderinglatency"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:renderinglatency",
+        "target": "fact:0e5b9db6"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ba6383bf",
+        "target": "concept:resourcemanager"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ba6383bf",
+        "target": "concept:diskio"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ba6383bf",
+        "target": "concept:memorymanagement"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:diskio",
+        "target": "fact:ba6383bf"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:memorymanagement",
+        "target": "fact:ba6383bf"
+      },
+      {
+        "rel": "prevents",
+        "weight": 1.0,
+        "source": "concept:centralizedresourcemanager",
+        "target": "concept:redundantdiskio"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:0bcfa783",
+        "target": "concept:pygame.font"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:0bcfa783",
+        "target": "concept:pygame.init"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:0bcfa783",
+        "target": "concept:runtimeerror"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame.font",
+        "target": "fact:0bcfa783"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame.font",
+        "target": "fact:487ca123"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame.init",
+        "target": "fact:0bcfa783"
+      },
+      {
+        "rel": "prerequisite_for",
+        "weight": 1.0,
+        "source": "concept:pygame.init",
+        "target": "concept:pygame.font.sysfont"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:runtimeerror",
+        "target": "fact:0bcfa783"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:d03f6f77",
+        "target": "concept:pygame.surface"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:d03f6f77",
+        "target": "concept:dependency_injection"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:d03f6f77",
+        "target": "concept:decoupling"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:decoupling",
+        "target": "fact:d03f6f77"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:decoupling",
+        "target": "fact:447c6ba7"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:4b163a29",
+        "target": "concept:pygame.error"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:4b163a29",
+        "target": "concept:try-except"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:4b163a29",
+        "target": "concept:font_rendering"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:try-except",
+        "target": "fact:4b163a29"
+      },
+      {
+        "rel": "prevents",
+        "weight": 1.0,
+        "source": "concept:try-except",
+        "target": "concept:crash_on_font_load_failure"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:font_rendering",
+        "target": "fact:4b163a29"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:1e03e158",
+        "target": "concept:pygame.surface"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:1e03e158",
+        "target": "concept:scoremanager"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:1e03e158",
+        "target": "concept:render_logic"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:render_logic",
+        "target": "fact:1e03e158"
+      },
+      {
+        "rel": "decoupled_from",
+        "weight": 1.0,
+        "source": "concept:state_logic",
+        "target": "concept:rendering_logic"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:487ca123",
+        "target": "concept:src.config"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:487ca123",
+        "target": "concept:magic_values"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:487ca123",
+        "target": "concept:pygame.font"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:magic_values",
+        "target": "fact:487ca123"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:107e1386",
+        "target": "concept:pygame.display"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:107e1386",
+        "target": "concept:nullpointerexception"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:107e1386",
+        "target": "concept:engine_state"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame.display",
+        "target": "fact:107e1386"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:nullpointerexception",
+        "target": "fact:107e1386"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:engine_state",
+        "target": "fact:107e1386"
+      },
+      {
+        "rel": "causes",
+        "weight": 1.0,
+        "source": "concept:missing_engine_check",
+        "target": "concept:runtime_crash"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a90252d2",
+        "target": "concept:functools.lru_cache"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a90252d2",
+        "target": "concept:disk_io"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a90252d2",
+        "target": "concept:memory_management"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:functools.lru_cache",
+        "target": "fact:a90252d2"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:disk_io",
+        "target": "fact:a90252d2"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:memory_management",
+        "target": "fact:a90252d2"
+      },
+      {
+        "rel": "reduces",
+        "weight": 1.0,
+        "source": "concept:lru_caching",
+        "target": "concept:disk_io"
+      },
+      {
+        "rel": "controls",
+        "weight": 1.0,
+        "source": "concept:lru_caching",
+        "target": "concept:memory_usage"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:e5126e05",
+        "target": "concept:pygame.mixer"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:e5126e05",
+        "target": "concept:lazy_initialization"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:e5126e05",
+        "target": "concept:runtime_error"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame.mixer",
+        "target": "fact:e5126e05"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:lazy_initialization",
+        "target": "fact:e5126e05"
+      },
+      {
+        "rel": "prevents",
+        "weight": 1.0,
+        "source": "concept:lazy_initialization",
+        "target": "concept:runtime_error"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:3baa4881",
+        "target": "concept:pygame.sprite.sprite"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:3baa4881",
+        "target": "concept:baseentity"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:3baa4881",
+        "target": "concept:game_loop"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame.sprite.sprite",
+        "target": "fact:3baa4881"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame.sprite.sprite",
+        "target": "fact:2c6c576a"
+      },
+      {
+        "rel": "enables",
+        "weight": 1.0,
+        "source": "concept:pygame.sprite.sprite",
+        "target": "concept:collision_detection"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame.sprite.sprite",
+        "target": "fact:82d2f462"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame.sprite.sprite",
+        "target": "fact:23c1f270"
+      },
+      {
+        "rel": "enables",
+        "weight": 1.0,
+        "source": "concept:pygame.sprite.sprite",
+        "target": "concept:group-level update()"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame.sprite.sprite",
+        "target": "fact:6ff4a55f"
+      },
+      {
+        "rel": "enables",
+        "weight": 1.0,
+        "source": "concept:pygame.sprite.sprite",
+        "target": "concept:polymorphic_management"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame.sprite.sprite",
+        "target": "fact:6f13606c"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:baseentity",
+        "target": "fact:3baa4881"
+      },
+      {
+        "rel": "inherits_from",
+        "weight": 1.0,
+        "source": "concept:baseentity",
+        "target": "concept:pygame.sprite.sprite"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:baseentity",
+        "target": "fact:1a20b1aa"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:baseentity",
+        "target": "fact:d213aa6d"
+      },
+      {
+        "rel": "standardizes",
+        "weight": 1.0,
+        "source": "concept:baseentity",
+        "target": "concept:game_entities"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:baseentity",
+        "target": "fact:8870efa7"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:baseentity",
+        "target": "fact:9046cb14"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:baseentity",
+        "target": "fact:6fcaaec7"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:game_loop",
+        "target": "fact:3baa4881"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:447c6ba7",
+        "target": "concept:entitystate"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:447c6ba7",
+        "target": "concept:serialization"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:447c6ba7",
+        "target": "concept:decoupling"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:serialization",
+        "target": "fact:447c6ba7"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:serialization",
+        "target": "fact:ef72eb53"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:c1613447",
+        "target": "concept:resourcemanager"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:c1613447",
+        "target": "concept:mocking"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:c1613447",
+        "target": "concept:dependency_injection"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:mocking",
+        "target": "fact:c1613447"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:2c6c576a",
+        "target": "concept:pygame.sprite.sprite"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:2c6c576a",
+        "target": "concept:sprite.update"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:2c6c576a",
+        "target": "concept:sprite.draw"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:sprite.update",
+        "target": "fact:2c6c576a"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:sprite.draw",
+        "target": "fact:2c6c576a"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:collision_detection",
+        "target": "fact:79b61ec7"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:9703934b",
+        "target": "concept:resourcemanager"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:9703934b",
+        "target": "concept:dependency_injection"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:9703934b",
+        "target": "concept:coupling"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:coupling",
+        "target": "fact:9703934b"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ef72eb53",
+        "target": "concept:entitystate"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ef72eb53",
+        "target": "concept:serialization"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ef72eb53",
+        "target": "concept:data-logic-separation"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:data-logic-separation",
+        "target": "fact:ef72eb53"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:82d2f462",
+        "target": "concept:pygame.sprite.sprite"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:82d2f462",
+        "target": "concept:update_loop"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:82d2f462",
+        "target": "concept:self.kill()"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:update_loop",
+        "target": "fact:82d2f462"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:update_loop",
+        "target": "fact:1a20b1aa"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:self.kill()",
+        "target": "fact:82d2f462"
+      },
+      {
+        "rel": "removes_from",
+        "weight": 1.0,
+        "source": "concept:self.kill()",
+        "target": "concept:sprite_groups"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:69948bef",
+        "target": "concept:bullet_speed"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:69948bef",
+        "target": "concept:constants.py"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:bullet_speed",
+        "target": "fact:69948bef"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:bullet_speed",
+        "target": "fact:20788846"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:constants.py",
+        "target": "fact:69948bef"
+      },
+      {
+        "rel": "impedes",
+        "weight": 1.0,
+        "source": "concept:hardcoded_constants",
+        "target": "concept:balancing"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:1a20b1aa",
+        "target": "concept:baseentity"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:1a20b1aa",
+        "target": "concept:kill()"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:1a20b1aa",
+        "target": "concept:update_loop"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:kill()",
+        "target": "fact:1a20b1aa"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:kill()",
+        "target": "fact:6fcaaec7"
+      },
+      {
+        "rel": "reduces",
+        "weight": 1.0,
+        "source": "concept:self_cleanup",
+        "target": "concept:memory_leak"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:20788846",
+        "target": "concept:velocity_vector"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:20788846",
+        "target": "concept:bullet_speed"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:20788846",
+        "target": "concept:frame-rate_independence"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:velocity_vector",
+        "target": "fact:20788846"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:frame-rate_independence",
+        "target": "fact:20788846"
+      },
+      {
+        "rel": "enables",
+        "weight": 1.0,
+        "source": "concept:constant_driven_velocity",
+        "target": "concept:frame-rate_independence"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:81c64be0",
+        "target": "concept:configuration_object"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:81c64be0",
+        "target": "concept:unit_testing"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:81c64be0",
+        "target": "concept:entity_state"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:configuration_object",
+        "target": "fact:81c64be0"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:entity_state",
+        "target": "fact:81c64be0"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:50aeef3e",
+        "target": "concept:player"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:50aeef3e",
+        "target": "concept:boundary_logic"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:50aeef3e",
+        "target": "concept:update_method"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:player",
+        "target": "fact:50aeef3e"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:player",
+        "target": "fact:35447793"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:boundary_logic",
+        "target": "fact:50aeef3e"
+      },
+      {
+        "rel": "contained_in",
+        "weight": 1.0,
+        "source": "concept:boundary_logic",
+        "target": "concept:player"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:update_method",
+        "target": "fact:50aeef3e"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:bd2e7ec2",
+        "target": "concept:bullet"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:bd2e7ec2",
+        "target": "concept:cooldown_mechanism"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:bd2e7ec2",
+        "target": "concept:factory_pattern"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:bullet",
+        "target": "fact:bd2e7ec2"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:cooldown_mechanism",
+        "target": "fact:bd2e7ec2"
+      },
+      {
+        "rel": "prevents",
+        "weight": 1.0,
+        "source": "concept:cooldown_mechanism",
+        "target": "concept:fire_rate_abuse"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:factory_pattern",
+        "target": "fact:bd2e7ec2"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:35447793",
+        "target": "concept:player"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:35447793",
+        "target": "concept:boundary_clamping"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:35447793",
+        "target": "concept:screen_coordinates"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:boundary_clamping",
+        "target": "fact:35447793"
+      },
+      {
+        "rel": "ensures",
+        "weight": 1.0,
+        "source": "concept:boundary_clamping",
+        "target": "concept:player_position_validity"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:screen_coordinates",
+        "target": "fact:35447793"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:cb290f86",
+        "target": "concept:cooldown_manager"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:cb290f86",
+        "target": "concept:timestamp"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:cb290f86",
+        "target": "concept:frame_rate_independence"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:cooldown_manager",
+        "target": "fact:cb290f86"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:timestamp",
+        "target": "fact:cb290f86"
+      },
+      {
+        "rel": "enables",
+        "weight": 1.0,
+        "source": "concept:timestamp",
+        "target": "concept:frame_rate_independence"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:frame_rate_independence",
+        "target": "fact:cb290f86"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:d213aa6d",
+        "target": "concept:baseentity"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:d213aa6d",
+        "target": "concept:inheritance"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:d213aa6d",
+        "target": "concept:polymorphism"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:inheritance",
+        "target": "fact:d213aa6d"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:inheritance",
+        "target": "fact:23c1f270"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:polymorphism",
+        "target": "fact:d213aa6d"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:8870efa7",
+        "target": "concept:delta_time"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:8870efa7",
+        "target": "concept:movement_logic"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:8870efa7",
+        "target": "concept:baseentity"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:delta_time",
+        "target": "fact:8870efa7"
+      },
+      {
+        "rel": "enables",
+        "weight": 1.0,
+        "source": "concept:delta_time",
+        "target": "concept:frame_independent_motion"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:movement_logic",
+        "target": "fact:8870efa7"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:9046cb14",
+        "target": "concept:boundary_checks"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:9046cb14",
+        "target": "concept:baseentity"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:9046cb14",
+        "target": "concept:kill_signal"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:boundary_checks",
+        "target": "fact:9046cb14"
+      },
+      {
+        "rel": "triggers",
+        "weight": 1.0,
+        "source": "concept:boundary_checks",
+        "target": "concept:self_removal"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:kill_signal",
+        "target": "fact:9046cb14"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:6fcaaec7",
+        "target": "concept:baseentity"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:6fcaaec7",
+        "target": "concept:update()"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:6fcaaec7",
+        "target": "concept:kill()"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:6fcaaec7",
+        "target": "concept:screen_height"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:update()",
+        "target": "fact:6fcaaec7"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:update()",
+        "target": "fact:80816f18"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:screen_height",
+        "target": "fact:6fcaaec7"
+      },
+      {
+        "rel": "triggers",
+        "weight": 1.0,
+        "source": "concept:out-of-bounds-position",
+        "target": "concept:kill()"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ace16432",
+        "target": "concept:config.py"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ace16432",
+        "target": "concept:enemy"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ace16432",
+        "target": "concept:hardcoding"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:enemy",
+        "target": "fact:ace16432"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:hardcoding",
+        "target": "fact:ace16432"
+      },
+      {
+        "rel": "enables",
+        "weight": 1.0,
+        "source": "concept:centralized-config",
+        "target": "concept:modular-balancing"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:fe31c0bf",
+        "target": "concept:pygame.sprite.group"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:fe31c0bf",
+        "target": "concept:pygame.sprite.groupcollide"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:fe31c0bf",
+        "target": "concept:collide_mask"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame.sprite.group",
+        "target": "fact:fe31c0bf"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame.sprite.group",
+        "target": "fact:6054b7c0"
+      },
+      {
+        "rel": "optimizes",
+        "weight": 1.0,
+        "source": "concept:pygame.sprite.group",
+        "target": "concept:rendering"
+      },
+      {
+        "rel": "simplifies",
+        "weight": 1.0,
+        "source": "concept:pygame.sprite.group",
+        "target": "concept:entity lifecycle"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame.sprite.group",
+        "target": "fact:80816f18"
+      },
+      {
+        "rel": "optimizes",
+        "weight": 1.0,
+        "source": "concept:pygame.sprite.group",
+        "target": "concept:rendering_cycle"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame.sprite.groupcollide",
+        "target": "fact:fe31c0bf"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame.sprite.groupcollide",
+        "target": "fact:79b61ec7"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:collide_mask",
+        "target": "fact:fe31c0bf"
+      },
+      {
+        "rel": "enables",
+        "weight": 1.0,
+        "source": "concept:collide_mask",
+        "target": "concept:pixel-perfect detection"
+      },
+      {
+        "rel": "improves",
+        "weight": 1.0,
+        "source": "concept:group",
+        "target": "concept:collision processing speed"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:7eeead82",
+        "target": "concept:pygame.sprite"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:7eeead82",
+        "target": "concept:dokill"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:7eeead82",
+        "target": "concept:api_signature"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame.sprite",
+        "target": "fact:7eeead82"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:dokill",
+        "target": "fact:7eeead82"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:dokill",
+        "target": "fact:79b61ec7"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:api_signature",
+        "target": "fact:7eeead82"
+      },
+      {
+        "rel": "causes",
+        "weight": 1.0,
+        "source": "concept:mismatched_parameters",
+        "target": "concept:runtime_errors"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:6054b7c0",
+        "target": "concept:pygame.sprite.group"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:6054b7c0",
+        "target": "concept:entity lifecycle"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:6054b7c0",
+        "target": "concept:rendering"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:entity lifecycle",
+        "target": "fact:6054b7c0"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:rendering",
+        "target": "fact:6054b7c0"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:23c1f270",
+        "target": "concept:pygame.sprite.sprite"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:23c1f270",
+        "target": "concept:attributeerror"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:23c1f270",
+        "target": "concept:inheritance"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:attributeerror",
+        "target": "fact:23c1f270"
+      },
+      {
+        "rel": "causes",
+        "weight": 1.0,
+        "source": "concept:missing_inheritance",
+        "target": "concept:attributeerror"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:80816f18",
+        "target": "concept:pygame.sprite.group"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:80816f18",
+        "target": "concept:update()"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:80816f18",
+        "target": "concept:draw()"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:draw()",
+        "target": "fact:80816f18"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:6ff4a55f",
+        "target": "concept:pygame.sprite.sprite"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:6ff4a55f",
+        "target": "concept:entitymanager"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:6ff4a55f",
+        "target": "concept:ducktyping"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:entitymanager",
+        "target": "fact:6ff4a55f"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:entitymanager",
+        "target": "fact:ec48e49e"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:entitymanager",
+        "target": "fact:2d6414a0"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:ducktyping",
+        "target": "fact:6ff4a55f"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:79b61ec7",
+        "target": "concept:pygame.sprite.groupcollide"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:79b61ec7",
+        "target": "concept:dokill"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:79b61ec7",
+        "target": "concept:collision_detection"
+      },
+      {
+        "rel": "optimizes",
+        "weight": 1.0,
+        "source": "concept:groupcollide",
+        "target": "concept:manual_iteration_logic"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:6f13606c",
+        "target": "concept:pygame.mask"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:6f13606c",
+        "target": "concept:pygame.sprite.sprite"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:6f13606c",
+        "target": "concept:bounding_box"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame.mask",
+        "target": "fact:6f13606c"
+      },
+      {
+        "rel": "improves",
+        "weight": 1.0,
+        "source": "concept:pygame.mask",
+        "target": "concept:collision_precision"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:bounding_box",
+        "target": "fact:6f13606c"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:60efe345",
+        "target": "concept:collisionsystem"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:60efe345",
+        "target": "concept:scoremanager"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:60efe345",
+        "target": "concept:observerpattern"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:collisionsystem",
+        "target": "fact:60efe345"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:collisionsystem",
+        "target": "fact:0702b56e"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:collisionsystem",
+        "target": "fact:bfa5b249"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:observerpattern",
+        "target": "fact:60efe345"
+      },
+      {
+        "rel": "reduces",
+        "weight": 1.0,
+        "source": "concept:observerpattern",
+        "target": "concept:system_coupling"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ec48e49e",
+        "target": "concept:pygame.time.clock"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ec48e49e",
+        "target": "concept:entitymanager"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ec48e49e",
+        "target": "concept:gameloop"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pygame.time.clock",
+        "target": "fact:ec48e49e"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:gameloop",
+        "target": "fact:ec48e49e"
+      },
+      {
+        "rel": "delegates_to",
+        "weight": 1.0,
+        "source": "concept:gameloop",
+        "target": "concept:entitymanager"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:0702b56e",
+        "target": "concept:resourcemanager"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:0702b56e",
+        "target": "concept:collisionsystem"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:0702b56e",
+        "target": "concept:initializationphase"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:initializationphase",
+        "target": "fact:0702b56e"
+      },
+      {
+        "rel": "must_precede",
+        "weight": 1.0,
+        "source": "concept:systemmanagers",
+        "target": "concept:mainloop"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:2d6414a0",
+        "target": "concept:gameengine"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:2d6414a0",
+        "target": "concept:entitymanager"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:2d6414a0",
+        "target": "concept:inputhandler"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:2d6414a0",
+        "target": "concept:dependency injection"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:gameengine",
+        "target": "fact:2d6414a0"
+      },
+      {
+        "rel": "orchestrates",
+        "weight": 1.0,
+        "source": "concept:gameengine",
+        "target": "concept:entitymanager"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:gameengine",
+        "target": "fact:3f0b5689"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:dependency injection",
+        "target": "fact:2d6414a0"
+      },
+      {
+        "rel": "facilitates",
+        "weight": 1.0,
+        "source": "concept:dependency injection",
+        "target": "concept:unit testing"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:781fd694",
+        "target": "concept:game loop"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:781fd694",
+        "target": "concept:delta time"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:781fd694",
+        "target": "concept:fps"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:781fd694",
+        "target": "concept:hardware variability"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:game loop",
+        "target": "fact:781fd694"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:delta time",
+        "target": "fact:781fd694"
+      },
+      {
+        "rel": "stabilizes",
+        "weight": 1.0,
+        "source": "concept:delta time",
+        "target": "concept:physics consistency"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:fps",
+        "target": "fact:781fd694"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:hardware variability",
+        "target": "fact:781fd694"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:3f0b5689",
+        "target": "concept:abstract base classes"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:3f0b5689",
+        "target": "concept:gameengine"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:3f0b5689",
+        "target": "concept:runtime error"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:abstract base classes",
+        "target": "fact:3f0b5689"
+      },
+      {
+        "rel": "prevents",
+        "weight": 1.0,
+        "source": "concept:abstract base classes",
+        "target": "concept:attributeerror"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:runtime error",
+        "target": "fact:3f0b5689"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:3b7e3ee9",
+        "target": "concept:pygame"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:3b7e3ee9",
+        "target": "concept:sdl_videodriver"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:3b7e3ee9",
+        "target": "concept:headless_mode"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:sdl_videodriver",
+        "target": "fact:3b7e3ee9"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:headless_mode",
+        "target": "fact:3b7e3ee9"
+      },
+      {
+        "rel": "prevents",
+        "weight": 1.0,
+        "source": "concept:headless_mode",
+        "target": "concept:display_initialization_error"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:bfa5b249",
+        "target": "concept:dependencyinjection"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:bfa5b249",
+        "target": "concept:scoremanager"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:bfa5b249",
+        "target": "concept:collisionsystem"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:dependencyinjection",
+        "target": "fact:bfa5b249"
+      },
+      {
+        "rel": "enables",
+        "weight": 1.0,
+        "source": "concept:dependencyinjection",
+        "target": "concept:testability"
+      }
+    ]
+  }
+}

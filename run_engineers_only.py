@@ -8,9 +8,9 @@ Just the engineering manager + 8 developers building from a task brief.
 Usage:
     python run_engineers_only.py
     python run_engineers_only.py "Build a REST API for a notes app with CRUD"
+    python run_engineers_only.py "Build a pygame shooter" --sprints 3
     python run_engineers_only.py -f prompts/engineers_only_full_task_template.txt
-    python run_engineers_only.py -f prompts/engineers_only_tkinter_docker_gui.txt
-    python run_engineers_only.py --file prompts/engineers_only_full_task_template.txt
+    python run_engineers_only.py -f prompts/task.txt --sprints 2
 
 Output goes to: eng_output/code/  and  eng_output/tests/
 """
@@ -18,51 +18,25 @@ Output goes to: eng_output/code/  and  eng_output/tests/
 import sys
 import time
 import logging
+import argparse
+import shutil
+import stat
+import os
 import numpy as np
 from pathlib import Path
 
 # ── Override output dir before importing software_company ─────────────────────
-# We use a separate folder so we don't pollute company_output/
-import os
-import shutil
-import stat
 import software_company as sc
 
 sc.OUTPUT_DIR = Path("eng_output")
-
-# Clear code/ and config/ from prior runs so stale files don't block fresh agents.
-# (The hard file-existence guard in write_code_file would otherwise block round-1
-#  agents from writing files that were left over from a previous test run.)
-def _on_rm_error(func, path, exc_info):
-    # Clear the read-only bit and retry
-    os.chmod(path, stat.S_IWRITE)
-    func(path)
-
-for _subdir in ("code", "config", "tests", "design"):
-    _p = sc.OUTPUT_DIR / _subdir
-    if _p.exists():
-        shutil.rmtree(_p, onexc=_on_rm_error)
-
-sc.OUTPUT_DIR.mkdir(exist_ok=True)
-(sc.OUTPUT_DIR / "code").mkdir(exist_ok=True)
-(sc.OUTPUT_DIR / "tests").mkdir(exist_ok=True)
-(sc.OUTPUT_DIR / "design").mkdir(exist_ok=True)
-(sc.OUTPUT_DIR / "config").mkdir(exist_ok=True)
-
-# Also reset the dashboard save path so it writes to eng_output
 sc.WorkDashboard.SAVE_PATH = sc.OUTPUT_DIR / "WORK_DASHBOARD.json"
-sc._dashboard = None   # force fresh dashboard
-sc.reset_contracts()   # force fresh contract registry
-
-# ── Reduce rounds for a quick but meaningful run ─────────────────────────────
-sc.MAX_ENG_ROUNDS = 2   # 2 rounds: implement + integrate
 
 from software_company import (
-    ENG_WORKERS, ROLES, RollingContext,
-    run_engineering_team, token_summary,
-    ActiveInferenceState, HYPOTHESES, ROLE_PRIOR,
+    ENG_WORKERS, RollingContext, run_engineering_team,
+    token_summary, ActiveInferenceState, HYPOTHESES, ROLE_PRIOR,
     extract_stance_probs, STANCES,
 )
+from software_company.engineering import run_sprint_retrospective
 
 logging.basicConfig(
     level=logging.INFO,
@@ -81,104 +55,165 @@ _DEFAULT_TASK = (
     "Keep it minimal and completable in 2 rounds."
 )
 
-
-def _parse_task(argv: list) -> str:
-    if len(argv) < 2:
-        return _DEFAULT_TASK
-    if argv[1] in ("-h", "--help"):
-        print(__doc__)
-        raise SystemExit(0)
-    if argv[1] in ("-f", "--file"):
-        if len(argv) < 3:
-            print("ERROR: -f/--file requires a path", file=sys.stderr)
-            raise SystemExit(2)
-        path = Path(argv[2])
-        if not path.is_file():
-            print(f"ERROR: task file not found: {path}", file=sys.stderr)
-            raise SystemExit(2)
-        return path.read_text(encoding="utf-8").strip()
-    return " ".join(argv[1:]).strip() or _DEFAULT_TASK
+_ON_RM_ERROR = lambda func, path, exc: (os.chmod(path, stat.S_IWRITE), func(path))
 
 
-TASK = _parse_task(sys.argv)
+def _wipe_output_dir() -> None:
+    """Remove all subdirs so stale files don't block fresh agents."""
+    for subdir in ("code", "config", "tests", "design"):
+        p = sc.OUTPUT_DIR / subdir
+        if p.exists():
+            shutil.rmtree(p, onexc=_ON_RM_ERROR)
+    sc.OUTPUT_DIR.mkdir(exist_ok=True)
+    for subdir in ("code", "tests", "design", "config"):
+        (sc.OUTPUT_DIR / subdir).mkdir(exist_ok=True)
+
+
+def _reset_between_sprints() -> None:
+    """Reset planning state between sprints. Keep code/ so engineers build on prior work."""
+    sc.reset_contracts()
+    sc._dashboard = None
+
+    # Remove stale planning artifacts (will be regenerated for new goal)
+    for fname in ("task_queue_state.json", "TASK_TREE.json", "COMPONENT_GRAPH.json"):
+        p = sc.OUTPUT_DIR / fname
+        if p.exists():
+            p.unlink()
+
+    # Clear design/ and config/ — re-planned each sprint; code/ stays intact
+    for subdir in ("design", "config"):
+        d = sc.OUTPUT_DIR / subdir
+        if d.exists():
+            shutil.rmtree(d, onexc=_ON_RM_ERROR)
+        d.mkdir(exist_ok=True)
+
+
+def _print_sprint_summary(sprint_num: int, result, elapsed: float, health_states: dict) -> None:
+    n_devs = len(ENG_WORKERS)
+    stable_threshold = 1.5 * n_devs
+    print(f"\n{'='*60}")
+    print(f"  SPRINT {sprint_num} RESULTS")
+    print(f"{'='*60}")
+    print(f"  H_swarm:    {result.H_swarm:.3f}  ({'stable' if result.H_swarm < stable_threshold else 'ELEVATED'})")
+    print(f"  Confidence: {result.confidence:.0%}")
+    print(f"  Consensus:  {result.consensus_stance.upper()}")
+    print(f"  Duration:   {elapsed:.0f}s")
+    print(f"  Tokens:     {token_summary()}")
+
+    print(f"\n  Files written:")
+    written = sorted(
+        f for f in sc.OUTPUT_DIR.rglob("*")
+        if f.is_file()
+        and f.name != "WORK_DASHBOARD.json"
+        and ".git" not in f.parts
+        and "__pycache__" not in f.parts
+        and f.suffix != ".pyc"
+    )
+    for f in written:
+        rel = str(f.relative_to(sc.OUTPUT_DIR))
+        print(f"    {rel:<45} {f.stat().st_size:>6} bytes")
+
+    print(f"\n  Manager synthesis:")
+    print(f"  {result.manager_synthesis[:600].replace(chr(10), chr(10)+'  ')}")
+
+    print(f"\n  Developer health:")
+    print(f"  {'Dev':<10} {'F_health':>10}  {'Anomaly':>8}  {'Stance':<12}")
+    print(f"  {'─'*46}")
+    worker_by_dev = {w.role: w for w in result.worker_outputs}
+    for dev in ENG_WORKERS:
+        F = health_states[dev].free_energy()
+        an = "YES" if health_states[dev].is_anomaly() else "no"
+        wo = worker_by_dev.get(dev)
+        stance = STANCES[int(np.argmax(wo.stance_probs))] if wo else "unknown"
+        print(f"  {dev:<10} {F:>10.3f}  {an:>8}  {stance:<12}")
 
 
 def main():
-    print("\n" + "="*60)
-    print("  ENGINEERING TEAM — LIVE RUN")
-    print(f"  {len(ENG_WORKERS)} developers | {sc.MAX_ENG_ROUNDS} rounds | gemini-2.0-flash")
-    print("="*60)
-    print(f"\nTASK:\n{TASK}\n")
-    print(f"Output → {sc.OUTPUT_DIR.resolve()}/\n")
-    print("─"*60)
+    parser = argparse.ArgumentParser(
+        description="Run the engineering team for N sprints.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__,
+    )
+    parser.add_argument("task", nargs="?", default=None,
+                        help="Task description (inline string)")
+    parser.add_argument("-f", "--file", metavar="PATH",
+                        help="Read task from a file instead")
+    parser.add_argument("-s", "--sprints", type=int, default=1, metavar="N",
+                        help="Number of sprints to run (default: 1)")
+    args = parser.parse_args()
 
+    # Resolve task
+    if args.file:
+        path = Path(args.file)
+        if not path.is_file():
+            print(f"ERROR: task file not found: {path}", file=sys.stderr)
+            sys.exit(2)
+        original_goal = path.read_text(encoding="utf-8").strip()
+    elif args.task:
+        original_goal = args.task.strip()
+    else:
+        original_goal = _DEFAULT_TASK
+
+    num_sprints = max(1, args.sprints)
+    sc.MAX_ENG_ROUNDS = 2
+
+    # Initial wipe (fresh start)
+    _wipe_output_dir()
+    sc._dashboard = None
+    sc.reset_contracts()
+
+    print(f"\n{'='*60}")
+    print(f"  ENGINEERING TEAM — {num_sprints} SPRINT{'S' if num_sprints > 1 else ''}")
+    print(f"  {len(ENG_WORKERS)} developers | {sc.MAX_ENG_ROUNDS} rounds/sprint")
+    print(f"{'='*60}")
+    print(f"\nORIGINAL GOAL:\n{original_goal}\n")
+    print(f"Output -> {sc.OUTPUT_DIR.resolve()}/\n{'─'*60}")
+
+    # Shared across all sprints — team memory accumulates
     rolling_ctxs = {k: RollingContext() for k in ENG_WORKERS + ["eng_manager"]}
     health_states = {
         k: ActiveInferenceState(HYPOTHESES, ROLE_PRIOR)
         for k in ENG_WORKERS + ["eng_manager"]
     }
 
-    t0 = time.time()
-    result = run_engineering_team(
-        task=TASK,
-        rolling_ctxs=rolling_ctxs,
-        health_states=health_states,
-        sprint_num=1,
-    )
-    elapsed = time.time() - t0
+    current_goal = original_goal
+    total_start = time.time()
 
-    # ── Results summary ───────────────────────────────────────────────────────
-    print("\n" + "="*60)
-    print("  RESULTS")
-    print("="*60)
-    n_devs = len(ENG_WORKERS)
-    stable_threshold = 1.5 * n_devs
-    print(f"\nH_swarm:    {result.H_swarm:.3f}  ({'stable' if result.H_swarm < stable_threshold else 'ELEVATED ⚠'})")
-    print(f"Confidence: {result.confidence:.0%}")
-    print(f"Consensus:  {result.consensus_stance.upper()}")
-    print(f"Duration:   {elapsed:.0f}s")
-    print(f"Tokens:     {token_summary()}")
+    for sprint_num in range(1, num_sprints + 1):
+        print(f"\n{'='*60}")
+        print(f"  SPRINT {sprint_num} / {num_sprints}")
+        print(f"  GOAL: {current_goal[:120]}{'...' if len(current_goal) > 120 else ''}")
+        print(f"{'='*60}\n")
 
-    # ── What was written ──────────────────────────────────────────────────────
-    print("\n── Files written ──────────────────────────────────────────")
-    all_files = list(sc.OUTPUT_DIR.rglob("*"))
-    written = [
-        f for f in all_files
-        if f.is_file()
-        and f.name != "WORK_DASHBOARD.json"
-        and ".git" not in f.parts
-        and "__pycache__" not in f.parts
-        and not f.suffix == ".pyc"
-    ]
-    if written:
-        for f in sorted(written):
-            rel = str(f.relative_to(sc.OUTPUT_DIR))   # str() required for format spec on Windows
-            size = f.stat().st_size
-            print(f"  {rel:<45} {size:>6} bytes")
-    else:
-        print("  (no files written)")
+        t0 = time.time()
+        result = run_engineering_team(
+            task=current_goal,
+            rolling_ctxs=rolling_ctxs,
+            health_states=health_states,
+            sprint_num=sprint_num,
+        )
+        elapsed = time.time() - t0
 
-    # ── Manager synthesis ─────────────────────────────────────────────────────
-    print("\n── Manager synthesis ──────────────────────────────────────")
-    print(result.manager_synthesis[:1200])
+        _print_sprint_summary(sprint_num, result, elapsed, health_states)
 
-    # ── Per-dev health ────────────────────────────────────────────────────────
-    print("\n── Developer health ───────────────────────────────────────")
-    print(f"  {'Dev':<10} {'F_health':>10}  {'Anomaly':>8}  {'Stance':<12}")
-    print(f"  {'─'*46}")
-    # Index worker_outputs by role key for fast lookup
-    worker_out_by_dev = {w.role: w for w in result.worker_outputs}
-    for dev in ENG_WORKERS:
-        F  = health_states[dev].free_energy()
-        an = "⚠ YES" if health_states[dev].is_anomaly() else "no"
-        # Use stance from WorkerOutput (derived from actual agent output, not rolling context)
-        wo = worker_out_by_dev.get(dev)
-        stance = STANCES[int(np.argmax(wo.stance_probs))] if wo else "unknown"
-        print(f"  {dev:<10} {F:>10.3f}  {an:>8}  {stance:<12}")
+        if sprint_num < num_sprints:
+            print(f"\n{'─'*60}")
+            print(f"  Retrospective: manager reviewing sprint {sprint_num} output...")
+            print(f"{'─'*60}")
+            _reset_between_sprints()
+            current_goal = run_sprint_retrospective(
+                original_goal=original_goal,
+                prev_result=result,
+                sprint_num=sprint_num,
+            )
+            print(f"\n  SPRINT {sprint_num + 1} GOAL:\n  {current_goal[:400]}\n")
 
-    print("\n" + "="*60)
-    print(f"  Done. Open eng_output/code/ to review the generated code.")
-    print("="*60 + "\n")
+    total_elapsed = time.time() - total_start
+    print(f"\n{'='*60}")
+    print(f"  ALL {num_sprints} SPRINT{'S' if num_sprints > 1 else ''} COMPLETE")
+    print(f"  Total time: {total_elapsed:.0f}s  |  Tokens: {token_summary()}")
+    print(f"  Code: {sc.OUTPUT_DIR.resolve()}/code/")
+    print(f"{'='*60}\n")
 
 
 if __name__ == "__main__":

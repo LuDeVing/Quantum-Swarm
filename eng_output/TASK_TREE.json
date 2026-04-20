@@ -1,0 +1,67 @@
+{
+  "sprint": 1,
+  "goal": "Build a 2D space shooter game in pygame with a player ship, enemy waves, bullets, collision detection, score tracking, and a game over screen",
+  "root_id": "7e129ca4",
+  "nodes": {
+    "7e129ca4": {
+      "id": "7e129ca4",
+      "name": "Sprint Goal",
+      "description": "Build a 2D space shooter game in pygame with a player ship, enemy waves, bullets, collision detection, score tracking, and a game over screen",
+      "parent_id": null,
+      "depth": 0,
+      "is_atomic": false,
+      "suggested_file": null,
+      "complexity": "high",
+      "children": [
+        "d3292c8d",
+        "44ba58ec",
+        "1b813172",
+        "9d78fe3f"
+      ]
+    },
+    "d3292c8d": {
+      "id": "d3292c8d",
+      "name": "Game Engine Core",
+      "description": "Initialize pygame, main event loop, display handling, and game state management.",
+      "parent_id": "7e129ca4",
+      "depth": 1,
+      "is_atomic": true,
+      "suggested_file": "main.py",
+      "complexity": "medium",
+      "children": []
+    },
+    "44ba58ec": {
+      "id": "44ba58ec",
+      "name": "Entity Logic",
+      "description": "Implement player ship movement, bullet mechanics, and enemy wave spawning logic.",
+      "parent_id": "7e129ca4",
+      "depth": 1,
+      "is_atomic": true,
+      "suggested_file": "entities.py",
+      "complexity": "medium",
+      "children": []
+    },
+    "1b813172": {
+      "id": "1b813172",
+      "name": "Physics and Collision",
+      "description": "Handle coordinate math, hitbox detection, and resolution of projectile-enemy interactions.",
+      "parent_id": "7e129ca4",
+      "depth": 1,
+      "is_atomic": true,
+      "suggested_file": "physics.py",
+      "complexity": "low",
+      "children": []
+    },
+    "9d78fe3f": {
+      "id": "9d78fe3f",
+      "name": "UI and Scoring",
+      "description": "Manage text rendering for score tracking and the game-over screen overlay.",
+      "parent_id": "7e129ca4",
+      "depth": 1,
+      "is_atomic": true,
+      "suggested_file": "ui.py",
+      "complexity": "low",
+      "children": []
+    }
+  }
+}

@@ -81,3 +81,6 @@ class EngTask:
     primary_owner: Optional[str] = None
     phase: int = PHASE_IMPLEMENTATION
     waiting_for: List[str] = field(default_factory=list)
+    component_id: Optional[str] = None
+    component_graph_snapshot: Optional[dict] = None
+    depth: int = 0  # 0 = leaf (no dependencies), higher = closer to root
