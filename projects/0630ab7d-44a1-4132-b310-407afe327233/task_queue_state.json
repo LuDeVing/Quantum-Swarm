@@ -1,0 +1,218 @@
+{
+  "tasks": {
+    "task_comp_comp_001_p1": {
+      "id": "task_comp_comp_001_p1",
+      "file": "src/config.py",
+      "description": "PHASE 1: Implement AppConfig (src/config.py)\nThis module acts as the centralized source of truth for all application configuration, constants, and environment settings. It manages static application metadata such as window dimensions, theme constants, and default application paths, providing a single point of truth to avoid magic values across the GUI layers.\n\nREQUIRED PUBLIC INTERFACE:\nConstants: APP_TITLE: str = 'Quantum Task Manager', DEFAULT_WIDTH: int = 800, DEFAULT_HEIGHT: int = 600, THEME_COLOR: str = '#2E3440'",
+      "depends_on": [],
+      "assigned_to": "dev_1",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_002_p1": {
+      "id": "task_comp_comp_002_p1",
+      "file": "src/models/task.py",
+      "description": "PHASE 1: Implement TaskModel (src/models/task.py)\nDefines the core data schema for a task entity within the application. It encapsulates the task's state using Python dataclasses to ensure type safety, consistency, and easy serialization when saving or loading data from the persistence layer.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: Task\nFunctions:\n  Task.__init__(self, id: str, title: str, completed: bool = False) -> None\nConstants: id: str, title: str, completed: bool = False",
+      "depends_on": [],
+      "assigned_to": "dev_2",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_008_p1": {
+      "id": "task_comp_comp_008_p1",
+      "file": "src/ui/components/input_view.py",
+      "description": "PHASE 1: Implement TaskInputView (src/ui/components/input_view.py)\nProvides a user interface widget for accepting input for new tasks. It handles validation of the input string and exposes an event or signal when the user successfully submits a new task title.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: TaskInputView\nFunctions:\n  TaskInputView.__init__(self, parent: object) -> None\n  TaskInputView.get_text(self) -> str\n  TaskInputView.clear(self) -> None",
+      "depends_on": [],
+      "assigned_to": "dev_3",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_012_p1": {
+      "id": "task_comp_comp_012_p1",
+      "file": "src/utils/event_bus.py",
+      "description": "PHASE 1: Implement EventBus (src/utils/event_bus.py)\nA centralized messaging component that implements the Observer pattern to facilitate decoupled communication between UI components and the controller. It prevents circular dependencies by allowing components to publish events and subscribe to signals without direct references to each other.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: EventBus\nFunctions:\n  EventBus.subscribe(self, event_name: str, callback: callable) -> None\n  EventBus.emit(self, event_name: str, data: any) -> None",
+      "depends_on": [],
+      "assigned_to": "dev_4",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_005_p1": {
+      "id": "task_comp_comp_005_p1",
+      "file": "src/utils/theme.py",
+      "description": "PHASE 1: Implement ThemeManager (src/utils/theme.py)\nProvides utility functions to manage and apply application-wide styling and color schemes to GUI components. It ensures visual consistency by translating abstract theme constants into concrete widget configurations, facilitating easy skinning of the application.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: ThemeManager\nFunctions:\n  ThemeManager.__init__(self) -> None\n  ThemeManager.apply_theme(self, widget: object) -> None",
+      "depends_on": [
+        "task_comp_comp_001_p1"
+      ],
+      "assigned_to": "dev_2",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_003_p1": {
+      "id": "task_comp_comp_003_p1",
+      "file": "src/data/repository.py",
+      "description": "PHASE 1: Implement TaskRepository (src/data/repository.py)\nHandles all CRUD operations for task entities, abstracting the persistence layer from the business logic. It provides methods to fetch, add, update, and remove tasks, ensuring that the rest of the application interacts with a consistent interface regardless of the underlying storage mechanism.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: TaskRepository\nFunctions:\n  TaskRepository.__init__(self, storage_path: str) -> None\n  TaskRepository.get_all(self) -> list[Task]\n  TaskRepository.add_task(self, task: Task) -> None\n  TaskRepository.remove_task(self, task_id: str) -> None",
+      "depends_on": [
+        "task_comp_comp_002_p1"
+      ],
+      "assigned_to": "dev_1",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_007_p1": {
+      "id": "task_comp_comp_007_p1",
+      "file": "src/ui/components/list_view.py",
+      "description": "PHASE 1: Implement TaskListView (src/ui/components/list_view.py)\nA specific UI component responsible for rendering the list of tasks and reacting to user interaction within that list. It encapsulates the drawing logic for task items, selection handling, and event dispatching for task modifications.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: TaskListView\nFunctions:\n  TaskListView.__init__(self, parent: object) -> None\n  TaskListView.update_list(self, tasks: list[Task]) -> None",
+      "depends_on": [
+        "task_comp_comp_002_p1"
+      ],
+      "assigned_to": "dev_3",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_006_p1": {
+      "id": "task_comp_comp_006_p1",
+      "file": "src/ui/layout.py",
+      "description": "PHASE 1: Implement MainLayout (src/ui/layout.py)\nDefines the primary graphical container and top-level structure of the desktop application. It composes child UI components, handles window-level events, and establishes the grid or box layout that organizes all functional widgets within the main window.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: MainLayout\nFunctions:\n  MainLayout.__init__(self, parent: object) -> None\n  MainLayout.setup_ui(self) -> None",
+      "depends_on": [
+        "task_comp_comp_001_p1",
+        "task_comp_comp_005_p1"
+      ],
+      "assigned_to": "dev_2",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_004_p1": {
+      "id": "task_comp_comp_004_p1",
+      "file": "src/services/task_service.py",
+      "description": "PHASE 1: Implement TaskService (src/services/task_service.py)\nContains the business logic layer that orchestrates interaction between the UI and the repository. It validates task data, processes state transitions, and notifies the UI layer of any relevant updates to the task list, maintaining a clean separation of concerns.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: TaskService\nFunctions:\n  TaskService.__init__(self, repository: TaskRepository) -> None\n  TaskService.create_task(self, title: str) -> Task\n  TaskService.toggle_task(self, task_id: str) -> None\n  TaskService.list_tasks(self) -> list[Task]",
+      "depends_on": [
+        "task_comp_comp_002_p1",
+        "task_comp_comp_003_p1"
+      ],
+      "assigned_to": "dev_1",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_009_p1": {
+      "id": "task_comp_comp_009_p1",
+      "file": "src/controller.py",
+      "description": "PHASE 1: Implement AppController (src/controller.py)\nActs as the central coordinator between the UI layer and the business logic layer. It receives signals from the interface components, triggers actions on the service, and updates the views accordingly, managing the application's event loop via the EventBus.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: AppController\nFunctions:\n  AppController.__init__(self, view: MainLayout, service: TaskService, bus: EventBus) -> None\n  AppController.handle_add_task(self) -> None\n  AppController.handle_toggle_task(self, task_id: str) -> None",
+      "depends_on": [
+        "task_comp_comp_004_p1",
+        "task_comp_comp_006_p1",
+        "task_comp_comp_007_p1",
+        "task_comp_comp_008_p1",
+        "task_comp_comp_012_p1"
+      ],
+      "assigned_to": "dev_1",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_010_p1": {
+      "id": "task_comp_comp_010_p1",
+      "file": "src/ui/main_window.py",
+      "description": "PHASE 1: Implement MainWindow (src/ui/main_window.py)\nThe top-level window class that initializes the application UI environment. It sets up the main loop and ties the controller to the specific layout and components, acting as the primary entry point for the GUI application execution.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: MainWindow\nFunctions:\n  MainWindow.__init__(self) -> None\n  MainWindow.run(self) -> None",
+      "depends_on": [
+        "task_comp_comp_001_p1",
+        "task_comp_comp_006_p1",
+        "task_comp_comp_007_p1",
+        "task_comp_comp_008_p1",
+        "task_comp_comp_009_p1"
+      ],
+      "assigned_to": "dev_1",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_011_p1": {
+      "id": "task_comp_comp_011_p1",
+      "file": "tests/integration.py",
+      "description": "PHASE 1: Implement IntegrationTester (tests/integration.py)\nDefines the suite of automated tests for verifying full end-to-end functionality of the application. It simulates user interactions to ensure the Controller, Service, and Repository layers correctly handle state updates across the stack.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: IntegrationTester\nFunctions:\n  IntegrationTester.run_all(self) -> bool",
+      "depends_on": [
+        "task_comp_comp_003_p1",
+        "task_comp_comp_004_p1",
+        "task_comp_comp_009_p1"
+      ],
+      "assigned_to": "dev_2",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_013_p1": {
+      "id": "task_comp_comp_013_p1",
+      "file": "tests/runner.py",
+      "description": "PHASE 1: Implement TestRunner (tests/runner.py)\nProvides the primary entry point for executing the application's test suite, including unit, integration, and UI tests. It manages test discovery, environment setup, and report generation to ensure continuous quality during development.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: TestRunner\nFunctions:\n  TestRunner.execute(self) -> None",
+      "depends_on": [
+        "task_comp_comp_011_p1"
+      ],
+      "assigned_to": "dev_1",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_integration_test": {
+      "id": "task_integration_test",
+      "file": "__integration__",
+      "description": "Final integration: final build check and smoke tests",
+      "depends_on": [
+        "task_comp_comp_001_p1",
+        "task_comp_comp_002_p1",
+        "task_comp_comp_008_p1",
+        "task_comp_comp_012_p1",
+        "task_comp_comp_005_p1",
+        "task_comp_comp_003_p1",
+        "task_comp_comp_007_p1",
+        "task_comp_comp_006_p1",
+        "task_comp_comp_004_p1",
+        "task_comp_comp_009_p1",
+        "task_comp_comp_010_p1",
+        "task_comp_comp_011_p1",
+        "task_comp_comp_013_p1"
+      ],
+      "assigned_to": null,
+      "status": "failed",
+      "retries": 0,
+      "phase": 2,
+      "waiting_for": []
+    }
+  },
+  "completed_tasks": [
+    "task_comp_comp_008_p1",
+    "task_comp_comp_005_p1",
+    "task_comp_comp_007_p1",
+    "task_comp_comp_003_p1",
+    "task_comp_comp_004_p1",
+    "task_comp_comp_013_p1",
+    "task_comp_comp_010_p1",
+    "task_comp_comp_009_p1",
+    "task_comp_comp_011_p1",
+    "task_comp_comp_001_p1",
+    "task_integration_test",
+    "task_comp_comp_012_p1",
+    "task_comp_comp_002_p1",
+    "task_comp_comp_006_p1"
+  ]
+}

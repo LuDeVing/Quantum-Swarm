@@ -1,0 +1,24 @@
+{
+  "id": "0630ab7d-44a1-4132-b310-407afe327233",
+  "name": "project 1",
+  "status": "Completed",
+  "date": "2026-04-20T17:46:41.563475+00:00",
+  "owner_id": "guest",
+  "messages": [
+    {
+      "id": "32a6bfea-90b8-42ec-af12-57a4311f2daa",
+      "text": "create a gui app with python and test it",
+      "sender": "user",
+      "time": "",
+      "createdAt": "2026-04-20T17:46:56.002515+00:00"
+    },
+    {
+      "id": "0805c86b-8a1c-49da-ae28-887ae4e949e7",
+      "text": "Got it! I'm spinning up your engineering team to build \"create a gui app with python and test it\". Send another message to check progress.",
+      "sender": "ai",
+      "time": "",
+      "createdAt": "2026-04-20T17:46:56.017752+00:00"
+    }
+  ],
+  "runner_pid": null
+}

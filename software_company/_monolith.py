@@ -164,9 +164,6 @@ from .roles import (
     ROLES,
     ENG_WORKERS,
     _DOD_CHECKLISTS,
-    _ARCH_ROLES,
-    _DESIGN_ROLES,
-    _QA_ROLES,
     _get_dod,
 )
 
@@ -179,10 +176,8 @@ _ROLE_TOOL_NAMES["eng_manager"] = _ENG_MANAGER_TOOL_NAMES
 
 from .agent_loop import _run_fixer, _run_with_tools
 
-# ── Worker / planning / teams / engineering (submodules) ───────────────────
-from . import workers as _workers_mod
+# ── Planning / engineering (submodules) ────────────────────────────────────────
 from . import planning as _planning_mod
-from . import teams as _teams_mod
 from . import engineering as _engineering_mod
 
 def _merge_submodule(ns: dict, mod) -> None:
@@ -194,9 +189,7 @@ def _merge_submodule(ns: dict, mod) -> None:
         ns[k] = v
 
 _mp = globals()
-_merge_submodule(_mp, _workers_mod)
 _merge_submodule(_mp, _planning_mod)
-_merge_submodule(_mp, _teams_mod)
 _merge_submodule(_mp, _engineering_mod)
 from . import desktop_skill as _desktop_skill_mod
 
@@ -207,23 +200,9 @@ _merge_submodule(_mp, _desktop_live_snapshot_mod)
 del (
     _mp,
     _merge_submodule,
-    _workers_mod,
     _planning_mod,
-    _teams_mod,
     _engineering_mod,
     _desktop_skill_mod,
     _desktop_live_snapshot_mod,
 )
-
-# ── Orchestration (run_company, outputs, dashboard) ───────────────────────────
-from . import orchestration as _orch_mod
-
-_mo = globals()
-for _ok, _ov in _orch_mod.__dict__.items():
-    if _ok.startswith("__"):
-        continue
-    if _ok in ("logger",):
-        continue
-    _mo[_ok] = _ov
-del _mo, _ok, _ov
 

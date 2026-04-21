@@ -1,0 +1,2632 @@
+{
+  "role": "dev_engineer",
+  "facts": [
+    {
+      "id": "a9dbf494",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:01:55.700247+00:00",
+      "task": "PHASE 1: Implement Config (src/config.py)\nCentralized configuration management. Holds constants like window dimensions, ",
+      "lesson": "Centralize configuration in a dedicated module to ensure single-source-of-truth access and eliminate scattered hardcoded values across the codebase.",
+      "tags": [
+        "config",
+        "architecture",
+        "maintainability"
+      ],
+      "success": true,
+      "confidence": 1.0
+    },
+    {
+      "id": "ea76998a",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:01:55.701184+00:00",
+      "task": "PHASE 1: Implement Config (src/config.py)\nCentralized configuration management. Holds constants like window dimensions, ",
+      "lesson": "Use type-hinted, immutable constants in configuration modules to prevent runtime side effects and improve IDE autocompletion for development teams.",
+      "tags": [
+        "typing",
+        "python",
+        "developer_experience"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "38e1decc",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:01:55.702395+00:00",
+      "task": "PHASE 1: Implement Config (src/config.py)\nCentralized configuration management. Holds constants like window dimensions, ",
+      "lesson": "Externalize sensitive environment variables from config files using standard libraries like `os.getenv` or `pydantic-settings` to avoid committing credentials to version control.",
+      "tags": [
+        "security",
+        "dotenv",
+        "environment_variables"
+      ],
+      "success": true,
+      "confidence": 0.98
+    },
+    {
+      "id": "d3cc67c1",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:01:56.478197+00:00",
+      "task": "PHASE 1: Implement LoggerService (src/services/logger.py)\nCaptures application runtime errors and logs state transitions",
+      "lesson": "Encapsulate standard logging in a service class to abstract log rotation, file formatting, and directory initialization, preventing fragmented configuration across high-precision calculation modules.",
+      "tags": [
+        "logging",
+        "service-pattern",
+        "observability"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "de4b1859",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:01:56.480806+00:00",
+      "task": "PHASE 1: Implement LoggerService (src/services/logger.py)\nCaptures application runtime errors and logs state transitions",
+      "lesson": "Ensure log directory existence before instantiation; use `pathlib.Path.mkdir(parents=True, exist_ok=True)` to avoid FileNotFoundError during startup in containerized environments.",
+      "tags": [
+        "filesystem",
+        "pathlib",
+        "deployment"
+      ],
+      "success": true,
+      "confidence": 0.98
+    },
+    {
+      "id": "164bbb7f",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:02:09.888770+00:00",
+      "task": "PHASE 1: Implement ButtonUI (src/ui/buttons.py)\nCustom button widgets. Manages click events and visual feedback for the ",
+      "lesson": "Encapsulate UI widget styling within custom classes inheriting from tkinter.Button to ensure consistent theme application and centralized event handling via the command pattern.",
+      "tags": [
+        "tkinter",
+        "ui-design",
+        "encapsulation"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "1c968091",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:02:09.889379+00:00",
+      "task": "PHASE 1: Implement ButtonUI (src/ui/buttons.py)\nCustom button widgets. Manages click events and visual feedback for the ",
+      "lesson": "Externalize UI configuration constants into a dedicated module to prevent hardcoded values and simplify styling updates across the layout component hierarchy.",
+      "tags": [
+        "configuration",
+        "clean-code",
+        "refactoring"
+      ],
+      "success": true,
+      "confidence": 0.9
+    },
+    {
+      "id": "2aabc654",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:02:09.889901+00:00",
+      "task": "PHASE 1: Implement ButtonUI (src/ui/buttons.py)\nCustom button widgets. Manages click events and visual feedback for the ",
+      "lesson": "Implement explicit state management methods like set_active in custom widgets to provide immediate visual feedback during asynchronous state transitions or event triggers.",
+      "tags": [
+        "event-handling",
+        "ux",
+        "state-machine"
+      ],
+      "success": true,
+      "confidence": 0.92
+    },
+    {
+      "id": "19751bee",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:02:11.325458+00:00",
+      "task": "PHASE 1: Implement DisplayUI (src/ui/display.py)\nWraps tkinter Text/Entry widgets. Includes horizontal scrolling for lar",
+      "lesson": "Use tkinter's xscrollcommand linked to a Scrollbar widget to handle overflowing text in Entry fields, ensuring visibility of long numerical outputs without truncation or UI breakage.",
+      "tags": [
+        "tkinter",
+        "ui",
+        "ux"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "4fd69dc3",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:02:11.328638+00:00",
+      "task": "PHASE 1: Implement DisplayUI (src/ui/display.py)\nWraps tkinter Text/Entry widgets. Includes horizontal scrolling for lar",
+      "lesson": "Centralize UI dimension constants in a dedicated config module rather than hardcoding values in view classes to maintain consistent layout behavior across the application.",
+      "tags": [
+        "configuration",
+        "clean-code",
+        "refactoring"
+      ],
+      "success": true,
+      "confidence": 0.98
+    },
+    {
+      "id": "b3d1c93f",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:02:17.880667+00:00",
+      "task": "PHASE 1: Implement LoggerService (src/services/logger.py)\nCaptures application runtime errors and logs state transitions",
+      "lesson": "Use the logging module's file rotation (RotatingFileHandler) to prevent uncontrolled disk growth in production environments.",
+      "tags": [
+        "python",
+        "logging",
+        "production"
+      ],
+      "success": true,
+      "confidence": 1.0
+    },
+    {
+      "id": "5e2212e2",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:02:17.883160+00:00",
+      "task": "PHASE 1: Implement LoggerService (src/services/logger.py)\nCaptures application runtime errors and logs state transitions",
+      "lesson": "Always capture full tracebacks using exc_info=True when logging errors to ensure debugging precision for high-stakes calculations.",
+      "tags": [
+        "debugging",
+        "logging",
+        "error_handling"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "f826eb8c",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:02:17.885396+00:00",
+      "task": "PHASE 1: Implement LoggerService (src/services/logger.py)\nCaptures application runtime errors and logs state transitions",
+      "lesson": "Implement thread-safe logging or process-safe file handling to avoid log corruption when multiple service instances write to the same output destination.",
+      "tags": [
+        "concurrency",
+        "logging",
+        "file_io"
+      ],
+      "success": true,
+      "confidence": 0.9
+    },
+    {
+      "id": "d9d09d7c",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:02:32.967431+00:00",
+      "task": "PHASE 1: Implement CalcModel (src/models/calculator.py)\nManages calculator state using Decimal. Includes serialization m",
+      "lesson": "Use the decimal module's context for precision control instead of global rounding to prevent accumulated arithmetic drift in financial or high-precision states.",
+      "tags": [
+        "python",
+        "decimal",
+        "precision"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "5a1ebe5b",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:02:32.970099+00:00",
+      "task": "PHASE 1: Implement CalcModel (src/models/calculator.py)\nManages calculator state using Decimal. Includes serialization m",
+      "lesson": "Implement explicit from_dict/to_dict methods with type validation using Pydantic or type hints to ensure state serializability when persisting calculator models.",
+      "tags": [
+        "serialization",
+        "pydantic",
+        "data-integrity"
+      ],
+      "success": true,
+      "confidence": 0.9
+    },
+    {
+      "id": "49b084de",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:02:32.971484+00:00",
+      "task": "PHASE 1: Implement CalcModel (src/models/calculator.py)\nManages calculator state using Decimal. Includes serialization m",
+      "lesson": "Enforce strict setter validation for numerical inputs; raise ValueError immediately to keep state transitions atomic and maintain internal model integrity.",
+      "tags": [
+        "validation",
+        "encapsulation",
+        "robustness"
+      ],
+      "success": true,
+      "confidence": 0.98
+    },
+    {
+      "id": "a79eac14",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:02:33.646362+00:00",
+      "task": "PHASE 1: Implement MathEngine (src/services/math_engine.py)\nHigh-precision arithmetic using decimal.Context. Handles div",
+      "lesson": "Use decimal.Context to enforce global precision settings in financial or scientific applications, ensuring consistency across disparate arithmetic operations.",
+      "tags": [
+        "decimal",
+        "arithmetic",
+        "precision"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "0aaf052c",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:02:33.649029+00:00",
+      "task": "PHASE 1: Implement MathEngine (src/services/math_engine.py)\nHigh-precision arithmetic using decimal.Context. Handles div",
+      "lesson": "Explicitly catch decimal.DivisionByZero and decimal.InvalidOperation to prevent unhandled arithmetic crashes; always log the context state before re-raising or returning error results.",
+      "tags": [
+        "error-handling",
+        "decimal",
+        "logging"
+      ],
+      "success": true,
+      "confidence": 0.98
+    },
+    {
+      "id": "be442198",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:02:34.367397+00:00",
+      "task": "PHASE 1: Implement MainLayout (src/ui/layout.py)\nOrganizes the display and button grid. Provides the main window interfa",
+      "lesson": "Expose UI components as public interface contracts to decouple view logic from controller orchestration, ensuring the main window acts as a central registry for layout components.",
+      "tags": [
+        "ui-design",
+        "architectural-pattern",
+        "tk"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "2dac92df",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:02:34.379181+00:00",
+      "task": "PHASE 1: Implement MainLayout (src/ui/layout.py)\nOrganizes the display and button grid. Provides the main window interfa",
+      "lesson": "Validate UI layout structures using headful test runners before integration to catch geometry management errors and layout inconsistencies early in the implementation phase.",
+      "tags": [
+        "testing",
+        "ui-testing",
+        "validation"
+      ],
+      "success": true,
+      "confidence": 0.9
+    },
+    {
+      "id": "f51c4743",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:02:34.676625+00:00",
+      "task": "PHASE 1: Implement StringSanitizer (src/services/sanitizer.py)\nHandles numeric string sanitization. Strips whitespace, c",
+      "lesson": "Use regex pre-validation with a deterministic fallback value to prevent downstream MathEngine crashes from malformed numeric strings.",
+      "tags": [
+        "sanitization",
+        "regex",
+        "defensive-programming"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "b3cedfb8",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:02:34.682107+00:00",
+      "task": "PHASE 1: Implement StringSanitizer (src/services/sanitizer.py)\nHandles numeric string sanitization. Strips whitespace, c",
+      "lesson": "Normalize numeric locales by consistently replacing comma decimal separators with dots before parsing, ensuring compatibility with standard float processing libraries.",
+      "tags": [
+        "locale",
+        "normalization",
+        "data-processing"
+      ],
+      "success": true,
+      "confidence": 0.92
+    },
+    {
+      "id": "0998d13d",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:02:34.685638+00:00",
+      "task": "PHASE 1: Implement StringSanitizer (src/services/sanitizer.py)\nHandles numeric string sanitization. Strips whitespace, c",
+      "lesson": "Centralize error logging within service classes to decouple sanitization logic from observability infrastructure, simplifying debugging for future pipeline integrations.",
+      "tags": [
+        "logging",
+        "architecture",
+        "observability"
+      ],
+      "success": true,
+      "confidence": 0.88
+    },
+    {
+      "id": "5e463c6d",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:02:50.238065+00:00",
+      "task": "PHASE 1: Implement Controller (src/controller.py)\nOrchestrates UI and model. Bridges input handling, mathematical execut",
+      "lesson": "Decouple business logic from UI components by injecting the UI interface into the Controller via dependency injection; this ensures the Controller remains framework-agnostic and testable.",
+      "tags": [
+        "dependency-injection",
+        "architecture",
+        "testing"
+      ],
+      "success": true,
+      "confidence": 1.0
+    },
+    {
+      "id": "f8bd8654",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:02:50.242911+00:00",
+      "task": "PHASE 1: Implement Controller (src/controller.py)\nOrchestrates UI and model. Bridges input handling, mathematical execut",
+      "lesson": "Sanitize all raw inputs at the Controller boundary before passing them to the execution layer to prevent injection attacks and runtime math errors.",
+      "tags": [
+        "security",
+        "sanitization",
+        "input-validation"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "2bb3dadd",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:02:50.247158+00:00",
+      "task": "PHASE 1: Implement Controller (src/controller.py)\nOrchestrates UI and model. Bridges input handling, mathematical execut",
+      "lesson": "Implement a centralized state manager within the Controller to ensure UI displays remain synchronized with mathematical outputs, preventing UI/model state divergence.",
+      "tags": [
+        "state-management",
+        "synchronization",
+        "ui"
+      ],
+      "success": true,
+      "confidence": 0.9
+    },
+    {
+      "id": "ed42d9cc",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:03:06.928969+00:00",
+      "task": "PHASE 1: Implement AppEntry (src/main.py)\nApplication root. Implements a DI container to instantiate the model, engine, ",
+      "lesson": "Implement Dependency Injection at the entry point to decouple object creation from execution, ensuring services like Model and Controller are instantiated before the UI event loop starts.",
+      "tags": [
+        "architecture",
+        "dependency-injection",
+        "tk-inter"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "2806bde2",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:03:06.933179+00:00",
+      "task": "PHASE 1: Implement AppEntry (src/main.py)\nApplication root. Implements a DI container to instantiate the model, engine, ",
+      "lesson": "Avoid global state in UI applications by passing instantiated controllers and models explicitly into view constructors, facilitating unit testing of individual layers without requiring a full GUI environment.",
+      "tags": [
+        "testing",
+        "decoupling",
+        "python"
+      ],
+      "success": true,
+      "confidence": 0.9
+    },
+    {
+      "id": "e65884d7",
+      "sprint": 1,
+      "timestamp": "2026-04-20T18:03:06.937174+00:00",
+      "task": "PHASE 1: Implement AppEntry (src/main.py)\nApplication root. Implements a DI container to instantiate the model, engine, ",
+      "lesson": "Standardize logging initialization at the main entry point to ensure consistent observability across the model, engine, and controller layers throughout the application lifecycle.",
+      "tags": [
+        "logging",
+        "observability",
+        "best-practices"
+      ],
+      "success": true,
+      "confidence": 0.85
+    }
+  ],
+  "graph": {
+    "directed": true,
+    "multigraph": false,
+    "graph": {},
+    "nodes": [
+      {
+        "type": "fact",
+        "lesson": "Centralize configuration in a dedicated module to ensure single-source-of-truth access and eliminate scattered hardcoded values across the codebase.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 1.0,
+        "id": "fact:a9dbf494"
+      },
+      {
+        "type": "concept",
+        "label": "src.config",
+        "freq": 2,
+        "id": "concept:src.config"
+      },
+      {
+        "type": "concept",
+        "label": "constant_patterns",
+        "freq": 1,
+        "id": "concept:constant_patterns"
+      },
+      {
+        "type": "concept",
+        "label": "global_state",
+        "freq": 1,
+        "id": "concept:global_state"
+      },
+      {
+        "type": "concept",
+        "label": "centralized_config",
+        "freq": 1,
+        "id": "concept:centralized_config"
+      },
+      {
+        "type": "concept",
+        "label": "maintenance_overhead",
+        "freq": 1,
+        "id": "concept:maintenance_overhead"
+      },
+      {
+        "type": "fact",
+        "lesson": "Use type-hinted, immutable constants in configuration modules to prevent runtime side effects and improve IDE autocompletion for development teams.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:ea76998a"
+      },
+      {
+        "type": "concept",
+        "label": "type_hints",
+        "freq": 2,
+        "id": "concept:type_hints"
+      },
+      {
+        "type": "concept",
+        "label": "final_type",
+        "freq": 1,
+        "id": "concept:final_type"
+      },
+      {
+        "type": "concept",
+        "label": "runtime_safety",
+        "freq": 1,
+        "id": "concept:runtime_safety"
+      },
+      {
+        "type": "concept",
+        "label": "code_discoverability",
+        "freq": 1,
+        "id": "concept:code_discoverability"
+      },
+      {
+        "type": "fact",
+        "lesson": "Externalize sensitive environment variables from config files using standard libraries like `os.getenv` or `pydantic-settings` to avoid committing credentials to version control.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.98,
+        "id": "fact:38e1decc"
+      },
+      {
+        "type": "concept",
+        "label": "os.getenv",
+        "freq": 1,
+        "id": "concept:os.getenv"
+      },
+      {
+        "type": "concept",
+        "label": "pydantic_settings",
+        "freq": 1,
+        "id": "concept:pydantic_settings"
+      },
+      {
+        "type": "concept",
+        "label": "secret_exposure",
+        "freq": 2,
+        "id": "concept:secret_exposure"
+      },
+      {
+        "type": "concept",
+        "label": "environment_variables",
+        "freq": 1,
+        "id": "concept:environment_variables"
+      },
+      {
+        "type": "fact",
+        "lesson": "Encapsulate standard logging in a service class to abstract log rotation, file formatting, and directory initialization, preventing fragmented configuration across high-precision calculation modules.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:d3cc67c1"
+      },
+      {
+        "type": "concept",
+        "label": "logging",
+        "freq": 2,
+        "id": "concept:logging"
+      },
+      {
+        "type": "concept",
+        "label": "loggerservice",
+        "freq": 4,
+        "id": "concept:loggerservice"
+      },
+      {
+        "type": "concept",
+        "label": "file-rotation",
+        "freq": 1,
+        "id": "concept:file-rotation"
+      },
+      {
+        "type": "concept",
+        "label": "encapsulation",
+        "freq": 2,
+        "id": "concept:encapsulation"
+      },
+      {
+        "type": "concept",
+        "label": "fragmented-config",
+        "freq": 1,
+        "id": "concept:fragmented-config"
+      },
+      {
+        "type": "fact",
+        "lesson": "Ensure log directory existence before instantiation; use `pathlib.Path.mkdir(parents=True, exist_ok=True)` to avoid FileNotFoundError during startup in containerized environments.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.98,
+        "id": "fact:de4b1859"
+      },
+      {
+        "type": "concept",
+        "label": "pathlib",
+        "freq": 1,
+        "id": "concept:pathlib"
+      },
+      {
+        "type": "concept",
+        "label": "filenotfounderror",
+        "freq": 2,
+        "id": "concept:filenotfounderror"
+      },
+      {
+        "type": "concept",
+        "label": "mkdir",
+        "freq": 2,
+        "id": "concept:mkdir"
+      },
+      {
+        "type": "fact",
+        "lesson": "Encapsulate UI widget styling within custom classes inheriting from tkinter.Button to ensure consistent theme application and centralized event handling via the command pattern.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:164bbb7f"
+      },
+      {
+        "type": "concept",
+        "label": "tkinter.button",
+        "freq": 1,
+        "id": "concept:tkinter.button"
+      },
+      {
+        "type": "concept",
+        "label": "calcbutton",
+        "freq": 1,
+        "id": "concept:calcbutton"
+      },
+      {
+        "type": "concept",
+        "label": "command-pattern",
+        "freq": 1,
+        "id": "concept:command-pattern"
+      },
+      {
+        "type": "concept",
+        "label": "maintainability",
+        "freq": 1,
+        "id": "concept:maintainability"
+      },
+      {
+        "type": "fact",
+        "lesson": "Externalize UI configuration constants into a dedicated module to prevent hardcoded values and simplify styling updates across the layout component hierarchy.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.9,
+        "id": "fact:1c968091"
+      },
+      {
+        "type": "concept",
+        "label": "ui constants",
+        "freq": 1,
+        "id": "concept:ui constants"
+      },
+      {
+        "type": "concept",
+        "label": "layout",
+        "freq": 1,
+        "id": "concept:layout"
+      },
+      {
+        "type": "concept",
+        "label": "hardcoding",
+        "freq": 3,
+        "id": "concept:hardcoding"
+      },
+      {
+        "type": "concept",
+        "label": "agile_updates",
+        "freq": 1,
+        "id": "concept:agile_updates"
+      },
+      {
+        "type": "fact",
+        "lesson": "Implement explicit state management methods like set_active in custom widgets to provide immediate visual feedback during asynchronous state transitions or event triggers.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.92,
+        "id": "fact:2aabc654"
+      },
+      {
+        "type": "concept",
+        "label": "set_active",
+        "freq": 1,
+        "id": "concept:set_active"
+      },
+      {
+        "type": "concept",
+        "label": "visual-feedback",
+        "freq": 2,
+        "id": "concept:visual-feedback"
+      },
+      {
+        "type": "concept",
+        "label": "widget-state",
+        "freq": 1,
+        "id": "concept:widget-state"
+      },
+      {
+        "type": "concept",
+        "label": "event-triggers",
+        "freq": 1,
+        "id": "concept:event-triggers"
+      },
+      {
+        "type": "fact",
+        "lesson": "Use tkinter's xscrollcommand linked to a Scrollbar widget to handle overflowing text in Entry fields, ensuring visibility of long numerical outputs without truncation or UI breakage.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:19751bee"
+      },
+      {
+        "type": "concept",
+        "label": "tkinter",
+        "freq": 2,
+        "id": "concept:tkinter"
+      },
+      {
+        "type": "concept",
+        "label": "entry",
+        "freq": 2,
+        "id": "concept:entry"
+      },
+      {
+        "type": "concept",
+        "label": "scrollbar",
+        "freq": 2,
+        "id": "concept:scrollbar"
+      },
+      {
+        "type": "concept",
+        "label": "xscrollcommand",
+        "freq": 2,
+        "id": "concept:xscrollcommand"
+      },
+      {
+        "type": "concept",
+        "label": "horizontal_overflow_handling",
+        "freq": 1,
+        "id": "concept:horizontal_overflow_handling"
+      },
+      {
+        "type": "fact",
+        "lesson": "Centralize UI dimension constants in a dedicated config module rather than hardcoding values in view classes to maintain consistent layout behavior across the application.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.98,
+        "id": "fact:4fd69dc3"
+      },
+      {
+        "type": "concept",
+        "label": "config_module",
+        "freq": 2,
+        "id": "concept:config_module"
+      },
+      {
+        "type": "concept",
+        "label": "ui_dimensions",
+        "freq": 1,
+        "id": "concept:ui_dimensions"
+      },
+      {
+        "type": "concept",
+        "label": "ui_inconsistency",
+        "freq": 1,
+        "id": "concept:ui_inconsistency"
+      },
+      {
+        "type": "concept",
+        "label": "ui_consistency",
+        "freq": 1,
+        "id": "concept:ui_consistency"
+      },
+      {
+        "type": "fact",
+        "lesson": "Use the logging module's file rotation (RotatingFileHandler) to prevent uncontrolled disk growth in production environments.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 1.0,
+        "id": "fact:b3d1c93f"
+      },
+      {
+        "type": "concept",
+        "label": "rotatingfilehandler",
+        "freq": 2,
+        "id": "concept:rotatingfilehandler"
+      },
+      {
+        "type": "concept",
+        "label": "logging_module",
+        "freq": 1,
+        "id": "concept:logging_module"
+      },
+      {
+        "type": "concept",
+        "label": "disk_saturation",
+        "freq": 2,
+        "id": "concept:disk_saturation"
+      },
+      {
+        "type": "fact",
+        "lesson": "Always capture full tracebacks using exc_info=True when logging errors to ensure debugging precision for high-stakes calculations.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:5e2212e2"
+      },
+      {
+        "type": "concept",
+        "label": "traceback",
+        "freq": 1,
+        "id": "concept:traceback"
+      },
+      {
+        "type": "concept",
+        "label": "exc_info",
+        "freq": 1,
+        "id": "concept:exc_info"
+      },
+      {
+        "type": "concept",
+        "label": "exc_info_true",
+        "freq": 1,
+        "id": "concept:exc_info_true"
+      },
+      {
+        "type": "concept",
+        "label": "root_cause_analysis",
+        "freq": 1,
+        "id": "concept:root_cause_analysis"
+      },
+      {
+        "type": "fact",
+        "lesson": "Implement thread-safe logging or process-safe file handling to avoid log corruption when multiple service instances write to the same output destination.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.9,
+        "id": "fact:f826eb8c"
+      },
+      {
+        "type": "concept",
+        "label": "thread_safety",
+        "freq": 1,
+        "id": "concept:thread_safety"
+      },
+      {
+        "type": "concept",
+        "label": "file_locking",
+        "freq": 2,
+        "id": "concept:file_locking"
+      },
+      {
+        "type": "concept",
+        "label": "race_condition",
+        "freq": 2,
+        "id": "concept:race_condition"
+      },
+      {
+        "type": "fact",
+        "lesson": "Use the decimal module's context for precision control instead of global rounding to prevent accumulated arithmetic drift in financial or high-precision states.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:d9d09d7c"
+      },
+      {
+        "type": "concept",
+        "label": "decimal",
+        "freq": 1,
+        "id": "concept:decimal"
+      },
+      {
+        "type": "concept",
+        "label": "decimal.context",
+        "freq": 4,
+        "id": "concept:decimal.context"
+      },
+      {
+        "type": "concept",
+        "label": "rounding_error",
+        "freq": 1,
+        "id": "concept:rounding_error"
+      },
+      {
+        "type": "concept",
+        "label": "arithmetic_drift",
+        "freq": 1,
+        "id": "concept:arithmetic_drift"
+      },
+      {
+        "type": "fact",
+        "lesson": "Implement explicit from_dict/to_dict methods with type validation using Pydantic or type hints to ensure state serializability when persisting calculator models.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.9,
+        "id": "fact:5a1ebe5b"
+      },
+      {
+        "type": "concept",
+        "label": "pydantic",
+        "freq": 1,
+        "id": "concept:pydantic"
+      },
+      {
+        "type": "concept",
+        "label": "serialization",
+        "freq": 1,
+        "id": "concept:serialization"
+      },
+      {
+        "type": "concept",
+        "label": "data_validation",
+        "freq": 1,
+        "id": "concept:data_validation"
+      },
+      {
+        "type": "concept",
+        "label": "explicit_serialization",
+        "freq": 1,
+        "id": "concept:explicit_serialization"
+      },
+      {
+        "type": "concept",
+        "label": "state_persistence",
+        "freq": 1,
+        "id": "concept:state_persistence"
+      },
+      {
+        "type": "fact",
+        "lesson": "Enforce strict setter validation for numerical inputs; raise ValueError immediately to keep state transitions atomic and maintain internal model integrity.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.98,
+        "id": "fact:49b084de"
+      },
+      {
+        "type": "concept",
+        "label": "valueerror",
+        "freq": 1,
+        "id": "concept:valueerror"
+      },
+      {
+        "type": "concept",
+        "label": "setter_logic",
+        "freq": 1,
+        "id": "concept:setter_logic"
+      },
+      {
+        "type": "concept",
+        "label": "model_integrity",
+        "freq": 1,
+        "id": "concept:model_integrity"
+      },
+      {
+        "type": "concept",
+        "label": "setter_validation",
+        "freq": 1,
+        "id": "concept:setter_validation"
+      },
+      {
+        "type": "concept",
+        "label": "invalid_state",
+        "freq": 1,
+        "id": "concept:invalid_state"
+      },
+      {
+        "type": "fact",
+        "lesson": "Use decimal.Context to enforce global precision settings in financial or scientific applications, ensuring consistency across disparate arithmetic operations.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:a79eac14"
+      },
+      {
+        "type": "concept",
+        "label": "default_precision",
+        "freq": 1,
+        "id": "concept:default_precision"
+      },
+      {
+        "type": "concept",
+        "label": "floating-point-error",
+        "freq": 2,
+        "id": "concept:floating-point-error"
+      },
+      {
+        "type": "fact",
+        "lesson": "Explicitly catch decimal.DivisionByZero and decimal.InvalidOperation to prevent unhandled arithmetic crashes; always log the context state before re-raising or returning error results.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.98,
+        "id": "fact:0aaf052c"
+      },
+      {
+        "type": "concept",
+        "label": "decimal.divisionbyzero",
+        "freq": 1,
+        "id": "concept:decimal.divisionbyzero"
+      },
+      {
+        "type": "concept",
+        "label": "decimal.invalidoperation",
+        "freq": 1,
+        "id": "concept:decimal.invalidoperation"
+      },
+      {
+        "type": "concept",
+        "label": "explicit-catch",
+        "freq": 1,
+        "id": "concept:explicit-catch"
+      },
+      {
+        "type": "concept",
+        "label": "system-resilience",
+        "freq": 1,
+        "id": "concept:system-resilience"
+      },
+      {
+        "type": "fact",
+        "lesson": "Expose UI components as public interface contracts to decouple view logic from controller orchestration, ensuring the main window acts as a central registry for layout components.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:be442198"
+      },
+      {
+        "type": "concept",
+        "label": "calculatorwindow",
+        "freq": 5,
+        "id": "concept:calculatorwindow"
+      },
+      {
+        "type": "concept",
+        "label": "controller",
+        "freq": 6,
+        "id": "concept:controller"
+      },
+      {
+        "type": "concept",
+        "label": "interfacecontract",
+        "freq": 2,
+        "id": "concept:interfacecontract"
+      },
+      {
+        "type": "concept",
+        "label": "decoupling",
+        "freq": 3,
+        "id": "concept:decoupling"
+      },
+      {
+        "type": "fact",
+        "lesson": "Validate UI layout structures using headful test runners before integration to catch geometry management errors and layout inconsistencies early in the implementation phase.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.9,
+        "id": "fact:2dac92df"
+      },
+      {
+        "type": "concept",
+        "label": "geometry-manager",
+        "freq": 1,
+        "id": "concept:geometry-manager"
+      },
+      {
+        "type": "concept",
+        "label": "test-snippet",
+        "freq": 1,
+        "id": "concept:test-snippet"
+      },
+      {
+        "type": "concept",
+        "label": "headful-testing",
+        "freq": 1,
+        "id": "concept:headful-testing"
+      },
+      {
+        "type": "concept",
+        "label": "layout-inconsistencies",
+        "freq": 1,
+        "id": "concept:layout-inconsistencies"
+      },
+      {
+        "type": "fact",
+        "lesson": "Use regex pre-validation with a deterministic fallback value to prevent downstream MathEngine crashes from malformed numeric strings.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:f51c4743"
+      },
+      {
+        "type": "concept",
+        "label": "regex",
+        "freq": 1,
+        "id": "concept:regex"
+      },
+      {
+        "type": "concept",
+        "label": "mathengine",
+        "freq": 1,
+        "id": "concept:mathengine"
+      },
+      {
+        "type": "concept",
+        "label": "input-sanitization",
+        "freq": 1,
+        "id": "concept:input-sanitization"
+      },
+      {
+        "type": "concept",
+        "label": "regex-validation",
+        "freq": 1,
+        "id": "concept:regex-validation"
+      },
+      {
+        "type": "concept",
+        "label": "deterministic-fallback",
+        "freq": 1,
+        "id": "concept:deterministic-fallback"
+      },
+      {
+        "type": "fact",
+        "lesson": "Normalize numeric locales by consistently replacing comma decimal separators with dots before parsing, ensuring compatibility with standard float processing libraries.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.92,
+        "id": "fact:b3cedfb8"
+      },
+      {
+        "type": "concept",
+        "label": "locale",
+        "freq": 1,
+        "id": "concept:locale"
+      },
+      {
+        "type": "concept",
+        "label": "float",
+        "freq": 1,
+        "id": "concept:float"
+      },
+      {
+        "type": "concept",
+        "label": "string-manipulation",
+        "freq": 1,
+        "id": "concept:string-manipulation"
+      },
+      {
+        "type": "concept",
+        "label": "comma-decimal",
+        "freq": 1,
+        "id": "concept:comma-decimal"
+      },
+      {
+        "type": "concept",
+        "label": "standard-parsing",
+        "freq": 1,
+        "id": "concept:standard-parsing"
+      },
+      {
+        "type": "fact",
+        "lesson": "Centralize error logging within service classes to decouple sanitization logic from observability infrastructure, simplifying debugging for future pipeline integrations.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.88,
+        "id": "fact:0998d13d"
+      },
+      {
+        "type": "concept",
+        "label": "logger",
+        "freq": 3,
+        "id": "concept:logger"
+      },
+      {
+        "type": "concept",
+        "label": "serviceclass",
+        "freq": 1,
+        "id": "concept:serviceclass"
+      },
+      {
+        "type": "concept",
+        "label": "service-logging",
+        "freq": 1,
+        "id": "concept:service-logging"
+      },
+      {
+        "type": "concept",
+        "label": "debugging",
+        "freq": 1,
+        "id": "concept:debugging"
+      },
+      {
+        "type": "fact",
+        "lesson": "Decouple business logic from UI components by injecting the UI interface into the Controller via dependency injection; this ensures the Controller remains framework-agnostic and testable.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 1.0,
+        "id": "fact:5e463c6d"
+      },
+      {
+        "type": "concept",
+        "label": "ui interface",
+        "freq": 1,
+        "id": "concept:ui interface"
+      },
+      {
+        "type": "concept",
+        "label": "dependency injection",
+        "freq": 2,
+        "id": "concept:dependency injection"
+      },
+      {
+        "type": "concept",
+        "label": "testability",
+        "freq": 1,
+        "id": "concept:testability"
+      },
+      {
+        "type": "concept",
+        "label": "tight-coupling",
+        "freq": 1,
+        "id": "concept:tight-coupling"
+      },
+      {
+        "type": "fact",
+        "lesson": "Sanitize all raw inputs at the Controller boundary before passing them to the execution layer to prevent injection attacks and runtime math errors.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:f8bd8654"
+      },
+      {
+        "type": "concept",
+        "label": "sanitizer",
+        "freq": 1,
+        "id": "concept:sanitizer"
+      },
+      {
+        "type": "concept",
+        "label": "execution layer",
+        "freq": 2,
+        "id": "concept:execution layer"
+      },
+      {
+        "type": "concept",
+        "label": "sanitization",
+        "freq": 1,
+        "id": "concept:sanitization"
+      },
+      {
+        "type": "fact",
+        "lesson": "Implement a centralized state manager within the Controller to ensure UI displays remain synchronized with mathematical outputs, preventing UI/model state divergence.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.9,
+        "id": "fact:2bb3dadd"
+      },
+      {
+        "type": "concept",
+        "label": "calculatorstate",
+        "freq": 1,
+        "id": "concept:calculatorstate"
+      },
+      {
+        "type": "concept",
+        "label": "ui display",
+        "freq": 2,
+        "id": "concept:ui display"
+      },
+      {
+        "type": "concept",
+        "label": "state manager",
+        "freq": 1,
+        "id": "concept:state manager"
+      },
+      {
+        "type": "fact",
+        "lesson": "Implement Dependency Injection at the entry point to decouple object creation from execution, ensuring services like Model and Controller are instantiated before the UI event loop starts.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:ed42d9cc"
+      },
+      {
+        "type": "concept",
+        "label": "di container",
+        "freq": 2,
+        "id": "concept:di container"
+      },
+      {
+        "type": "concept",
+        "label": "calccontroller",
+        "freq": 1,
+        "id": "concept:calccontroller"
+      },
+      {
+        "type": "concept",
+        "label": "ui event loop",
+        "freq": 1,
+        "id": "concept:ui event loop"
+      },
+      {
+        "type": "concept",
+        "label": "services",
+        "freq": 2,
+        "id": "concept:services"
+      },
+      {
+        "type": "fact",
+        "lesson": "Avoid global state in UI applications by passing instantiated controllers and models explicitly into view constructors, facilitating unit testing of individual layers without requiring a full GUI environment.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.9,
+        "id": "fact:2806bde2"
+      },
+      {
+        "type": "concept",
+        "label": "global state",
+        "freq": 2,
+        "id": "concept:global state"
+      },
+      {
+        "type": "concept",
+        "label": "unit testing",
+        "freq": 2,
+        "id": "concept:unit testing"
+      },
+      {
+        "type": "concept",
+        "label": "view",
+        "freq": 1,
+        "id": "concept:view"
+      },
+      {
+        "type": "fact",
+        "lesson": "Standardize logging initialization at the main entry point to ensure consistent observability across the model, engine, and controller layers throughout the application lifecycle.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.85,
+        "id": "fact:e65884d7"
+      },
+      {
+        "type": "concept",
+        "label": "entry point",
+        "freq": 2,
+        "id": "concept:entry point"
+      },
+      {
+        "type": "concept",
+        "label": "application lifecycle",
+        "freq": 1,
+        "id": "concept:application lifecycle"
+      }
+    ],
+    "edges": [
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a9dbf494",
+        "target": "concept:src.config"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a9dbf494",
+        "target": "concept:constant_patterns"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a9dbf494",
+        "target": "concept:global_state"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:src.config",
+        "target": "fact:a9dbf494"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:src.config",
+        "target": "fact:1c968091"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:constant_patterns",
+        "target": "fact:a9dbf494"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:global_state",
+        "target": "fact:a9dbf494"
+      },
+      {
+        "rel": "reduces",
+        "weight": 1.0,
+        "source": "concept:centralized_config",
+        "target": "concept:maintenance_overhead"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ea76998a",
+        "target": "concept:type_hints"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ea76998a",
+        "target": "concept:final_type"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ea76998a",
+        "target": "concept:runtime_safety"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:type_hints",
+        "target": "fact:ea76998a"
+      },
+      {
+        "rel": "improves",
+        "weight": 1.0,
+        "source": "concept:type_hints",
+        "target": "concept:code_discoverability"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:final_type",
+        "target": "fact:ea76998a"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:runtime_safety",
+        "target": "fact:ea76998a"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:38e1decc",
+        "target": "concept:os.getenv"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:38e1decc",
+        "target": "concept:pydantic_settings"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:38e1decc",
+        "target": "concept:secret_exposure"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:os.getenv",
+        "target": "fact:38e1decc"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pydantic_settings",
+        "target": "fact:38e1decc"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:secret_exposure",
+        "target": "fact:38e1decc"
+      },
+      {
+        "rel": "prevents",
+        "weight": 1.0,
+        "source": "concept:environment_variables",
+        "target": "concept:secret_exposure"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:d3cc67c1",
+        "target": "concept:logging"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:d3cc67c1",
+        "target": "concept:loggerservice"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:d3cc67c1",
+        "target": "concept:file-rotation"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:logging",
+        "target": "fact:d3cc67c1"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:loggerservice",
+        "target": "fact:d3cc67c1"
+      },
+      {
+        "rel": "abstracts",
+        "weight": 1.0,
+        "source": "concept:loggerservice",
+        "target": "concept:logging"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:loggerservice",
+        "target": "fact:5e2212e2"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:loggerservice",
+        "target": "fact:0aaf052c"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:file-rotation",
+        "target": "fact:d3cc67c1"
+      },
+      {
+        "rel": "prevents",
+        "weight": 1.0,
+        "source": "concept:encapsulation",
+        "target": "concept:fragmented-config"
+      },
+      {
+        "rel": "improves",
+        "weight": 1.0,
+        "source": "concept:encapsulation",
+        "target": "concept:maintainability"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:de4b1859",
+        "target": "concept:pathlib"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:de4b1859",
+        "target": "concept:filenotfounderror"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:de4b1859",
+        "target": "concept:mkdir"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pathlib",
+        "target": "fact:de4b1859"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:filenotfounderror",
+        "target": "fact:de4b1859"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:mkdir",
+        "target": "fact:de4b1859"
+      },
+      {
+        "rel": "prevents",
+        "weight": 1.0,
+        "source": "concept:mkdir",
+        "target": "concept:filenotfounderror"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:164bbb7f",
+        "target": "concept:tkinter.button"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:164bbb7f",
+        "target": "concept:calcbutton"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:164bbb7f",
+        "target": "concept:command-pattern"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:tkinter.button",
+        "target": "fact:164bbb7f"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:calcbutton",
+        "target": "fact:164bbb7f"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:command-pattern",
+        "target": "fact:164bbb7f"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:1c968091",
+        "target": "concept:src.config"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:1c968091",
+        "target": "concept:ui constants"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:1c968091",
+        "target": "concept:layout"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:ui constants",
+        "target": "fact:1c968091"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:layout",
+        "target": "fact:1c968091"
+      },
+      {
+        "rel": "prevents",
+        "weight": 1.0,
+        "source": "concept:hardcoding",
+        "target": "concept:agile_updates"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:hardcoding",
+        "target": "fact:4fd69dc3"
+      },
+      {
+        "rel": "causes",
+        "weight": 1.0,
+        "source": "concept:hardcoding",
+        "target": "concept:ui_inconsistency"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:2aabc654",
+        "target": "concept:set_active"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:2aabc654",
+        "target": "concept:visual-feedback"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:2aabc654",
+        "target": "concept:widget-state"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:set_active",
+        "target": "fact:2aabc654"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:visual-feedback",
+        "target": "fact:2aabc654"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:widget-state",
+        "target": "fact:2aabc654"
+      },
+      {
+        "rel": "requires",
+        "weight": 1.0,
+        "source": "concept:event-triggers",
+        "target": "concept:visual-feedback"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:19751bee",
+        "target": "concept:tkinter"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:19751bee",
+        "target": "concept:entry"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:19751bee",
+        "target": "concept:scrollbar"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:19751bee",
+        "target": "concept:xscrollcommand"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:tkinter",
+        "target": "fact:19751bee"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:tkinter",
+        "target": "fact:be442198"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:entry",
+        "target": "fact:19751bee"
+      },
+      {
+        "rel": "links_to",
+        "weight": 1.0,
+        "source": "concept:entry",
+        "target": "concept:scrollbar"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:scrollbar",
+        "target": "fact:19751bee"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:xscrollcommand",
+        "target": "fact:19751bee"
+      },
+      {
+        "rel": "enables",
+        "weight": 1.0,
+        "source": "concept:xscrollcommand",
+        "target": "concept:horizontal_overflow_handling"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:4fd69dc3",
+        "target": "concept:config_module"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:4fd69dc3",
+        "target": "concept:ui_dimensions"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:4fd69dc3",
+        "target": "concept:hardcoding"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:config_module",
+        "target": "fact:4fd69dc3"
+      },
+      {
+        "rel": "enforces",
+        "weight": 1.0,
+        "source": "concept:config_module",
+        "target": "concept:ui_consistency"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:ui_dimensions",
+        "target": "fact:4fd69dc3"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:b3d1c93f",
+        "target": "concept:rotatingfilehandler"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:b3d1c93f",
+        "target": "concept:logging_module"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:b3d1c93f",
+        "target": "concept:disk_saturation"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:rotatingfilehandler",
+        "target": "fact:b3d1c93f"
+      },
+      {
+        "rel": "mitigates",
+        "weight": 1.0,
+        "source": "concept:rotatingfilehandler",
+        "target": "concept:disk_saturation"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:logging_module",
+        "target": "fact:b3d1c93f"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:disk_saturation",
+        "target": "fact:b3d1c93f"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:5e2212e2",
+        "target": "concept:traceback"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:5e2212e2",
+        "target": "concept:exc_info"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:5e2212e2",
+        "target": "concept:loggerservice"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:traceback",
+        "target": "fact:5e2212e2"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:exc_info",
+        "target": "fact:5e2212e2"
+      },
+      {
+        "rel": "enables",
+        "weight": 1.0,
+        "source": "concept:exc_info_true",
+        "target": "concept:root_cause_analysis"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:f826eb8c",
+        "target": "concept:thread_safety"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:f826eb8c",
+        "target": "concept:file_locking"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:f826eb8c",
+        "target": "concept:race_condition"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:thread_safety",
+        "target": "fact:f826eb8c"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:file_locking",
+        "target": "fact:f826eb8c"
+      },
+      {
+        "rel": "prevents",
+        "weight": 1.0,
+        "source": "concept:file_locking",
+        "target": "concept:race_condition"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:race_condition",
+        "target": "fact:f826eb8c"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:d9d09d7c",
+        "target": "concept:decimal"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:d9d09d7c",
+        "target": "concept:decimal.context"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:d9d09d7c",
+        "target": "concept:rounding_error"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:decimal",
+        "target": "fact:d9d09d7c"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:decimal.context",
+        "target": "fact:d9d09d7c"
+      },
+      {
+        "rel": "manages",
+        "weight": 1.0,
+        "source": "concept:decimal.context",
+        "target": "concept:arithmetic_drift"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:decimal.context",
+        "target": "fact:a79eac14"
+      },
+      {
+        "rel": "prevents",
+        "weight": 1.0,
+        "source": "concept:decimal.context",
+        "target": "concept:floating-point-error"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:rounding_error",
+        "target": "fact:d9d09d7c"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:5a1ebe5b",
+        "target": "concept:pydantic"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:5a1ebe5b",
+        "target": "concept:serialization"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:5a1ebe5b",
+        "target": "concept:data_validation"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:pydantic",
+        "target": "fact:5a1ebe5b"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:serialization",
+        "target": "fact:5a1ebe5b"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:data_validation",
+        "target": "fact:5a1ebe5b"
+      },
+      {
+        "rel": "enables",
+        "weight": 1.0,
+        "source": "concept:explicit_serialization",
+        "target": "concept:state_persistence"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:49b084de",
+        "target": "concept:valueerror"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:49b084de",
+        "target": "concept:setter_logic"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:49b084de",
+        "target": "concept:model_integrity"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:valueerror",
+        "target": "fact:49b084de"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:setter_logic",
+        "target": "fact:49b084de"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:model_integrity",
+        "target": "fact:49b084de"
+      },
+      {
+        "rel": "prevents",
+        "weight": 1.0,
+        "source": "concept:setter_validation",
+        "target": "concept:invalid_state"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a79eac14",
+        "target": "concept:decimal.context"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a79eac14",
+        "target": "concept:default_precision"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a79eac14",
+        "target": "concept:floating-point-error"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:default_precision",
+        "target": "fact:a79eac14"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:floating-point-error",
+        "target": "fact:a79eac14"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:0aaf052c",
+        "target": "concept:decimal.divisionbyzero"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:0aaf052c",
+        "target": "concept:decimal.invalidoperation"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:0aaf052c",
+        "target": "concept:loggerservice"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:decimal.divisionbyzero",
+        "target": "fact:0aaf052c"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:decimal.invalidoperation",
+        "target": "fact:0aaf052c"
+      },
+      {
+        "rel": "improves",
+        "weight": 1.0,
+        "source": "concept:explicit-catch",
+        "target": "concept:system-resilience"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:be442198",
+        "target": "concept:tkinter"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:be442198",
+        "target": "concept:calculatorwindow"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:be442198",
+        "target": "concept:controller"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:be442198",
+        "target": "concept:interfacecontract"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:calculatorwindow",
+        "target": "fact:be442198"
+      },
+      {
+        "rel": "exposes",
+        "weight": 1.0,
+        "source": "concept:calculatorwindow",
+        "target": "concept:controller"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:calculatorwindow",
+        "target": "fact:2dac92df"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:calculatorwindow",
+        "target": "fact:ed42d9cc"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:controller",
+        "target": "fact:be442198"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:controller",
+        "target": "fact:5e463c6d"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:controller",
+        "target": "fact:f8bd8654"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:controller",
+        "target": "fact:2bb3dadd"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:controller",
+        "target": "fact:2806bde2"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:interfacecontract",
+        "target": "fact:be442198"
+      },
+      {
+        "rel": "enforces",
+        "weight": 1.0,
+        "source": "concept:interfacecontract",
+        "target": "concept:decoupling"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:decoupling",
+        "target": "fact:0998d13d"
+      },
+      {
+        "rel": "prevents",
+        "weight": 1.0,
+        "source": "concept:decoupling",
+        "target": "concept:tight-coupling"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:2dac92df",
+        "target": "concept:geometry-manager"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:2dac92df",
+        "target": "concept:test-snippet"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:2dac92df",
+        "target": "concept:calculatorwindow"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:geometry-manager",
+        "target": "fact:2dac92df"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:test-snippet",
+        "target": "fact:2dac92df"
+      },
+      {
+        "rel": "prevents",
+        "weight": 1.0,
+        "source": "concept:headful-testing",
+        "target": "concept:layout-inconsistencies"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:f51c4743",
+        "target": "concept:regex"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:f51c4743",
+        "target": "concept:mathengine"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:f51c4743",
+        "target": "concept:input-sanitization"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:regex",
+        "target": "fact:f51c4743"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:mathengine",
+        "target": "fact:f51c4743"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:input-sanitization",
+        "target": "fact:f51c4743"
+      },
+      {
+        "rel": "enables",
+        "weight": 1.0,
+        "source": "concept:regex-validation",
+        "target": "concept:deterministic-fallback"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:b3cedfb8",
+        "target": "concept:locale"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:b3cedfb8",
+        "target": "concept:float"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:b3cedfb8",
+        "target": "concept:string-manipulation"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:locale",
+        "target": "fact:b3cedfb8"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:float",
+        "target": "fact:b3cedfb8"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:string-manipulation",
+        "target": "fact:b3cedfb8"
+      },
+      {
+        "rel": "is-incompatible-with",
+        "weight": 1.0,
+        "source": "concept:comma-decimal",
+        "target": "concept:standard-parsing"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:0998d13d",
+        "target": "concept:logger"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:0998d13d",
+        "target": "concept:serviceclass"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:0998d13d",
+        "target": "concept:decoupling"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:logger",
+        "target": "fact:0998d13d"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:logger",
+        "target": "fact:e65884d7"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:serviceclass",
+        "target": "fact:0998d13d"
+      },
+      {
+        "rel": "facilitates",
+        "weight": 1.0,
+        "source": "concept:service-logging",
+        "target": "concept:debugging"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:5e463c6d",
+        "target": "concept:controller"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:5e463c6d",
+        "target": "concept:ui interface"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:5e463c6d",
+        "target": "concept:dependency injection"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:ui interface",
+        "target": "fact:5e463c6d"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:dependency injection",
+        "target": "fact:5e463c6d"
+      },
+      {
+        "rel": "enables",
+        "weight": 1.0,
+        "source": "concept:dependency injection",
+        "target": "concept:testability"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:f8bd8654",
+        "target": "concept:controller"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:f8bd8654",
+        "target": "concept:sanitizer"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:f8bd8654",
+        "target": "concept:execution layer"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:sanitizer",
+        "target": "fact:f8bd8654"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:execution layer",
+        "target": "fact:f8bd8654"
+      },
+      {
+        "rel": "protects",
+        "weight": 1.0,
+        "source": "concept:sanitization",
+        "target": "concept:execution layer"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:2bb3dadd",
+        "target": "concept:calculatorstate"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:2bb3dadd",
+        "target": "concept:controller"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:2bb3dadd",
+        "target": "concept:ui display"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:calculatorstate",
+        "target": "fact:2bb3dadd"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:ui display",
+        "target": "fact:2bb3dadd"
+      },
+      {
+        "rel": "synchronizes",
+        "weight": 1.0,
+        "source": "concept:state manager",
+        "target": "concept:ui display"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ed42d9cc",
+        "target": "concept:di container"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ed42d9cc",
+        "target": "concept:calculatorwindow"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ed42d9cc",
+        "target": "concept:calccontroller"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ed42d9cc",
+        "target": "concept:ui event loop"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:di container",
+        "target": "fact:ed42d9cc"
+      },
+      {
+        "rel": "instantiates",
+        "weight": 1.0,
+        "source": "concept:di container",
+        "target": "concept:services"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:calccontroller",
+        "target": "fact:ed42d9cc"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:ui event loop",
+        "target": "fact:ed42d9cc"
+      },
+      {
+        "rel": "binds_to",
+        "weight": 1.0,
+        "source": "concept:services",
+        "target": "concept:calculatorwindow"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:2806bde2",
+        "target": "concept:global state"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:2806bde2",
+        "target": "concept:unit testing"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:2806bde2",
+        "target": "concept:controller"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:2806bde2",
+        "target": "concept:view"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:global state",
+        "target": "fact:2806bde2"
+      },
+      {
+        "rel": "impedes",
+        "weight": 1.0,
+        "source": "concept:global state",
+        "target": "concept:unit testing"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:unit testing",
+        "target": "fact:2806bde2"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:view",
+        "target": "fact:2806bde2"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:e65884d7",
+        "target": "concept:logger"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:e65884d7",
+        "target": "concept:entry point"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:e65884d7",
+        "target": "concept:application lifecycle"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:entry point",
+        "target": "fact:e65884d7"
+      },
+      {
+        "rel": "initializes",
+        "weight": 1.0,
+        "source": "concept:entry point",
+        "target": "concept:logger"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:application lifecycle",
+        "target": "fact:e65884d7"
+      }
+    ]
+  }
+}

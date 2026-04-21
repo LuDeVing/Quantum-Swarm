@@ -1,0 +1,24 @@
+{
+  "id": "920b796f-1b95-43b9-b3b1-5002656a8b2a",
+  "name": "project 2",
+  "status": "In Progress",
+  "date": "2026-04-20T18:00:35.297964+00:00",
+  "owner_id": "guest",
+  "messages": [
+    {
+      "id": "f1d4e398-57f6-4cca-b61c-4b940bd78a24",
+      "text": "alright create a tkinter calculator app that works well with very large numbers",
+      "sender": "user",
+      "time": "",
+      "createdAt": "2026-04-20T18:01:03.475726+00:00"
+    },
+    {
+      "id": "f58bb802-8088-4342-abef-dcdcd41c2cb8",
+      "text": "Got it! I'm spinning up your engineering team to build \"alright create a tkinter calculator app that works well with very large numbers\". Send another message to check progress.",
+      "sender": "ai",
+      "time": "",
+      "createdAt": "2026-04-20T18:01:03.508624+00:00"
+    }
+  ],
+  "runner_pid": 18492
+}

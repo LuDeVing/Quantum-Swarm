@@ -1,0 +1,3124 @@
+{
+  "role": "dev_engineer",
+  "facts": [
+    {
+      "id": "11f87d61",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:47:43.990754+00:00",
+      "task": "PHASE 1: Implement AppConfig (src/config.py)\nThis module acts as the centralized source of truth for all application con",
+      "lesson": "Use Final type hints for configuration constants to prevent accidental runtime mutations and improve IDE static analysis accuracy.",
+      "tags": [
+        "python",
+        "typing",
+        "configuration"
+      ],
+      "success": true,
+      "confidence": 1.0
+    },
+    {
+      "id": "ed5cd63a",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:47:43.993138+00:00",
+      "task": "PHASE 1: Implement AppConfig (src/config.py)\nThis module acts as the centralized source of truth for all application con",
+      "lesson": "Centralize configuration in a dedicated module to ensure a single source of truth and simplify environment variable management across the application.",
+      "tags": [
+        "architecture",
+        "configuration",
+        "best-practices"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "c95c6dc3",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:47:43.995767+00:00",
+      "task": "PHASE 1: Implement AppConfig (src/config.py)\nThis module acts as the centralized source of truth for all application con",
+      "lesson": "Provide sensible, safe defaults for UI constants like dimensions and paths to prevent application crashes when environment variables are missing.",
+      "tags": [
+        "robustness",
+        "ui",
+        "configuration"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "a63a8960",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:47:44.232754+00:00",
+      "task": "PHASE 1: Implement TaskModel (src/models/task.py)\nDefines the core data schema for a task entity within the application.",
+      "lesson": "Use Python dataclasses with explicit type hinting for internal data models to ensure runtime type safety and improve IDE autocompletion for service layer developers.",
+      "tags": [
+        "python",
+        "dataclasses",
+        "type-safety"
+      ],
+      "success": true,
+      "confidence": 1.0
+    },
+    {
+      "id": "356e31e2",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:47:44.234887+00:00",
+      "task": "PHASE 1: Implement TaskModel (src/models/task.py)\nDefines the core data schema for a task entity within the application.",
+      "lesson": "Implement symmetrical to_dict/from_dict serialization helpers within domain models to decouple internal business logic from persistence layer formats.",
+      "tags": [
+        "serialization",
+        "architecture",
+        "data-transfer"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "d7c47b61",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:47:45.587819+00:00",
+      "task": "PHASE 1: Implement TaskInputView (src/ui/components/input_view.py)\nProvides a user interface widget for accepting input ",
+      "lesson": "Decouple UI components from business logic by using callback functions instead of direct method calls to ensure framework-agnostic component design.",
+      "tags": [
+        "ui-design",
+        "decoupling",
+        "callbacks"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "3efdea16",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:47:45.589507+00:00",
+      "task": "PHASE 1: Implement TaskInputView (src/ui/components/input_view.py)\nProvides a user interface widget for accepting input ",
+      "lesson": "Validate user input at the component level using guard clauses before triggering submission events to prevent downstream logic errors and minimize state corruption.",
+      "tags": [
+        "input-validation",
+        "defensive-programming",
+        "ui"
+      ],
+      "success": true,
+      "confidence": 0.92
+    },
+    {
+      "id": "a02fd582",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:47:45.591195+00:00",
+      "task": "PHASE 1: Implement TaskInputView (src/ui/components/input_view.py)\nProvides a user interface widget for accepting input ",
+      "lesson": "Encapsulate state mutation (like clearing text fields) within public methods to maintain strict control over internal component data flow.",
+      "tags": [
+        "encapsulation",
+        "api-design",
+        "state-management"
+      ],
+      "success": true,
+      "confidence": 0.88
+    },
+    {
+      "id": "bd9c0f96",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:47:46.870957+00:00",
+      "task": "PHASE 1: Implement EventBus (src/utils/event_bus.py)\nA centralized messaging component that implements the Observer patt",
+      "lesson": "Use reentrant locks (threading.RLock) instead of standard locks when implementing observers to prevent deadlocks if a callback attempts to emit further events or modify the subscription list.",
+      "tags": [
+        "threading",
+        "concurrency",
+        "patterns"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "3fb39f86",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:47:46.879707+00:00",
+      "task": "PHASE 1: Implement EventBus (src/utils/event_bus.py)\nA centralized messaging component that implements the Observer patt",
+      "lesson": "Favor weak references (weakref) for subscriber callbacks to prevent memory leaks in long-running UI applications where components are frequently created and destroyed.",
+      "tags": [
+        "memory-management",
+        "weakref",
+        "ui-development"
+      ],
+      "success": true,
+      "confidence": 0.85
+    },
+    {
+      "id": "a44af14c",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:47:59.250258+00:00",
+      "task": "PHASE 1: Implement ThemeManager (src/utils/theme.py)\nProvides utility functions to manage and apply application-wide sty",
+      "lesson": "Decouple GUI styling logic from business logic by centralizing property application in a dedicated ThemeManager class that iterates through widget trees.",
+      "tags": [
+        "tkinter",
+        "architecture",
+        "gui"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "86b55959",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:47:59.253927+00:00",
+      "task": "PHASE 1: Implement ThemeManager (src/utils/theme.py)\nProvides utility functions to manage and apply application-wide sty",
+      "lesson": "Inject configuration through a centralized AppConfig pattern rather than hardcoding style values to ensure dynamic theme switching and simplified environment-specific styling.",
+      "tags": [
+        "config",
+        "dependency-injection",
+        "patterns"
+      ],
+      "success": true,
+      "confidence": 0.9
+    },
+    {
+      "id": "4586b7c9",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:47:59.864777+00:00",
+      "task": "PHASE 1: Implement TaskRepository (src/data/repository.py)\nHandles all CRUD operations for task entities, abstracting th",
+      "lesson": "Use dataclasses.asdict for lightweight persistence serialization instead of manual key-value mapping to ensure schema consistency between internal models and storage layers.",
+      "tags": [
+        "python",
+        "dataclasses",
+        "serialization"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "4e04bfe9",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:47:59.867409+00:00",
+      "task": "PHASE 1: Implement TaskRepository (src/data/repository.py)\nHandles all CRUD operations for task entities, abstracting th",
+      "lesson": "Decouple business logic from persistence by enforcing a repository pattern that hides the storage backend (e.g., JSON vs SQL), facilitating future migration without changing service-layer code.",
+      "tags": [
+        "architecture",
+        "repository_pattern",
+        "decoupling"
+      ],
+      "success": true,
+      "confidence": 0.98
+    },
+    {
+      "id": "1e7b57c2",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:47:59.869904+00:00",
+      "task": "PHASE 1: Implement TaskRepository (src/data/repository.py)\nHandles all CRUD operations for task entities, abstracting th",
+      "lesson": "Implement granular file locking when using JSON-based repositories to prevent race conditions during concurrent CRUD operations in multi-process or multi-threaded environments.",
+      "tags": [
+        "concurrency",
+        "json",
+        "data_integrity"
+      ],
+      "success": true,
+      "confidence": 0.85
+    },
+    {
+      "id": "692e92e7",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:48:00.682179+00:00",
+      "task": "PHASE 1: Implement TaskListView (src/ui/components/list_view.py)\nA specific UI component responsible for rendering the l",
+      "lesson": "In tkinter.ttk.Treeview, store sensitive metadata like database IDs in hidden columns rather than relying on visible text, ensuring UI updates don't break data retrieval logic.",
+      "tags": [
+        "tkinter",
+        "ttk",
+        "ui-development"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "b6a22e60",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:48:00.684891+00:00",
+      "task": "PHASE 1: Implement TaskListView (src/ui/components/list_view.py)\nA specific UI component responsible for rendering the l",
+      "lesson": "Implement decoupled interaction handlers using callback patterns in UI components to isolate business logic from presentation layer code.",
+      "tags": [
+        "ui-patterns",
+        "callback",
+        "decoupling"
+      ],
+      "success": true,
+      "confidence": 0.9
+    },
+    {
+      "id": "4d1d3c31",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:48:15.225697+00:00",
+      "task": "PHASE 1: Implement TaskService (src/services/task_service.py)\nContains the business logic layer that orchestrates intera",
+      "lesson": "Decouple business logic from persistence by requiring repositories to implement a strict interface, ensuring services remain agnostic of the underlying database technology.",
+      "tags": [
+        "architecture",
+        "dependency-inversion",
+        "repository-pattern"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "ffe2a216",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:48:15.230305+00:00",
+      "task": "PHASE 1: Implement TaskService (src/services/task_service.py)\nContains the business logic layer that orchestrates intera",
+      "lesson": "Implement explicit data validation at the service boundary before passing DTOs to repositories to prevent malformed data from corrupting the persistent state.",
+      "tags": [
+        "validation",
+        "data-integrity",
+        "defensive-programming"
+      ],
+      "success": true,
+      "confidence": 0.98
+    },
+    {
+      "id": "4c128b1b",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:48:15.234820+00:00",
+      "task": "PHASE 1: Implement TaskService (src/services/task_service.py)\nContains the business logic layer that orchestrates intera",
+      "lesson": "Favor composition over inheritance when orchestrating multiple services to keep the orchestration layer modular and prevent deep class hierarchies.",
+      "tags": [
+        "composition",
+        "oop",
+        "clean-code"
+      ],
+      "success": true,
+      "confidence": 0.92
+    },
+    {
+      "id": "7d3bfc6f",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:48:32.220003+00:00",
+      "task": "PHASE 1: Implement MainLayout (src/ui/layout.py)\nDefines the primary graphical container and top-level structure of the ",
+      "lesson": "Avoid tight coupling between UI components and unstable config interfaces by using placeholder mocks or dependency injection patterns until the internal contract stabilizes.",
+      "tags": [
+        "architecture",
+        "ui",
+        "dependency-injection"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "81f444ff",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:48:32.222909+00:00",
+      "task": "PHASE 1: Implement MainLayout (src/ui/layout.py)\nDefines the primary graphical container and top-level structure of the ",
+      "lesson": "Implement automated smoke tests using minimal instantiation scripts to verify structural integrity of UI layouts before full integration.",
+      "tags": [
+        "testing",
+        "qa",
+        "automation"
+      ],
+      "success": true,
+      "confidence": 0.9
+    },
+    {
+      "id": "b155d8e1",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:48:47.479780+00:00",
+      "task": "PHASE 1: Implement AppController (src/controller.py)\nActs as the central coordinator between the UI layer and the busine",
+      "lesson": "Decouple UI and business logic by using an EventBus within the AppController; this prevents tight coupling and ensures components remain independently testable.",
+      "tags": [
+        "architecture",
+        "decoupling",
+        "controller-pattern"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "823eef8e",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:48:47.483263+00:00",
+      "task": "PHASE 1: Implement AppController (src/controller.py)\nActs as the central coordinator between the UI layer and the busine",
+      "lesson": "Inject dependencies into controllers via constructor arguments rather than global singletons to facilitate mock-based unit testing of coordination logic.",
+      "tags": [
+        "testing",
+        "dependency-injection",
+        "design-patterns"
+      ],
+      "success": true,
+      "confidence": 0.98
+    },
+    {
+      "id": "a4d0635f",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:48:47.486346+00:00",
+      "task": "PHASE 1: Implement AppController (src/controller.py)\nActs as the central coordinator between the UI layer and the busine",
+      "lesson": "Implement structured logging at controller entry points to trace user-triggered events through the system, simplifying debugging of orchestration flows.",
+      "tags": [
+        "logging",
+        "observability",
+        "debugging"
+      ],
+      "success": true,
+      "confidence": 0.92
+    },
+    {
+      "id": "19d7e709",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:49:00.901403+00:00",
+      "task": "PHASE 1: Implement MainWindow (src/ui/main_window.py)\nThe top-level window class that initializes the application UI env",
+      "lesson": "Utilize Dependency Injection in UI constructors to decouple the MainWindow from concrete service implementations, facilitating easier unit testing and modular component replacement.",
+      "tags": [
+        "ui",
+        "architecture",
+        "dependency-injection"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "38d170b1",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:49:00.905587+00:00",
+      "task": "PHASE 1: Implement MainWindow (src/ui/main_window.py)\nThe top-level window class that initializes the application UI env",
+      "lesson": "Enforce explicit lifecycle management by providing a standardized 'run' or 'start' method in the top-level window class to ensure proper initialization of the EventBus and backend services.",
+      "tags": [
+        "lifecycle",
+        "event-driven",
+        "ui"
+      ],
+      "success": true,
+      "confidence": 0.9
+    },
+    {
+      "id": "cf039fd1",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:49:00.909751+00:00",
+      "task": "PHASE 1: Implement MainWindow (src/ui/main_window.py)\nThe top-level window class that initializes the application UI env",
+      "lesson": "Define clear interface contracts for UI components (e.g., MainLayout) to avoid tight coupling between the UI logic and data repository layers, ensuring future-proof integration.",
+      "tags": [
+        "interface-segregation",
+        "architecture"
+      ],
+      "success": true,
+      "confidence": 0.85
+    },
+    {
+      "id": "37649a4f",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:49:01.311143+00:00",
+      "task": "PHASE 1: Implement IntegrationTester (tests/integration.py)\nDefines the suite of automated tests for verifying full end-",
+      "lesson": "Implement idempotent teardown logic in integration tests using a try-finally block to ensure local test artifacts are purged regardless of whether the test suite succeeds or crashes.",
+      "tags": [
+        "testing",
+        "cleanup",
+        "reliability"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "6f7bb458",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:49:01.316583+00:00",
+      "task": "PHASE 1: Implement IntegrationTester (tests/integration.py)\nDefines the suite of automated tests for verifying full end-",
+      "lesson": "Decouple storage layers from business services using dependency injection to facilitate testing against ephemeral in-memory or temporary file backends without mutating production state.",
+      "tags": [
+        "architecture",
+        "dependency_injection",
+        "testing"
+      ],
+      "success": true,
+      "confidence": 0.9
+    },
+    {
+      "id": "fbea4bfd",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:49:01.321417+00:00",
+      "task": "PHASE 1: Implement IntegrationTester (tests/integration.py)\nDefines the suite of automated tests for verifying full end-",
+      "lesson": "Centralize test execution in an entry-point class to standardize environment setup and teardown, preventing configuration drift across heterogeneous test modules.",
+      "tags": [
+        "testing",
+        "standardization"
+      ],
+      "success": true,
+      "confidence": 0.85
+    },
+    {
+      "id": "5c4a68a7",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:49:15.129569+00:00",
+      "task": "PHASE 1: Implement TestRunner (tests/runner.py)\nProvides the primary entry point for executing the application's test su",
+      "lesson": "Utilize unittest.TestLoader().discover() for automated test suite scaling; avoid manual list maintenance to ensure new test files are automatically included in the execution cycle.",
+      "tags": [
+        "testing",
+        "unittest",
+        "automation"
+      ],
+      "success": true,
+      "confidence": 0.95
+    },
+    {
+      "id": "3d51a828",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:49:15.133754+00:00",
+      "task": "PHASE 1: Implement TestRunner (tests/runner.py)\nProvides the primary entry point for executing the application's test su",
+      "lesson": "Implement failure reporting via standard logging modules rather than print statements to preserve CI/CD pipeline readability and facilitate automated failure analysis.",
+      "tags": [
+        "logging",
+        "observability",
+        "ci/cd"
+      ],
+      "success": true,
+      "confidence": 0.92
+    },
+    {
+      "id": "6c039f5e",
+      "sprint": 1,
+      "timestamp": "2026-04-20T17:49:15.137658+00:00",
+      "task": "PHASE 1: Implement TestRunner (tests/runner.py)\nProvides the primary entry point for executing the application's test su",
+      "lesson": "Enforce consistent execution interfaces by wrapping test runners in a unified class structure, decoupling the internal testing framework (e.g., unittest) from the application deployment lifecycle.",
+      "tags": [
+        "architecture",
+        "refactoring",
+        "testing"
+      ],
+      "success": true,
+      "confidence": 0.88
+    }
+  ],
+  "graph": {
+    "directed": true,
+    "multigraph": false,
+    "graph": {},
+    "nodes": [
+      {
+        "type": "fact",
+        "lesson": "Use Final type hints for configuration constants to prevent accidental runtime mutations and improve IDE static analysis accuracy.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 1.0,
+        "id": "fact:11f87d61"
+      },
+      {
+        "type": "concept",
+        "label": "typing.final",
+        "freq": 1,
+        "id": "concept:typing.final"
+      },
+      {
+        "type": "concept",
+        "label": "config.py",
+        "freq": 1,
+        "id": "concept:config.py"
+      },
+      {
+        "type": "concept",
+        "label": "static_analysis",
+        "freq": 1,
+        "id": "concept:static_analysis"
+      },
+      {
+        "type": "concept",
+        "label": "final",
+        "freq": 1,
+        "id": "concept:final"
+      },
+      {
+        "type": "concept",
+        "label": "immutability",
+        "freq": 1,
+        "id": "concept:immutability"
+      },
+      {
+        "type": "fact",
+        "lesson": "Centralize configuration in a dedicated module to ensure a single source of truth and simplify environment variable management across the application.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:ed5cd63a"
+      },
+      {
+        "type": "concept",
+        "label": "appconfig",
+        "freq": 3,
+        "id": "concept:appconfig"
+      },
+      {
+        "type": "concept",
+        "label": "env_vars",
+        "freq": 1,
+        "id": "concept:env_vars"
+      },
+      {
+        "type": "concept",
+        "label": "singleton_pattern",
+        "freq": 1,
+        "id": "concept:singleton_pattern"
+      },
+      {
+        "type": "concept",
+        "label": "centralization",
+        "freq": 1,
+        "id": "concept:centralization"
+      },
+      {
+        "type": "concept",
+        "label": "config_drift",
+        "freq": 1,
+        "id": "concept:config_drift"
+      },
+      {
+        "type": "fact",
+        "lesson": "Provide sensible, safe defaults for UI constants like dimensions and paths to prevent application crashes when environment variables are missing.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:c95c6dc3"
+      },
+      {
+        "type": "concept",
+        "label": "default_width",
+        "freq": 1,
+        "id": "concept:default_width"
+      },
+      {
+        "type": "concept",
+        "label": "default_storage_path",
+        "freq": 1,
+        "id": "concept:default_storage_path"
+      },
+      {
+        "type": "concept",
+        "label": "error_handling",
+        "freq": 2,
+        "id": "concept:error_handling"
+      },
+      {
+        "type": "concept",
+        "label": "sensible_defaults",
+        "freq": 1,
+        "id": "concept:sensible_defaults"
+      },
+      {
+        "type": "concept",
+        "label": "initialization_errors",
+        "freq": 1,
+        "id": "concept:initialization_errors"
+      },
+      {
+        "type": "fact",
+        "lesson": "Use Python dataclasses with explicit type hinting for internal data models to ensure runtime type safety and improve IDE autocompletion for service layer developers.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 1.0,
+        "id": "fact:a63a8960"
+      },
+      {
+        "type": "concept",
+        "label": "dataclass",
+        "freq": 2,
+        "id": "concept:dataclass"
+      },
+      {
+        "type": "concept",
+        "label": "typing",
+        "freq": 1,
+        "id": "concept:typing"
+      },
+      {
+        "type": "concept",
+        "label": "service-layer",
+        "freq": 1,
+        "id": "concept:service-layer"
+      },
+      {
+        "type": "concept",
+        "label": "type-safety",
+        "freq": 1,
+        "id": "concept:type-safety"
+      },
+      {
+        "type": "fact",
+        "lesson": "Implement symmetrical to_dict/from_dict serialization helpers within domain models to decouple internal business logic from persistence layer formats.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:356e31e2"
+      },
+      {
+        "type": "concept",
+        "label": "serialization",
+        "freq": 2,
+        "id": "concept:serialization"
+      },
+      {
+        "type": "concept",
+        "label": "persistence-layer",
+        "freq": 2,
+        "id": "concept:persistence-layer"
+      },
+      {
+        "type": "concept",
+        "label": "domain-model",
+        "freq": 1,
+        "id": "concept:domain-model"
+      },
+      {
+        "type": "concept",
+        "label": "serialization-helpers",
+        "freq": 1,
+        "id": "concept:serialization-helpers"
+      },
+      {
+        "type": "fact",
+        "lesson": "Decouple UI components from business logic by using callback functions instead of direct method calls to ensure framework-agnostic component design.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:d7c47b61"
+      },
+      {
+        "type": "concept",
+        "label": "tkinter",
+        "freq": 2,
+        "id": "concept:tkinter"
+      },
+      {
+        "type": "concept",
+        "label": "callback_pattern",
+        "freq": 4,
+        "id": "concept:callback_pattern"
+      },
+      {
+        "type": "concept",
+        "label": "mvc",
+        "freq": 1,
+        "id": "concept:mvc"
+      },
+      {
+        "type": "concept",
+        "label": "component_design",
+        "freq": 1,
+        "id": "concept:component_design"
+      },
+      {
+        "type": "concept",
+        "label": "component_decoupling",
+        "freq": 1,
+        "id": "concept:component_decoupling"
+      },
+      {
+        "type": "fact",
+        "lesson": "Validate user input at the component level using guard clauses before triggering submission events to prevent downstream logic errors and minimize state corruption.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.92,
+        "id": "fact:3efdea16"
+      },
+      {
+        "type": "concept",
+        "label": "validation_logic",
+        "freq": 1,
+        "id": "concept:validation_logic"
+      },
+      {
+        "type": "concept",
+        "label": "input_view",
+        "freq": 1,
+        "id": "concept:input_view"
+      },
+      {
+        "type": "concept",
+        "label": "early_validation",
+        "freq": 1,
+        "id": "concept:early_validation"
+      },
+      {
+        "type": "concept",
+        "label": "downstream_logic_errors",
+        "freq": 1,
+        "id": "concept:downstream_logic_errors"
+      },
+      {
+        "type": "fact",
+        "lesson": "Encapsulate state mutation (like clearing text fields) within public methods to maintain strict control over internal component data flow.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.88,
+        "id": "fact:a02fd582"
+      },
+      {
+        "type": "concept",
+        "label": "public_methods",
+        "freq": 2,
+        "id": "concept:public_methods"
+      },
+      {
+        "type": "concept",
+        "label": "internal_state",
+        "freq": 2,
+        "id": "concept:internal_state"
+      },
+      {
+        "type": "concept",
+        "label": "encapsulation",
+        "freq": 3,
+        "id": "concept:encapsulation"
+      },
+      {
+        "type": "fact",
+        "lesson": "Use reentrant locks (threading.RLock) instead of standard locks when implementing observers to prevent deadlocks if a callback attempts to emit further events or modify the subscription list.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:bd9c0f96"
+      },
+      {
+        "type": "concept",
+        "label": "threading.rlock",
+        "freq": 1,
+        "id": "concept:threading.rlock"
+      },
+      {
+        "type": "concept",
+        "label": "observer pattern",
+        "freq": 1,
+        "id": "concept:observer pattern"
+      },
+      {
+        "type": "concept",
+        "label": "deadlock",
+        "freq": 2,
+        "id": "concept:deadlock"
+      },
+      {
+        "type": "concept",
+        "label": "rlock",
+        "freq": 1,
+        "id": "concept:rlock"
+      },
+      {
+        "type": "concept",
+        "label": "reentrancy",
+        "freq": 1,
+        "id": "concept:reentrancy"
+      },
+      {
+        "type": "concept",
+        "label": "recursive_callbacks",
+        "freq": 1,
+        "id": "concept:recursive_callbacks"
+      },
+      {
+        "type": "fact",
+        "lesson": "Favor weak references (weakref) for subscriber callbacks to prevent memory leaks in long-running UI applications where components are frequently created and destroyed.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.85,
+        "id": "fact:3fb39f86"
+      },
+      {
+        "type": "concept",
+        "label": "weakref",
+        "freq": 2,
+        "id": "concept:weakref"
+      },
+      {
+        "type": "concept",
+        "label": "memory_leak",
+        "freq": 3,
+        "id": "concept:memory_leak"
+      },
+      {
+        "type": "concept",
+        "label": "callback",
+        "freq": 1,
+        "id": "concept:callback"
+      },
+      {
+        "type": "concept",
+        "label": "strong_references",
+        "freq": 1,
+        "id": "concept:strong_references"
+      },
+      {
+        "type": "fact",
+        "lesson": "Decouple GUI styling logic from business logic by centralizing property application in a dedicated ThemeManager class that iterates through widget trees.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:a44af14c"
+      },
+      {
+        "type": "concept",
+        "label": "thememanager",
+        "freq": 4,
+        "id": "concept:thememanager"
+      },
+      {
+        "type": "concept",
+        "label": "widget",
+        "freq": 2,
+        "id": "concept:widget"
+      },
+      {
+        "type": "concept",
+        "label": "decoupling",
+        "freq": 1,
+        "id": "concept:decoupling"
+      },
+      {
+        "type": "concept",
+        "label": "ui_consistency",
+        "freq": 1,
+        "id": "concept:ui_consistency"
+      },
+      {
+        "type": "fact",
+        "lesson": "Inject configuration through a centralized AppConfig pattern rather than hardcoding style values to ensure dynamic theme switching and simplified environment-specific styling.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.9,
+        "id": "fact:86b55959"
+      },
+      {
+        "type": "fact",
+        "lesson": "Use dataclasses.asdict for lightweight persistence serialization instead of manual key-value mapping to ensure schema consistency between internal models and storage layers.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:4586b7c9"
+      },
+      {
+        "type": "concept",
+        "label": "dataclasses",
+        "freq": 1,
+        "id": "concept:dataclasses"
+      },
+      {
+        "type": "concept",
+        "label": "asdict",
+        "freq": 1,
+        "id": "concept:asdict"
+      },
+      {
+        "type": "concept",
+        "label": "persistence_layer",
+        "freq": 2,
+        "id": "concept:persistence_layer"
+      },
+      {
+        "type": "concept",
+        "label": "dataclasses.asdict",
+        "freq": 1,
+        "id": "concept:dataclasses.asdict"
+      },
+      {
+        "type": "concept",
+        "label": "persistence_serialization",
+        "freq": 1,
+        "id": "concept:persistence_serialization"
+      },
+      {
+        "type": "fact",
+        "lesson": "Decouple business logic from persistence by enforcing a repository pattern that hides the storage backend (e.g., JSON vs SQL), facilitating future migration without changing service-layer code.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.98,
+        "id": "fact:4e04bfe9"
+      },
+      {
+        "type": "concept",
+        "label": "repository_pattern",
+        "freq": 2,
+        "id": "concept:repository_pattern"
+      },
+      {
+        "type": "concept",
+        "label": "business_logic",
+        "freq": 3,
+        "id": "concept:business_logic"
+      },
+      {
+        "type": "fact",
+        "lesson": "Implement granular file locking when using JSON-based repositories to prevent race conditions during concurrent CRUD operations in multi-process or multi-threaded environments.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.85,
+        "id": "fact:1e7b57c2"
+      },
+      {
+        "type": "concept",
+        "label": "file_locking",
+        "freq": 2,
+        "id": "concept:file_locking"
+      },
+      {
+        "type": "concept",
+        "label": "json",
+        "freq": 1,
+        "id": "concept:json"
+      },
+      {
+        "type": "concept",
+        "label": "race_conditions",
+        "freq": 2,
+        "id": "concept:race_conditions"
+      },
+      {
+        "type": "concept",
+        "label": "data_corruption",
+        "freq": 1,
+        "id": "concept:data_corruption"
+      },
+      {
+        "type": "fact",
+        "lesson": "In tkinter.ttk.Treeview, store sensitive metadata like database IDs in hidden columns rather than relying on visible text, ensuring UI updates don't break data retrieval logic.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:692e92e7"
+      },
+      {
+        "type": "concept",
+        "label": "tkinter.ttk.treeview",
+        "freq": 1,
+        "id": "concept:tkinter.ttk.treeview"
+      },
+      {
+        "type": "concept",
+        "label": "metadata",
+        "freq": 1,
+        "id": "concept:metadata"
+      },
+      {
+        "type": "concept",
+        "label": "hidden_columns",
+        "freq": 3,
+        "id": "concept:hidden_columns"
+      },
+      {
+        "type": "concept",
+        "label": "ui_rendering",
+        "freq": 1,
+        "id": "concept:ui_rendering"
+      },
+      {
+        "type": "concept",
+        "label": "reliable_event_handling",
+        "freq": 1,
+        "id": "concept:reliable_event_handling"
+      },
+      {
+        "type": "fact",
+        "lesson": "Implement decoupled interaction handlers using callback patterns in UI components to isolate business logic from presentation layer code.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.9,
+        "id": "fact:b6a22e60"
+      },
+      {
+        "type": "concept",
+        "label": "presentation_layer",
+        "freq": 1,
+        "id": "concept:presentation_layer"
+      },
+      {
+        "type": "concept",
+        "label": "tight_coupling",
+        "freq": 1,
+        "id": "concept:tight_coupling"
+      },
+      {
+        "type": "fact",
+        "lesson": "Decouple business logic from persistence by requiring repositories to implement a strict interface, ensuring services remain agnostic of the underlying database technology.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:4d1d3c31"
+      },
+      {
+        "type": "concept",
+        "label": "taskservice",
+        "freq": 4,
+        "id": "concept:taskservice"
+      },
+      {
+        "type": "concept",
+        "label": "taskrepository",
+        "freq": 4,
+        "id": "concept:taskrepository"
+      },
+      {
+        "type": "concept",
+        "label": "service layer",
+        "freq": 2,
+        "id": "concept:service layer"
+      },
+      {
+        "type": "concept",
+        "label": "interface",
+        "freq": 2,
+        "id": "concept:interface"
+      },
+      {
+        "type": "concept",
+        "label": "dependency inversion",
+        "freq": 1,
+        "id": "concept:dependency inversion"
+      },
+      {
+        "type": "concept",
+        "label": "testability",
+        "freq": 2,
+        "id": "concept:testability"
+      },
+      {
+        "type": "fact",
+        "lesson": "Implement explicit data validation at the service boundary before passing DTOs to repositories to prevent malformed data from corrupting the persistent state.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.98,
+        "id": "fact:ffe2a216"
+      },
+      {
+        "type": "concept",
+        "label": "dto",
+        "freq": 1,
+        "id": "concept:dto"
+      },
+      {
+        "type": "concept",
+        "label": "input validation",
+        "freq": 2,
+        "id": "concept:input validation"
+      },
+      {
+        "type": "concept",
+        "label": "data corruption",
+        "freq": 1,
+        "id": "concept:data corruption"
+      },
+      {
+        "type": "concept",
+        "label": "data integrity",
+        "freq": 1,
+        "id": "concept:data integrity"
+      },
+      {
+        "type": "fact",
+        "lesson": "Favor composition over inheritance when orchestrating multiple services to keep the orchestration layer modular and prevent deep class hierarchies.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.92,
+        "id": "fact:4c128b1b"
+      },
+      {
+        "type": "concept",
+        "label": "orchestration",
+        "freq": 1,
+        "id": "concept:orchestration"
+      },
+      {
+        "type": "concept",
+        "label": "composition",
+        "freq": 2,
+        "id": "concept:composition"
+      },
+      {
+        "type": "concept",
+        "label": "inheritance",
+        "freq": 1,
+        "id": "concept:inheritance"
+      },
+      {
+        "type": "concept",
+        "label": "coupling",
+        "freq": 2,
+        "id": "concept:coupling"
+      },
+      {
+        "type": "fact",
+        "lesson": "Avoid tight coupling between UI components and unstable config interfaces by using placeholder mocks or dependency injection patterns until the internal contract stabilizes.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:7d3bfc6f"
+      },
+      {
+        "type": "concept",
+        "label": "ui components",
+        "freq": 1,
+        "id": "concept:ui components"
+      },
+      {
+        "type": "concept",
+        "label": "mainlayout",
+        "freq": 5,
+        "id": "concept:mainlayout"
+      },
+      {
+        "type": "concept",
+        "label": "config interface",
+        "freq": 1,
+        "id": "concept:config interface"
+      },
+      {
+        "type": "concept",
+        "label": "importerror",
+        "freq": 2,
+        "id": "concept:importerror"
+      },
+      {
+        "type": "concept",
+        "label": "unstable_config_interface",
+        "freq": 1,
+        "id": "concept:unstable_config_interface"
+      },
+      {
+        "type": "concept",
+        "label": "dependency_injection",
+        "freq": 3,
+        "id": "concept:dependency_injection"
+      },
+      {
+        "type": "concept",
+        "label": "build_failure",
+        "freq": 1,
+        "id": "concept:build_failure"
+      },
+      {
+        "type": "fact",
+        "lesson": "Implement automated smoke tests using minimal instantiation scripts to verify structural integrity of UI layouts before full integration.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.9,
+        "id": "fact:81f444ff"
+      },
+      {
+        "type": "concept",
+        "label": "python3",
+        "freq": 1,
+        "id": "concept:python3"
+      },
+      {
+        "type": "concept",
+        "label": "smoke_test",
+        "freq": 2,
+        "id": "concept:smoke_test"
+      },
+      {
+        "type": "concept",
+        "label": "structural_integrity",
+        "freq": 1,
+        "id": "concept:structural_integrity"
+      },
+      {
+        "type": "fact",
+        "lesson": "Decouple UI and business logic by using an EventBus within the AppController; this prevents tight coupling and ensures components remain independently testable.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:b155d8e1"
+      },
+      {
+        "type": "concept",
+        "label": "appcontroller",
+        "freq": 4,
+        "id": "concept:appcontroller"
+      },
+      {
+        "type": "concept",
+        "label": "eventbus",
+        "freq": 4,
+        "id": "concept:eventbus"
+      },
+      {
+        "type": "concept",
+        "label": "ui-layer",
+        "freq": 2,
+        "id": "concept:ui-layer"
+      },
+      {
+        "type": "concept",
+        "label": "business-logic",
+        "freq": 2,
+        "id": "concept:business-logic"
+      },
+      {
+        "type": "fact",
+        "lesson": "Inject dependencies into controllers via constructor arguments rather than global singletons to facilitate mock-based unit testing of coordination logic.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.98,
+        "id": "fact:823eef8e"
+      },
+      {
+        "type": "concept",
+        "label": "unit-testing",
+        "freq": 2,
+        "id": "concept:unit-testing"
+      },
+      {
+        "type": "concept",
+        "label": "dependency-injection",
+        "freq": 1,
+        "id": "concept:dependency-injection"
+      },
+      {
+        "type": "fact",
+        "lesson": "Implement structured logging at controller entry points to trace user-triggered events through the system, simplifying debugging of orchestration flows.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.92,
+        "id": "fact:a4d0635f"
+      },
+      {
+        "type": "concept",
+        "label": "logging",
+        "freq": 2,
+        "id": "concept:logging"
+      },
+      {
+        "type": "concept",
+        "label": "event-trace",
+        "freq": 2,
+        "id": "concept:event-trace"
+      },
+      {
+        "type": "concept",
+        "label": "structured-logging",
+        "freq": 1,
+        "id": "concept:structured-logging"
+      },
+      {
+        "type": "fact",
+        "lesson": "Utilize Dependency Injection in UI constructors to decouple the MainWindow from concrete service implementations, facilitating easier unit testing and modular component replacement.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:19d7e709"
+      },
+      {
+        "type": "concept",
+        "label": "mainwindow",
+        "freq": 2,
+        "id": "concept:mainwindow"
+      },
+      {
+        "type": "concept",
+        "label": "dependency injection",
+        "freq": 3,
+        "id": "concept:dependency injection"
+      },
+      {
+        "type": "fact",
+        "lesson": "Enforce explicit lifecycle management by providing a standardized 'run' or 'start' method in the top-level window class to ensure proper initialization of the EventBus and backend services.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.9,
+        "id": "fact:38d170b1"
+      },
+      {
+        "type": "concept",
+        "label": "lifecycle",
+        "freq": 1,
+        "id": "concept:lifecycle"
+      },
+      {
+        "type": "concept",
+        "label": "explicit lifecycle",
+        "freq": 1,
+        "id": "concept:explicit lifecycle"
+      },
+      {
+        "type": "concept",
+        "label": "uninitialized_state_errors",
+        "freq": 1,
+        "id": "concept:uninitialized_state_errors"
+      },
+      {
+        "type": "fact",
+        "lesson": "Define clear interface contracts for UI components (e.g., MainLayout) to avoid tight coupling between the UI logic and data repository layers, ensuring future-proof integration.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.85,
+        "id": "fact:cf039fd1"
+      },
+      {
+        "type": "concept",
+        "label": "interface contracts",
+        "freq": 1,
+        "id": "concept:interface contracts"
+      },
+      {
+        "type": "concept",
+        "label": "ui",
+        "freq": 1,
+        "id": "concept:ui"
+      },
+      {
+        "type": "fact",
+        "lesson": "Implement idempotent teardown logic in integration tests using a try-finally block to ensure local test artifacts are purged regardless of whether the test suite succeeds or crashes.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:37649a4f"
+      },
+      {
+        "type": "concept",
+        "label": "try-finally",
+        "freq": 2,
+        "id": "concept:try-finally"
+      },
+      {
+        "type": "concept",
+        "label": "idempotency",
+        "freq": 1,
+        "id": "concept:idempotency"
+      },
+      {
+        "type": "concept",
+        "label": "file_system_persistence",
+        "freq": 1,
+        "id": "concept:file_system_persistence"
+      },
+      {
+        "type": "concept",
+        "label": "idempotent_teardown",
+        "freq": 1,
+        "id": "concept:idempotent_teardown"
+      },
+      {
+        "type": "fact",
+        "lesson": "Decouple storage layers from business services using dependency injection to facilitate testing against ephemeral in-memory or temporary file backends without mutating production state.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.9,
+        "id": "fact:6f7bb458"
+      },
+      {
+        "type": "concept",
+        "label": "test_isolation",
+        "freq": 1,
+        "id": "concept:test_isolation"
+      },
+      {
+        "type": "fact",
+        "lesson": "Centralize test execution in an entry-point class to standardize environment setup and teardown, preventing configuration drift across heterogeneous test modules.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.85,
+        "id": "fact:fbea4bfd"
+      },
+      {
+        "type": "concept",
+        "label": "integrationtester",
+        "freq": 2,
+        "id": "concept:integrationtester"
+      },
+      {
+        "type": "concept",
+        "label": "test_entry_point",
+        "freq": 1,
+        "id": "concept:test_entry_point"
+      },
+      {
+        "type": "concept",
+        "label": "environment_lifecycle",
+        "freq": 1,
+        "id": "concept:environment_lifecycle"
+      },
+      {
+        "type": "fact",
+        "lesson": "Utilize unittest.TestLoader().discover() for automated test suite scaling; avoid manual list maintenance to ensure new test files are automatically included in the execution cycle.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.95,
+        "id": "fact:5c4a68a7"
+      },
+      {
+        "type": "concept",
+        "label": "unittest",
+        "freq": 2,
+        "id": "concept:unittest"
+      },
+      {
+        "type": "concept",
+        "label": "testloader",
+        "freq": 1,
+        "id": "concept:testloader"
+      },
+      {
+        "type": "concept",
+        "label": "test_discovery",
+        "freq": 1,
+        "id": "concept:test_discovery"
+      },
+      {
+        "type": "concept",
+        "label": "manual_test_registration",
+        "freq": 2,
+        "id": "concept:manual_test_registration"
+      },
+      {
+        "type": "concept",
+        "label": "omitted_coverage",
+        "freq": 1,
+        "id": "concept:omitted_coverage"
+      },
+      {
+        "type": "concept",
+        "label": "testloader.discover()",
+        "freq": 1,
+        "id": "concept:testloader.discover()"
+      },
+      {
+        "type": "fact",
+        "lesson": "Implement failure reporting via standard logging modules rather than print statements to preserve CI/CD pipeline readability and facilitate automated failure analysis.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.92,
+        "id": "fact:3d51a828"
+      },
+      {
+        "type": "concept",
+        "label": "ci_pipeline",
+        "freq": 1,
+        "id": "concept:ci_pipeline"
+      },
+      {
+        "type": "concept",
+        "label": "stdout",
+        "freq": 1,
+        "id": "concept:stdout"
+      },
+      {
+        "type": "concept",
+        "label": "print_statements",
+        "freq": 1,
+        "id": "concept:print_statements"
+      },
+      {
+        "type": "concept",
+        "label": "log_parsing",
+        "freq": 1,
+        "id": "concept:log_parsing"
+      },
+      {
+        "type": "concept",
+        "label": "logging_module",
+        "freq": 1,
+        "id": "concept:logging_module"
+      },
+      {
+        "type": "concept",
+        "label": "structured_diagnostics",
+        "freq": 1,
+        "id": "concept:structured_diagnostics"
+      },
+      {
+        "type": "fact",
+        "lesson": "Enforce consistent execution interfaces by wrapping test runners in a unified class structure, decoupling the internal testing framework (e.g., unittest) from the application deployment lifecycle.",
+        "sprint": 1,
+        "success": true,
+        "confidence": 0.88,
+        "id": "fact:6c039f5e"
+      },
+      {
+        "type": "concept",
+        "label": "testrunner",
+        "freq": 1,
+        "id": "concept:testrunner"
+      },
+      {
+        "type": "concept",
+        "label": "modularity",
+        "freq": 1,
+        "id": "concept:modularity"
+      },
+      {
+        "type": "concept",
+        "label": "unified_interface",
+        "freq": 1,
+        "id": "concept:unified_interface"
+      },
+      {
+        "type": "concept",
+        "label": "tooling_integration",
+        "freq": 1,
+        "id": "concept:tooling_integration"
+      }
+    ],
+    "edges": [
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:11f87d61",
+        "target": "concept:typing.final"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:11f87d61",
+        "target": "concept:config.py"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:11f87d61",
+        "target": "concept:static_analysis"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:typing.final",
+        "target": "fact:11f87d61"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:config.py",
+        "target": "fact:11f87d61"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:static_analysis",
+        "target": "fact:11f87d61"
+      },
+      {
+        "rel": "enforces",
+        "weight": 1.0,
+        "source": "concept:final",
+        "target": "concept:immutability"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ed5cd63a",
+        "target": "concept:appconfig"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ed5cd63a",
+        "target": "concept:env_vars"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ed5cd63a",
+        "target": "concept:singleton_pattern"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:appconfig",
+        "target": "fact:ed5cd63a"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:appconfig",
+        "target": "fact:86b55959"
+      },
+      {
+        "rel": "provides_data_to",
+        "weight": 1.0,
+        "source": "concept:appconfig",
+        "target": "concept:thememanager"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:env_vars",
+        "target": "fact:ed5cd63a"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:singleton_pattern",
+        "target": "fact:ed5cd63a"
+      },
+      {
+        "rel": "reduces",
+        "weight": 1.0,
+        "source": "concept:centralization",
+        "target": "concept:config_drift"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:c95c6dc3",
+        "target": "concept:default_width"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:c95c6dc3",
+        "target": "concept:default_storage_path"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:c95c6dc3",
+        "target": "concept:error_handling"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:default_width",
+        "target": "fact:c95c6dc3"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:default_storage_path",
+        "target": "fact:c95c6dc3"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:error_handling",
+        "target": "fact:c95c6dc3"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:error_handling",
+        "target": "fact:3efdea16"
+      },
+      {
+        "rel": "prevents",
+        "weight": 1.0,
+        "source": "concept:sensible_defaults",
+        "target": "concept:initialization_errors"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a63a8960",
+        "target": "concept:dataclass"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a63a8960",
+        "target": "concept:typing"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a63a8960",
+        "target": "concept:service-layer"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:dataclass",
+        "target": "fact:a63a8960"
+      },
+      {
+        "rel": "enables",
+        "weight": 1.0,
+        "source": "concept:dataclass",
+        "target": "concept:type-safety"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:typing",
+        "target": "fact:a63a8960"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:service-layer",
+        "target": "fact:a63a8960"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:356e31e2",
+        "target": "concept:serialization"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:356e31e2",
+        "target": "concept:persistence-layer"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:356e31e2",
+        "target": "concept:domain-model"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:serialization",
+        "target": "fact:356e31e2"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:serialization",
+        "target": "fact:4586b7c9"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:persistence-layer",
+        "target": "fact:356e31e2"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:domain-model",
+        "target": "fact:356e31e2"
+      },
+      {
+        "rel": "decouples",
+        "weight": 1.0,
+        "source": "concept:serialization-helpers",
+        "target": "concept:persistence-layer"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:d7c47b61",
+        "target": "concept:tkinter"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:d7c47b61",
+        "target": "concept:callback_pattern"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:d7c47b61",
+        "target": "concept:mvc"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:d7c47b61",
+        "target": "concept:component_design"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:tkinter",
+        "target": "fact:d7c47b61"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:tkinter",
+        "target": "fact:a44af14c"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:callback_pattern",
+        "target": "fact:d7c47b61"
+      },
+      {
+        "rel": "enables",
+        "weight": 1.0,
+        "source": "concept:callback_pattern",
+        "target": "concept:component_decoupling"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:callback_pattern",
+        "target": "fact:b6a22e60"
+      },
+      {
+        "rel": "prevents",
+        "weight": 1.0,
+        "source": "concept:callback_pattern",
+        "target": "concept:tight_coupling"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:mvc",
+        "target": "fact:d7c47b61"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:component_design",
+        "target": "fact:d7c47b61"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:3efdea16",
+        "target": "concept:validation_logic"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:3efdea16",
+        "target": "concept:input_view"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:3efdea16",
+        "target": "concept:error_handling"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:validation_logic",
+        "target": "fact:3efdea16"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:input_view",
+        "target": "fact:3efdea16"
+      },
+      {
+        "rel": "prevents",
+        "weight": 1.0,
+        "source": "concept:early_validation",
+        "target": "concept:downstream_logic_errors"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a02fd582",
+        "target": "concept:public_methods"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a02fd582",
+        "target": "concept:internal_state"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a02fd582",
+        "target": "concept:encapsulation"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:public_methods",
+        "target": "fact:a02fd582"
+      },
+      {
+        "rel": "protects",
+        "weight": 1.0,
+        "source": "concept:public_methods",
+        "target": "concept:internal_state"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:internal_state",
+        "target": "fact:a02fd582"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:encapsulation",
+        "target": "fact:a02fd582"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:encapsulation",
+        "target": "fact:6c039f5e"
+      },
+      {
+        "rel": "improves",
+        "weight": 1.0,
+        "source": "concept:encapsulation",
+        "target": "concept:modularity"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:bd9c0f96",
+        "target": "concept:threading.rlock"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:bd9c0f96",
+        "target": "concept:observer pattern"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:bd9c0f96",
+        "target": "concept:deadlock"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:threading.rlock",
+        "target": "fact:bd9c0f96"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:observer pattern",
+        "target": "fact:bd9c0f96"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:deadlock",
+        "target": "fact:bd9c0f96"
+      },
+      {
+        "rel": "prevents",
+        "weight": 1.0,
+        "source": "concept:rlock",
+        "target": "concept:deadlock"
+      },
+      {
+        "rel": "supports",
+        "weight": 1.0,
+        "source": "concept:reentrancy",
+        "target": "concept:recursive_callbacks"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:3fb39f86",
+        "target": "concept:weakref"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:3fb39f86",
+        "target": "concept:memory_leak"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:3fb39f86",
+        "target": "concept:callback"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:weakref",
+        "target": "fact:3fb39f86"
+      },
+      {
+        "rel": "mitigates",
+        "weight": 1.0,
+        "source": "concept:weakref",
+        "target": "concept:memory_leak"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:memory_leak",
+        "target": "fact:3fb39f86"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:callback",
+        "target": "fact:3fb39f86"
+      },
+      {
+        "rel": "cause",
+        "weight": 1.0,
+        "source": "concept:strong_references",
+        "target": "concept:memory_leak"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a44af14c",
+        "target": "concept:thememanager"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a44af14c",
+        "target": "concept:tkinter"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a44af14c",
+        "target": "concept:widget"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:thememanager",
+        "target": "fact:a44af14c"
+      },
+      {
+        "rel": "manages",
+        "weight": 1.0,
+        "source": "concept:thememanager",
+        "target": "concept:widget"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:thememanager",
+        "target": "fact:86b55959"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:widget",
+        "target": "fact:a44af14c"
+      },
+      {
+        "rel": "improves",
+        "weight": 1.0,
+        "source": "concept:decoupling",
+        "target": "concept:ui_consistency"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:86b55959",
+        "target": "concept:appconfig"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:86b55959",
+        "target": "concept:thememanager"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:4586b7c9",
+        "target": "concept:dataclasses"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:4586b7c9",
+        "target": "concept:asdict"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:4586b7c9",
+        "target": "concept:serialization"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:4586b7c9",
+        "target": "concept:persistence_layer"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:dataclasses",
+        "target": "fact:4586b7c9"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:asdict",
+        "target": "fact:4586b7c9"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:persistence_layer",
+        "target": "fact:4586b7c9"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:persistence_layer",
+        "target": "fact:4e04bfe9"
+      },
+      {
+        "rel": "simplifies",
+        "weight": 1.0,
+        "source": "concept:dataclasses.asdict",
+        "target": "concept:persistence_serialization"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:4e04bfe9",
+        "target": "concept:repository_pattern"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:4e04bfe9",
+        "target": "concept:business_logic"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:4e04bfe9",
+        "target": "concept:persistence_layer"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:repository_pattern",
+        "target": "fact:4e04bfe9"
+      },
+      {
+        "rel": "decouples",
+        "weight": 1.0,
+        "source": "concept:repository_pattern",
+        "target": "concept:business_logic"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:business_logic",
+        "target": "fact:4e04bfe9"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:business_logic",
+        "target": "fact:b6a22e60"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:1e7b57c2",
+        "target": "concept:file_locking"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:1e7b57c2",
+        "target": "concept:json"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:1e7b57c2",
+        "target": "concept:race_conditions"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:1e7b57c2",
+        "target": "concept:data_corruption"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:file_locking",
+        "target": "fact:1e7b57c2"
+      },
+      {
+        "rel": "prevents",
+        "weight": 1.0,
+        "source": "concept:file_locking",
+        "target": "concept:race_conditions"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:json",
+        "target": "fact:1e7b57c2"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:race_conditions",
+        "target": "fact:1e7b57c2"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:data_corruption",
+        "target": "fact:1e7b57c2"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:692e92e7",
+        "target": "concept:tkinter.ttk.treeview"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:692e92e7",
+        "target": "concept:metadata"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:692e92e7",
+        "target": "concept:hidden_columns"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:tkinter.ttk.treeview",
+        "target": "fact:692e92e7"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:metadata",
+        "target": "fact:692e92e7"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:hidden_columns",
+        "target": "fact:692e92e7"
+      },
+      {
+        "rel": "decouples",
+        "weight": 1.0,
+        "source": "concept:hidden_columns",
+        "target": "concept:ui_rendering"
+      },
+      {
+        "rel": "facilitates",
+        "weight": 1.0,
+        "source": "concept:hidden_columns",
+        "target": "concept:reliable_event_handling"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:b6a22e60",
+        "target": "concept:callback_pattern"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:b6a22e60",
+        "target": "concept:presentation_layer"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:b6a22e60",
+        "target": "concept:business_logic"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:presentation_layer",
+        "target": "fact:b6a22e60"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:4d1d3c31",
+        "target": "concept:taskservice"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:4d1d3c31",
+        "target": "concept:taskrepository"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:4d1d3c31",
+        "target": "concept:service layer"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:4d1d3c31",
+        "target": "concept:interface"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:taskservice",
+        "target": "fact:4d1d3c31"
+      },
+      {
+        "rel": "depends_on",
+        "weight": 1.0,
+        "source": "concept:taskservice",
+        "target": "concept:taskrepository"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:taskservice",
+        "target": "fact:823eef8e"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:taskservice",
+        "target": "fact:6f7bb458"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:taskrepository",
+        "target": "fact:4d1d3c31"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:taskrepository",
+        "target": "fact:cf039fd1"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:taskrepository",
+        "target": "fact:6f7bb458"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:service layer",
+        "target": "fact:4d1d3c31"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:service layer",
+        "target": "fact:ffe2a216"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:interface",
+        "target": "fact:4d1d3c31"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:interface",
+        "target": "fact:cf039fd1"
+      },
+      {
+        "rel": "enables",
+        "weight": 1.0,
+        "source": "concept:dependency inversion",
+        "target": "concept:testability"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ffe2a216",
+        "target": "concept:dto"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ffe2a216",
+        "target": "concept:service layer"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ffe2a216",
+        "target": "concept:input validation"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:ffe2a216",
+        "target": "concept:data corruption"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:dto",
+        "target": "fact:ffe2a216"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:input validation",
+        "target": "fact:ffe2a216"
+      },
+      {
+        "rel": "protects",
+        "weight": 1.0,
+        "source": "concept:input validation",
+        "target": "concept:data integrity"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:data corruption",
+        "target": "fact:ffe2a216"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:4c128b1b",
+        "target": "concept:orchestration"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:4c128b1b",
+        "target": "concept:composition"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:4c128b1b",
+        "target": "concept:inheritance"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:orchestration",
+        "target": "fact:4c128b1b"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:composition",
+        "target": "fact:4c128b1b"
+      },
+      {
+        "rel": "reduces",
+        "weight": 1.0,
+        "source": "concept:composition",
+        "target": "concept:coupling"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:inheritance",
+        "target": "fact:4c128b1b"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:7d3bfc6f",
+        "target": "concept:ui components"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:7d3bfc6f",
+        "target": "concept:mainlayout"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:7d3bfc6f",
+        "target": "concept:config interface"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:7d3bfc6f",
+        "target": "concept:importerror"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:ui components",
+        "target": "fact:7d3bfc6f"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:mainlayout",
+        "target": "fact:7d3bfc6f"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:mainlayout",
+        "target": "fact:81f444ff"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:mainlayout",
+        "target": "fact:823eef8e"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:mainlayout",
+        "target": "fact:19d7e709"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:mainlayout",
+        "target": "fact:cf039fd1"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:config interface",
+        "target": "fact:7d3bfc6f"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:importerror",
+        "target": "fact:7d3bfc6f"
+      },
+      {
+        "rel": "causes",
+        "weight": 1.0,
+        "source": "concept:unstable_config_interface",
+        "target": "concept:importerror"
+      },
+      {
+        "rel": "prevents",
+        "weight": 1.0,
+        "source": "concept:dependency_injection",
+        "target": "concept:build_failure"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:dependency_injection",
+        "target": "fact:6f7bb458"
+      },
+      {
+        "rel": "enables",
+        "weight": 1.0,
+        "source": "concept:dependency_injection",
+        "target": "concept:test_isolation"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:81f444ff",
+        "target": "concept:python3"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:81f444ff",
+        "target": "concept:mainlayout"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:81f444ff",
+        "target": "concept:smoke_test"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:python3",
+        "target": "fact:81f444ff"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:smoke_test",
+        "target": "fact:81f444ff"
+      },
+      {
+        "rel": "verifies",
+        "weight": 1.0,
+        "source": "concept:smoke_test",
+        "target": "concept:structural_integrity"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:b155d8e1",
+        "target": "concept:appcontroller"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:b155d8e1",
+        "target": "concept:eventbus"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:b155d8e1",
+        "target": "concept:ui-layer"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:b155d8e1",
+        "target": "concept:business-logic"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:appcontroller",
+        "target": "fact:b155d8e1"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:appcontroller",
+        "target": "fact:823eef8e"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:appcontroller",
+        "target": "fact:a4d0635f"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:appcontroller",
+        "target": "fact:19d7e709"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:eventbus",
+        "target": "fact:b155d8e1"
+      },
+      {
+        "rel": "mediates_between",
+        "weight": 1.0,
+        "source": "concept:eventbus",
+        "target": "concept:ui-layer"
+      },
+      {
+        "rel": "mediates_between",
+        "weight": 1.0,
+        "source": "concept:eventbus",
+        "target": "concept:business-logic"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:eventbus",
+        "target": "fact:38d170b1"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:ui-layer",
+        "target": "fact:b155d8e1"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:business-logic",
+        "target": "fact:b155d8e1"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:823eef8e",
+        "target": "concept:appcontroller"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:823eef8e",
+        "target": "concept:taskservice"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:823eef8e",
+        "target": "concept:mainlayout"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:823eef8e",
+        "target": "concept:unit-testing"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:unit-testing",
+        "target": "fact:823eef8e"
+      },
+      {
+        "rel": "enables",
+        "weight": 1.0,
+        "source": "concept:dependency-injection",
+        "target": "concept:unit-testing"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a4d0635f",
+        "target": "concept:appcontroller"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a4d0635f",
+        "target": "concept:logging"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:a4d0635f",
+        "target": "concept:event-trace"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:logging",
+        "target": "fact:a4d0635f"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:logging",
+        "target": "fact:3d51a828"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:event-trace",
+        "target": "fact:a4d0635f"
+      },
+      {
+        "rel": "improves",
+        "weight": 1.0,
+        "source": "concept:structured-logging",
+        "target": "concept:event-trace"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:19d7e709",
+        "target": "concept:mainwindow"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:19d7e709",
+        "target": "concept:dependency injection"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:19d7e709",
+        "target": "concept:appcontroller"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:19d7e709",
+        "target": "concept:mainlayout"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:mainwindow",
+        "target": "fact:19d7e709"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:mainwindow",
+        "target": "fact:38d170b1"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:dependency injection",
+        "target": "fact:19d7e709"
+      },
+      {
+        "rel": "enables",
+        "weight": 1.0,
+        "source": "concept:dependency injection",
+        "target": "concept:testability"
+      },
+      {
+        "rel": "reduces",
+        "weight": 1.0,
+        "source": "concept:dependency injection",
+        "target": "concept:coupling"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:38d170b1",
+        "target": "concept:mainwindow"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:38d170b1",
+        "target": "concept:eventbus"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:38d170b1",
+        "target": "concept:lifecycle"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:lifecycle",
+        "target": "fact:38d170b1"
+      },
+      {
+        "rel": "prevents",
+        "weight": 1.0,
+        "source": "concept:explicit lifecycle",
+        "target": "concept:uninitialized_state_errors"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:cf039fd1",
+        "target": "concept:mainlayout"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:cf039fd1",
+        "target": "concept:taskrepository"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:cf039fd1",
+        "target": "concept:interface"
+      },
+      {
+        "rel": "decouples",
+        "weight": 1.0,
+        "source": "concept:interface contracts",
+        "target": "concept:ui"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:37649a4f",
+        "target": "concept:try-finally"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:37649a4f",
+        "target": "concept:idempotency"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:37649a4f",
+        "target": "concept:file_system_persistence"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:try-finally",
+        "target": "fact:37649a4f"
+      },
+      {
+        "rel": "enables",
+        "weight": 1.0,
+        "source": "concept:try-finally",
+        "target": "concept:idempotent_teardown"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:idempotency",
+        "target": "fact:37649a4f"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:file_system_persistence",
+        "target": "fact:37649a4f"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:6f7bb458",
+        "target": "concept:taskrepository"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:6f7bb458",
+        "target": "concept:taskservice"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:6f7bb458",
+        "target": "concept:dependency_injection"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:fbea4bfd",
+        "target": "concept:integrationtester"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:fbea4bfd",
+        "target": "concept:test_entry_point"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:integrationtester",
+        "target": "fact:fbea4bfd"
+      },
+      {
+        "rel": "standardizes",
+        "weight": 1.0,
+        "source": "concept:integrationtester",
+        "target": "concept:environment_lifecycle"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:test_entry_point",
+        "target": "fact:fbea4bfd"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:5c4a68a7",
+        "target": "concept:unittest"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:5c4a68a7",
+        "target": "concept:testloader"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:5c4a68a7",
+        "target": "concept:test_discovery"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:unittest",
+        "target": "fact:5c4a68a7"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:unittest",
+        "target": "fact:6c039f5e"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:testloader",
+        "target": "fact:5c4a68a7"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:test_discovery",
+        "target": "fact:5c4a68a7"
+      },
+      {
+        "rel": "causes",
+        "weight": 1.0,
+        "source": "concept:manual_test_registration",
+        "target": "concept:omitted_coverage"
+      },
+      {
+        "rel": "replaces",
+        "weight": 1.0,
+        "source": "concept:testloader.discover()",
+        "target": "concept:manual_test_registration"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:3d51a828",
+        "target": "concept:logging"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:3d51a828",
+        "target": "concept:ci_pipeline"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:3d51a828",
+        "target": "concept:stdout"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:ci_pipeline",
+        "target": "fact:3d51a828"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:stdout",
+        "target": "fact:3d51a828"
+      },
+      {
+        "rel": "complicates",
+        "weight": 1.0,
+        "source": "concept:print_statements",
+        "target": "concept:log_parsing"
+      },
+      {
+        "rel": "enables",
+        "weight": 1.0,
+        "source": "concept:logging_module",
+        "target": "concept:structured_diagnostics"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:6c039f5e",
+        "target": "concept:testrunner"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:6c039f5e",
+        "target": "concept:unittest"
+      },
+      {
+        "rel": "mentions",
+        "weight": 1.0,
+        "source": "fact:6c039f5e",
+        "target": "concept:encapsulation"
+      },
+      {
+        "rel": "appears_in",
+        "weight": 1.0,
+        "source": "concept:testrunner",
+        "target": "fact:6c039f5e"
+      },
+      {
+        "rel": "simplifies",
+        "weight": 1.0,
+        "source": "concept:unified_interface",
+        "target": "concept:tooling_integration"
+      }
+    ]
+  }
+}

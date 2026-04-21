@@ -1,0 +1,302 @@
+{
+  "sprint": 1,
+  "goal": "alright create a tkinter calculator app that works well with very large numbers",
+  "root_id": "92d3161e",
+  "nodes": {
+    "92d3161e": {
+      "id": "92d3161e",
+      "name": "Sprint Goal",
+      "description": "alright create a tkinter calculator app that works well with very large numbers",
+      "parent_id": null,
+      "depth": 0,
+      "is_atomic": false,
+      "suggested_file": null,
+      "complexity": "high",
+      "children": [
+        "7afbc494",
+        "ab51dd07",
+        "1c720397",
+        "91d6aeb6"
+      ]
+    },
+    "7afbc494": {
+      "id": "7afbc494",
+      "name": "BigIntEngine",
+      "description": "NON-ATOMIC: This sub-concern covers the core mathematical logic for high-precision arithmetic. It needs further splitting to define specific interface protocols for big-integer operations versus standard float behaviors before implementation.",
+      "parent_id": "92d3161e",
+      "depth": 1,
+      "is_atomic": false,
+      "suggested_file": "src/math/engine.py",
+      "complexity": "medium",
+      "children": [
+        "86fac79e",
+        "ab514627",
+        "809f993e"
+      ]
+    },
+    "ab51dd07": {
+      "id": "ab51dd07",
+      "name": "DisplayBuffer",
+      "description": "NON-ATOMIC: This sub-concern covers the visual representation and string formatting of arbitrarily large numbers in the UI. It needs further splitting to separate formatting logic from the specific tkinter text widget interaction.",
+      "parent_id": "92d3161e",
+      "depth": 1,
+      "is_atomic": false,
+      "suggested_file": "src/ui/display.py",
+      "complexity": "low",
+      "children": [
+        "45a73825",
+        "5252f64e"
+      ]
+    },
+    "1c720397": {
+      "id": "1c720397",
+      "name": "InputController",
+      "description": "NON-ATOMIC: This sub-concern covers event handling for button clicks and keyboard input processing. It needs further splitting to define the input validation schema and command pattern implementation for the calculator interface.",
+      "parent_id": "92d3161e",
+      "depth": 1,
+      "is_atomic": false,
+      "suggested_file": "src/ui/controller.py",
+      "complexity": "medium",
+      "children": [
+        "c0085662",
+        "15ae14e7",
+        "5fe504bb"
+      ]
+    },
+    "91d6aeb6": {
+      "id": "91d6aeb6",
+      "name": "MainEntry",
+      "description": "NON-ATOMIC: This sub-concern covers application orchestration, window lifecycle management, and dependency injection for the UI and logic layers. It needs further splitting to finalize the main loop configuration and resource cleanup processes.",
+      "parent_id": "92d3161e",
+      "depth": 1,
+      "is_atomic": false,
+      "suggested_file": "src/main.py",
+      "complexity": "low",
+      "children": [
+        "ab859225",
+        "62a4c660",
+        "640cc038",
+        "ea35a905"
+      ]
+    },
+    "45a73825": {
+      "id": "45a73825",
+      "name": "NumberFormatter",
+      "description": "ATOMIC: This module provides pure utility functions to format large integers or decimals into display-ready strings with truncation or scientific notation logic. Contains: format_for_display(value: str, max_chars: int) -> str. State: No internal state, purely functional. Imports: None. Consumed by DisplayBuffer. This file is atomic as it provides a single static transformation utility.",
+      "parent_id": "ab51dd07",
+      "depth": 2,
+      "is_atomic": true,
+      "suggested_file": "src/formatter.py",
+      "complexity": "low",
+      "children": []
+    },
+    "5252f64e": {
+      "id": "5252f64e",
+      "name": "DisplayBufferState",
+      "description": "ATOMIC: This module maintains the current string state of the calculator display and handles text updates for the Tkinter UI. Contains class DisplayState with: __init__(self, initial_value: str = '0') -> None, update_text(self, new_val: str) -> None, get_text(self) -> str, clear(self) -> None. State: self._buffer: str. Imports: None. Consumed by calculator_ui.py. This file is atomic as it strictly manages the buffer state for the GUI.",
+      "parent_id": "ab51dd07",
+      "depth": 2,
+      "is_atomic": true,
+      "suggested_file": "src/display_state.py",
+      "complexity": "low",
+      "children": []
+    },
+    "ab859225": {
+      "id": "ab859225",
+      "name": "AppBootstrap",
+      "description": "NON-ATOMIC: This sub-concern covers the entry point, dependency wiring, and window lifecycle orchestration. It needs splitting into specific orchestration logic and the main loop definition.",
+      "parent_id": "91d6aeb6",
+      "depth": 2,
+      "is_atomic": false,
+      "suggested_file": "src/main.py",
+      "complexity": "medium",
+      "children": [
+        "6c075ea6",
+        "c13e6460",
+        "c58731eb"
+      ]
+    },
+    "62a4c660": {
+      "id": "62a4c660",
+      "name": "BigIntEngine",
+      "description": "NON-ATOMIC: This sub-concern covers the mathematical operations for high-precision arithmetic. It needs splitting into arithmetic primitives and validation logic.",
+      "parent_id": "91d6aeb6",
+      "depth": 2,
+      "is_atomic": false,
+      "suggested_file": "src/core/arithmetic.py",
+      "complexity": "high",
+      "children": [
+        "4823f4ca",
+        "d87d8c32"
+      ]
+    },
+    "640cc038": {
+      "id": "640cc038",
+      "name": "DisplayBuffer",
+      "description": "ATOMIC: This file manages the visual state of the calculator display and input sanitization. Contains class DisplayBuffer with: __init__(self, master: tk.Tk) -> None, update_text(self, new_val: str) -> None, clear(self) -> None, and get_current_input(self) -> str. Holds self.display_widget: tk.Entry, self.current_text: str. Imports tkinter as tk. Consumed by main.py.",
+      "parent_id": "91d6aeb6",
+      "depth": 2,
+      "is_atomic": true,
+      "suggested_file": "src/ui/display.py",
+      "complexity": "low",
+      "children": []
+    },
+    "ea35a905": {
+      "id": "ea35a905",
+      "name": "ButtonGrid",
+      "description": "NON-ATOMIC: This sub-concern covers the layout and event binding for the numerical keypad. Needs splitting into grid configuration and event-handling delegates.",
+      "parent_id": "91d6aeb6",
+      "depth": 2,
+      "is_atomic": false,
+      "suggested_file": "src/ui/buttons.py",
+      "complexity": "medium",
+      "children": [
+        "885722e3",
+        "f1e1f45c"
+      ]
+    },
+    "86fac79e": {
+      "id": "86fac79e",
+      "name": "BigIntValidator",
+      "description": "ATOMIC: Validates string inputs to ensure they are compatible with high-precision arithmetic. Contains class InputValidator with: __init__(self) -> None, validate(self, input_str: str) -> bool. No module-level functions. State: None. Imports: typing. Consumed by calculation_engine.py.",
+      "parent_id": "7afbc494",
+      "depth": 2,
+      "is_atomic": true,
+      "suggested_file": "src/math/validator.py",
+      "complexity": "low",
+      "children": []
+    },
+    "ab514627": {
+      "id": "ab514627",
+      "name": "BigIntOperations",
+      "description": "ATOMIC: Performs high-precision arithmetic operations on large integers. Contains class BigMath with: __init__(self) -> None, add(self, a: str, b: str) -> str, subtract(self, a: str, b: str) -> str, multiply(self, a: str, b: str) -> str, divide(self, a: str, b: str) -> str. State: None. Imports: None. Consumed by controller.py.",
+      "parent_id": "7afbc494",
+      "depth": 2,
+      "is_atomic": true,
+      "suggested_file": "src/math/operations.py",
+      "complexity": "medium",
+      "children": []
+    },
+    "809f993e": {
+      "id": "809f993e",
+      "name": "BigIntFormatter",
+      "description": "ATOMIC: Formats raw large integer strings for display in the UI. Contains class OutputFormatter with: __init__(self, precision: int) -> None, format_display(self, value: str) -> str. State: self.precision: int. Imports: None. Consumed by ui/display.py.",
+      "parent_id": "7afbc494",
+      "depth": 2,
+      "is_atomic": true,
+      "suggested_file": "src/math/formatter.py",
+      "complexity": "low",
+      "children": []
+    },
+    "c0085662": {
+      "id": "c0085662",
+      "name": "InputValidator",
+      "description": "ATOMIC: Validates raw string input for calculator safety and format before processing. Contains class InputValidator with: __init__(self) -> None, validate_digit(self, char: str) -> bool, validate_operator(self, op: str) -> bool, is_expression_valid(self, expression: str) -> bool. State: Holds self._allowed_operators: set[str]. Consumed by InputController.py.",
+      "parent_id": "1c720397",
+      "depth": 2,
+      "is_atomic": true,
+      "suggested_file": "src/input/validator.py",
+      "complexity": "low",
+      "children": []
+    },
+    "15ae14e7": {
+      "id": "15ae14e7",
+      "name": "CommandDispatcher",
+      "description": "ATOMIC: Implements the command pattern to execute calculator operations via decoupled logic. Contains class CommandDispatcher with: __init__(self, engine: Any) -> None, execute(self, cmd_type: str, *args: str) -> str. State: Holds self._engine: Any. Consumed by InputController.py and main.py.",
+      "parent_id": "1c720397",
+      "depth": 2,
+      "is_atomic": true,
+      "suggested_file": "src/input/dispatcher.py",
+      "complexity": "medium",
+      "children": []
+    },
+    "5fe504bb": {
+      "id": "5fe504bb",
+      "name": "KeyEventHandler",
+      "description": "ATOMIC: Bridges tkinter keyboard events to application commands. Contains class KeyEventHandler with: __init__(self, root: Any, dispatcher: CommandDispatcher) -> None, handle_keypress(self, event: Any) -> None. State: Holds self.dispatcher: CommandDispatcher. Consumed by main.py.",
+      "parent_id": "1c720397",
+      "depth": 2,
+      "is_atomic": true,
+      "suggested_file": "src/input/events.py",
+      "complexity": "medium",
+      "children": []
+    },
+    "4823f4ca": {
+      "id": "4823f4ca",
+      "name": "BigIntArithmetic",
+      "description": "ATOMIC: This file handles high-precision mathematical operations using Python's native arbitrary-precision integer support. Contains class BigIntProcessor with: __init__(self) -> None, add(self, a: int, b: int) -> int, subtract(self, a: int, b: int) -> int, multiply(self, a: int, b: int) -> int, divide(self, a: int, b: int) -> float. Holds self.precision_limit: int. Imports nothing from the project. Consumed by calculator_controller.py.",
+      "parent_id": "62a4c660",
+      "depth": 3,
+      "is_atomic": true,
+      "suggested_file": "src/engine/arithmetic.py",
+      "complexity": "low",
+      "children": []
+    },
+    "d87d8c32": {
+      "id": "d87d8c32",
+      "name": "BigIntValidation",
+      "description": "ATOMIC: This file validates input strings to ensure they represent valid high-precision numbers. Contains class InputValidator with: __init__(self) -> None, is_valid_number(self, val: str) -> bool, sanitize(self, val: str) -> str. Module-level function: format_large_number(val: int) -> str. Holds self.max_digits: int = 10000. Imports nothing from the project. Consumed by calculator_ui.py and calculator_controller.py.",
+      "parent_id": "62a4c660",
+      "depth": 3,
+      "is_atomic": true,
+      "suggested_file": "src/engine/validation.py",
+      "complexity": "low",
+      "children": []
+    },
+    "6c075ea6": {
+      "id": "6c075ea6",
+      "name": "WindowOrchestrator",
+      "description": "ATOMIC: Defines the primary application window lifecycle and geometry configuration. Contains class CalcWindow with: __init__(self, title: str, geometry: str) -> None, setup_grid(self) -> None, run(self) -> None. Holds self.root: tk.Tk, self.title: str. Imports tkinter as tk. Consumed by main.py.",
+      "parent_id": "ab859225",
+      "depth": 3,
+      "is_atomic": true,
+      "suggested_file": "src/ui/window.py",
+      "complexity": "low",
+      "children": []
+    },
+    "c13e6460": {
+      "id": "c13e6460",
+      "name": "DependencyWiring",
+      "description": "ATOMIC: Defines the dependency injection container and startup registry. Contains class AppContext with: __init__(self) -> None, get_engine(self) -> CalculationEngine, get_ui(self) -> CalcWindow. Holds self._engine: CalculationEngine, self._window: CalcWindow. Imports CalculationEngine from src/logic/engine.py. Consumed by main.py.",
+      "parent_id": "ab859225",
+      "depth": 3,
+      "is_atomic": true,
+      "suggested_file": "src/core/container.py",
+      "complexity": "medium",
+      "children": []
+    },
+    "c58731eb": {
+      "id": "c58731eb",
+      "name": "EntryPoint",
+      "description": "ATOMIC: Manages the application bootstrap and main loop invocation. Contains module-level function main() -> None. No internal state. Imports AppContext from src/core/container.py and CalcWindow from src/ui/window.py. Entry point for the entire application.",
+      "parent_id": "ab859225",
+      "depth": 3,
+      "is_atomic": true,
+      "suggested_file": "src/main.py",
+      "complexity": "low",
+      "children": []
+    },
+    "885722e3": {
+      "id": "885722e3",
+      "name": "GridConfiguration",
+      "description": "ATOMIC: This file defines the layout structure and styling for the calculator buttons. It contains class ButtonLayoutManager with: __init__(self, parent: tk.Widget) -> None, create_grid(self, command_callback: Callable[[str], None]) -> None, get_button_style(self) -> dict[str, Any]. Holds self.parent: tk.Widget, self.buttons: dict[str, tk.Button]. Imports tkinter as tk and typing.Callable. Consumed by main.py and app_window.py.",
+      "parent_id": "ea35a905",
+      "depth": 3,
+      "is_atomic": true,
+      "suggested_file": "src/ui/grid_configuration.py",
+      "complexity": "medium",
+      "children": []
+    },
+    "f1e1f45c": {
+      "id": "f1e1f45c",
+      "name": "EventHandlingDelegates",
+      "description": "ATOMIC: This file manages the routing of button clicks to calculation logic. It contains class ButtonEventHandler with: __init__(self, display_update_func: Callable[[str], None]) -> None, handle_click(self, char: str) -> None, clear_display(self) -> None. Holds self.display_update_func: Callable[[str], None]. Imports typing.Callable. Consumed by main.py and grid_configuration.py.",
+      "parent_id": "ea35a905",
+      "depth": 3,
+      "is_atomic": true,
+      "suggested_file": "src/logic/event_handler.py",
+      "complexity": "low",
+      "children": []
+    }
+  }
+}

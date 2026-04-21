@@ -31,7 +31,7 @@ RETRIEVAL (spreading activation, like HippoRAG):
   4. Falls back to keyword scoring when graph has no matching seeds
 
 PERSISTENCE:
-  company_output/memory/{role_key}.json
+  eng_output/memory/{role_key}.json
   Format: {"role": ..., "facts": [...], "graph": <node_link_data>}
 
 ROLE POOLING:

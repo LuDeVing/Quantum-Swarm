@@ -140,6 +140,15 @@ def _tool_write_code_file(filename: str, content: str) -> str:
             return f"ERROR: invalid filename {filename!r}"
         code_dir = _get_code_dir()
         path     = code_dir / filename
+        # Detect file-vs-package conflict: writing foo.py when foo/ dir exists, or vice versa
+        stem = path.with_suffix("")  # e.g. src/assets (no .py)
+        if path.suffix == ".py" and stem.is_dir():
+            return (
+                f"ERROR: cannot write {filename!r} — a PACKAGE DIRECTORY '{stem.name}/' already "
+                f"exists at that path. Import from the package instead, e.g. "
+                f"'from {str(stem).replace('/', '.').replace(chr(92), '.')} import ...' "
+                f"or rename one of the two."
+            )
         logger.info(f"[write_code_file] writing {filename} → {path}")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(_strip_stance(content), encoding="utf-8")
@@ -789,6 +798,7 @@ def _normalize_shell_command_for_windows(command: str) -> str:
     """On Windows, rewrite Unix-style env prefixes to cmd.exe-compatible form.
     e.g. `PYTHONPATH=. python app/main.py`  →  `set PYTHONPATH=.&& python app/main.py`
     Also converts `VAR=val cmd` and `VAR1=a VAR2=b cmd` patterns.
+    Only used as a fallback when no bash shell is available.
     """
     import re as _re
     import sys as _sys
@@ -801,9 +811,40 @@ def _normalize_shell_command_for_windows(command: str) -> str:
         return command
     env_part = m.group(1).strip()   # e.g. "PYTHONPATH=. FOO=bar"
     rest     = m.group(2).strip()   # the actual command
-    # Build `set VAR=val` chain
     sets = " && ".join(f"set {kv}" for kv in env_part.split())
     return f"{sets} && {rest}"
+
+
+def _find_bash_on_windows() -> str | None:
+    """Return path to bash.exe on Windows (Git Bash / WSL), or None if not found."""
+    import shutil as _shutil
+    # shutil.which checks PATH first — covers most Git for Windows installs
+    bash = _shutil.which("bash")
+    if bash:
+        return bash
+    # Common fixed install locations
+    candidates = [
+        r"C:\Program Files\Git\bin\bash.exe",
+        r"C:\Program Files\Git\usr\bin\bash.exe",
+        r"C:\Program Files (x86)\Git\bin\bash.exe",
+    ]
+    import os as _os
+    for c in candidates:
+        if _os.path.isfile(c):
+            return c
+    return None
+
+
+_BASH_PATH: str | None | bool = False  # False = not yet probed
+
+
+def _get_bash_path() -> str | None:
+    """Cached probe for bash on Windows."""
+    global _BASH_PATH
+    if _BASH_PATH is False:
+        import sys as _sys
+        _BASH_PATH = _find_bash_on_windows() if _sys.platform == "win32" else None
+    return _BASH_PATH  # type: ignore[return-value]
 
 
 # Stacks where prepending PYTHONPATH is unnecessary and can confuse native toolchains.
@@ -983,6 +1024,42 @@ def _run_shell_blocks_gui_entrypoint(command: str) -> Optional[str]:
     return None
 
 
+def _dev_run_shell_blocks_app(command: str) -> Optional[str]:
+    """For dev_* agents: block any command that runs the full application.
+    Developers must only run unit tests or syntax checks — the manager runs the app."""
+    import re
+    c = (command or "").strip().lower()
+    # Allow: pytest, unittest, py_compile, validate, pip, flake8, mypy, ls, git, etc.
+    _ALLOWED_PATTERNS = (
+        "pytest", "unittest", "py_compile", "pip ", "pip3 ",
+        "flake8", "mypy", "black ", "ruff ", "isort ",
+        "validate", "ls ", "ls\n", "dir ", "find ", "cat ",
+        "git ", "echo ", "python --version", "python3 --version",
+        "python -m pytest", "python3 -m pytest",
+        "python -m unittest", "python3 -m unittest",
+        "python -m py_compile", "python3 -m py_compile",
+        "python -c \"import", "python3 -c \"import",
+        "python -c 'import", "python3 -c 'import",
+        "import tkinter", "import pygame", "import PyQt",
+    )
+    if any(p in c for p in _ALLOWED_PATTERNS):
+        return None
+    # Block: python <anything>.py  or  python3 <anything>.py  (that isn't a test file)
+    m = re.search(r"python\w*\s+([\w./\\-]+\.py)\b", c)
+    if m:
+        script = m.group(1).replace("\\", "/").split("/")[-1]
+        if not (script.startswith("test_") or script.endswith("_test.py")):
+            return (
+                f"ERROR: developers must not run the full application ({script}). "
+                "Your job is to write and unit-test YOUR file only. "
+                "The manager runs the full app after all files are merged.\n"
+                "Allowed: python -m pytest tests/test_your_file.py\n"
+                "         python -m py_compile your_file.py\n"
+                "         python -c \"import your_module; ...\" (import-only checks)"
+            )
+    return None
+
+
 def _tool_run_shell(command: str) -> str:
     """Run a shell command in the output directory and return stdout + stderr (last 3000 chars)."""
     import subprocess
@@ -990,7 +1067,15 @@ def _tool_run_shell(command: str) -> str:
     cwd = _get_code_dir()
     if not (command or "").strip():
         return "ERROR: run_shell requires a non-empty command."
-    command = _normalize_shell_command_for_windows(command)
+    bash = _get_bash_path()
+    if not bash:
+        command = _normalize_shell_command_for_windows(command)
+    # Dev agents must not run the full application
+    if (agent or "").startswith("dev_"):
+        _dev_block = _dev_run_shell_blocks_app(command)
+        if _dev_block:
+            logger.warning(f"[run_shell:{agent}] blocked app-run by developer: {command[:80]!r}")
+            return _dev_block
     _block = _run_shell_blocks_gui_entrypoint(command)
     if _block:
         logger.warning(f"[run_shell:{agent}] blocked GUI-blocking command: {command[:120]!r}")
@@ -998,17 +1083,31 @@ def _tool_run_shell(command: str) -> str:
     logger.info(f"[run_shell:{agent}] ▶ {command} (cwd={cwd})")
     try:
         _env = _subprocess_env_for_project(Path(cwd))
-        result = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=_RUN_SHELL_TIMEOUT,
-            cwd=str(cwd),
-            env=_env,
-            encoding="utf-8",
-            errors="replace",
-        )
+        if bash:
+            cmd_args = [bash, "-c", command]
+            result = subprocess.run(
+                cmd_args,
+                shell=False,
+                capture_output=True,
+                text=True,
+                timeout=_RUN_SHELL_TIMEOUT,
+                cwd=str(cwd),
+                env=_env,
+                encoding="utf-8",
+                errors="replace",
+            )
+        else:
+            result = subprocess.run(
+                command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=_RUN_SHELL_TIMEOUT,
+                cwd=str(cwd),
+                env=_env,
+                encoding="utf-8",
+                errors="replace",
+            )
         out = (result.stdout or "") + (result.stderr or "")
         preview = out[-500:] if len(out) > 500 else out
         logger.info(
@@ -1109,8 +1208,9 @@ def _tool_start_service(name: str, command: str) -> str:
     """Start a long-running process (server/worker) in the background.
     Returns a startup summary including early output, port readiness, and any crash details."""
     import subprocess, time, queue, threading as _th
-    # Normalize Windows env-prefix syntax (PYTHONPATH=. cmd → set PYTHONPATH=. && cmd)
-    command = _normalize_shell_command_for_windows(command)
+    bash = _get_bash_path()
+    if not bash:
+        command = _normalize_shell_command_for_windows(command)
 
     with _services_lock:
         existing = _services.get(name)
@@ -1128,9 +1228,10 @@ def _tool_start_service(name: str, command: str) -> str:
     try:
         _svc_root = OUTPUT_DIR / "code"
         _svc_env = _subprocess_env_for_project(_svc_root)
+        _popen_cmd = [bash, "-c", command] if bash else command
         proc = subprocess.Popen(
-            command,
-            shell=True,
+            _popen_cmd,
+            shell=not bash,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,

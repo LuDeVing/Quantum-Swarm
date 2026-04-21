@@ -44,7 +44,7 @@ def _is_ignored_project_path(path: Path) -> bool:
 
 class CodebaseRAG:
     """
-    Lightweight RAG over company_output/ code files.
+    Lightweight RAG over eng_output/ code files.
     Chunks files by function/class boundary, embeds with Gemini embedding model
     (gemini-embedding-001), stores as a numpy matrix. Queried with cosine
     similarity at agent time. Index is persisted to disk and rebuilt only when
@@ -54,7 +54,7 @@ class CodebaseRAG:
     EMBED_MODEL = "gemini-embedding-001"
     # CACHE_PATH must NOT be a class-level attribute — OUTPUT_DIR can be overridden
     # at runtime (e.g. run_engineers_only.py sets sc.OUTPUT_DIR = "eng_output"), and a
-    # frozen class attribute would keep pointing at "company_output/rag_index.pkl",
+    # frozen class attribute would keep pointing at "eng_output/rag_index.pkl",
     # loading stale cache from a prior full-company run into an engineers-only run.
     CHUNK_LINES  = 60          # max lines per chunk
     TOP_K        = 5           # chunks returned per query

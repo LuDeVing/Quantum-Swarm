@@ -1,66 +1,42 @@
 {
   "sprint": 1,
-  "goal": "Build a 2D space shooter game in pygame with a player ship, enemy waves, bullets, collision detection, score tracking, and a game over screen",
-  "root_id": "7e129ca4",
+  "goal": "Build a simple Python GUI todo list app using tkinter. Features: add tasks, mark complete, delete tasks, persistent storage using JSON file. Single file app.py with a clean modern UI.",
+  "root_id": "42ad941d",
   "nodes": {
-    "7e129ca4": {
-      "id": "7e129ca4",
+    "42ad941d": {
+      "id": "42ad941d",
       "name": "Sprint Goal",
-      "description": "Build a 2D space shooter game in pygame with a player ship, enemy waves, bullets, collision detection, score tracking, and a game over screen",
+      "description": "Build a simple Python GUI todo list app using tkinter. Features: add tasks, mark complete, delete tasks, persistent storage using JSON file. Single file app.py with a clean modern UI.",
       "parent_id": null,
       "depth": 0,
       "is_atomic": false,
       "suggested_file": null,
       "complexity": "high",
       "children": [
-        "d3292c8d",
-        "44ba58ec",
-        "1b813172",
-        "9d78fe3f"
+        "f0522378",
+        "17fa5f86"
       ]
     },
-    "d3292c8d": {
-      "id": "d3292c8d",
-      "name": "Game Engine Core",
-      "description": "Initialize pygame, main event loop, display handling, and game state management.",
-      "parent_id": "7e129ca4",
+    "f0522378": {
+      "id": "f0522378",
+      "name": "TodoDataLayer",
+      "description": "Handles JSON serialization/deserialization for task persistence. Contains class TodoStore with: __init__(self, filename: str) -> None, load_tasks(self) -> list[dict], save_tasks(self, tasks: list[dict]) -> None. State: self.filename: str. Used by TodoApp in app.py.",
+      "parent_id": "42ad941d",
       "depth": 1,
       "is_atomic": true,
-      "suggested_file": "main.py",
-      "complexity": "medium",
-      "children": []
-    },
-    "44ba58ec": {
-      "id": "44ba58ec",
-      "name": "Entity Logic",
-      "description": "Implement player ship movement, bullet mechanics, and enemy wave spawning logic.",
-      "parent_id": "7e129ca4",
-      "depth": 1,
-      "is_atomic": true,
-      "suggested_file": "entities.py",
-      "complexity": "medium",
-      "children": []
-    },
-    "1b813172": {
-      "id": "1b813172",
-      "name": "Physics and Collision",
-      "description": "Handle coordinate math, hitbox detection, and resolution of projectile-enemy interactions.",
-      "parent_id": "7e129ca4",
-      "depth": 1,
-      "is_atomic": true,
-      "suggested_file": "physics.py",
+      "suggested_file": "data_layer.py",
       "complexity": "low",
       "children": []
     },
-    "9d78fe3f": {
-      "id": "9d78fe3f",
-      "name": "UI and Scoring",
-      "description": "Manage text rendering for score tracking and the game-over screen overlay.",
-      "parent_id": "7e129ca4",
+    "17fa5f86": {
+      "id": "17fa5f86",
+      "name": "TodoGUI",
+      "description": "Manages tkinter UI components and event binding. Contains class TodoApp with: __init__(self, root: tk.Tk, store: TodoStore) -> None, add_task(self) -> None, delete_task(self, index: int) -> None, toggle_task(self, index: int) -> None, render_list(self) -> None. State: self.tasks: list[dict], self.entry: tk.Entry, self.listbox: tk.Listbox. Imports TodoStore from data_layer.py.",
+      "parent_id": "42ad941d",
       "depth": 1,
       "is_atomic": true,
-      "suggested_file": "ui.py",
-      "complexity": "low",
+      "suggested_file": "app.py",
+      "complexity": "medium",
       "children": []
     }
   }

@@ -28,8 +28,35 @@ from pathlib import Path
 # ── Override output dir before importing software_company ─────────────────────
 import software_company as sc
 
-sc.OUTPUT_DIR = Path("eng_output")
-sc.WorkDashboard.SAVE_PATH = sc.OUTPUT_DIR / "WORK_DASHBOARD.json"
+_OUT = Path("eng_output")
+
+sc.OUTPUT_DIR = _OUT
+sc.WorkDashboard.SAVE_PATH = _OUT / "WORK_DASHBOARD.json"
+
+# Propagate to every submodule that binds OUTPUT_DIR at import time
+import software_company.config as _sc_config
+import software_company.tools_impl as _sc_tools
+import software_company.agent_loop as _sc_agent_loop
+import software_company.dashboard as _sc_dashboard
+import software_company.git_worktrees as _sc_gwt
+import software_company.rag as _sc_rag
+import software_company.task_decomposition as _sc_td
+import software_company.engineering as _sc_eng
+import software_company.contracts as _sc_contracts
+import software_company.planning as _sc_planning
+
+_sc_config.OUTPUT_DIR      = _OUT
+_sc_tools.OUTPUT_DIR       = _OUT
+_sc_agent_loop.OUTPUT_DIR  = _OUT
+_sc_dashboard.OUTPUT_DIR   = _OUT
+_sc_gwt.OUTPUT_DIR         = _OUT
+_sc_rag.OUTPUT_DIR         = _OUT
+_sc_td.OUTPUT_DIR          = _OUT
+_sc_eng.OUTPUT_DIR         = _OUT
+_sc_contracts.OUTPUT_DIR   = _OUT
+_sc_planning.OUTPUT_DIR    = _OUT
+_sc_td.TaskTree.SAVE_PATH       = _OUT / "TASK_TREE.json"
+_sc_td.ComponentGraph.SAVE_PATH = _OUT / "COMPONENT_GRAPH.json"
 
 from software_company import (
     ENG_WORKERS, RollingContext, run_engineering_team,

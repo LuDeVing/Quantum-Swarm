@@ -78,7 +78,6 @@ class EngTask:
     assigned_to: Optional[str] = None
     status: str = "pending"
     retries: int = 0
-    primary_owner: Optional[str] = None
     phase: int = PHASE_IMPLEMENTATION
     waiting_for: List[str] = field(default_factory=list)
     component_id: Optional[str] = None

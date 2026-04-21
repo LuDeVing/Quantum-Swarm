@@ -44,7 +44,7 @@ from .tools_impl import (
     _strip_llm_summary_lines,
     _subprocess_env_for_project,
 )
-from .prompts_loaded import _SYSTEM_CEO, _manager_system, _worker_system
+from .prompts_loaded import _manager_system, _worker_system
 from .planning import run_team_planning
 from .computer_use import (
     CUTripletTracker,
@@ -67,204 +67,34 @@ def _run_with_tools_pkg(*args, **kwargs):
     return sc._run_with_tools(*args, **kwargs)
 
 
-# ── Executive meeting: CEO + all managers plan together ───────────────────────
-
-MANAGER_ROLES = {
-    "Architecture": "arch_manager",
-    "Design":       "design_manager",
-    "Engineering":  "eng_manager",
-    "QA":           "qa_manager",
-}
-
-TEAM_TASKS_PROMPT = {
-    "Architecture": "design the system architecture, API contracts, and data model",
-    "Design":       "define UX flows, UI components, and visual style guide",
-    "Engineering":  "implement the full software — backend, frontend, and infrastructure",
-    "QA":           "test correctness, integration, performance, and security",
-}
-
-
-def run_executive_meeting(
-    brief: str,
-    rolling_ctxs: Dict[str, RollingContext],
-    health_states: Dict[str, ActiveInferenceState],
-) -> ExecutionPlan:
-    """
-    CEO + all 4 managers meet together.
-    Round 1: each manager independently assesses their team's readiness and dependencies.
-    Round 2: each manager sees all other managers' positions, may negotiate.
-    CEO final: synthesises into an execution plan with phases and wait decisions.
-
-    Returns (ExecutionPlan, {team: task_description}).
-    """
-    logger.info(f"\n{'═'*55}\nEXECUTIVE MEETING: CEO + all managers\n{'═'*55}")
-
-    team_names = list(MANAGER_ROLES.keys())
-
-    # ── Round 1: CEO opens, managers respond independently ────────────────
-    ceo_opening = _llm(
-        f"You are the CEO of a software company.\n\n"
-        f"PROJECT BRIEF:\n{brief}\n\n"
-        f"Open the executive meeting. Briefly state:\n"
-        f"1. The project goal and key constraints\n"
-        f"2. The four team workstreams (Architecture, Design, Engineering, QA)\n"
-        f"3. Ask each manager to assess: can they start immediately, or do they "
-        f"need to wait for another team? What are their dependencies?\n\n"
-        f"Keep it concise — 150 words max.",
-        label="ceo_opening",
-        system=_SYSTEM_CEO,
-    )
-    logger.info(f"\nCEO opens meeting: {ceo_opening[:120]}...")
-
-    def manager_r1(team_name: str) -> Tuple[str, str]:
-        role_key = MANAGER_ROLES[team_name]
-        output = _llm(
-            f"You are the {ROLES[role_key]['title']}.\n\n"
-            f"CEO's opening:\n{ceo_opening}\n\n"
-            f"Your team's responsibility: {TEAM_TASKS_PROMPT[team_name]}\n\n"
-            f"Respond to the CEO. State:\n"
-            f"1. Can your team START IMMEDIATELY or do you need to WAIT for another team?\n"
-            f"2. If waiting: which team and what specific output do you need?\n"
-            f"3. Can you do any partial work while waiting? What?\n"
-            f"4. What does your team need from others to do their best work?\n\n"
-            f"Be direct and specific. 100 words max.",
-            label=f"{role_key}_r1",
-            system=_manager_system(role_key),
-        )
-        return team_name, output
-
-    r1: Dict[str, str] = {}
-    with ThreadPoolExecutor(max_workers=4) as ex:
-        for team_name, output in ex.map(lambda t: manager_r1(t), team_names):
-            r1[team_name] = output
-
-    # Health interference across managers
-    ActiveInferenceState.interfere_all(
-        [health_states[MANAGER_ROLES[t]] for t in team_names], alpha=INTERFERENCE_ALPHA
-    )
-
-    # ── Round 2: managers see all positions, negotiate ────────────────────
-    all_r1 = "\n\n".join(
-        f"{ROLES[MANAGER_ROLES[t]]['title']}:\n{r1[t]}" for t in team_names
-    )
-
-    def manager_r2(team_name: str) -> Tuple[str, str]:
-        role_key = MANAGER_ROLES[team_name]
-        output = _llm(
-            f"You are the {ROLES[role_key]['title']}.\n\n"
-            f"All managers have responded:\n{all_r1}\n\n"
-            f"Your team: {TEAM_TASKS_PROMPT[team_name]}\n\n"
-            f"After hearing everyone:\n"
-            f"1. Confirm or update your start decision (START NOW / WAIT FOR X)\n"
-            f"2. If you can start partial work in parallel, what specifically?\n"
-            f"3. Any concerns or blockers to flag to the CEO?\n\n"
-            f"50 words max.",
-            label=f"{role_key}_r2",
-            system=_manager_system(role_key),
-        )
-        return team_name, output
-
-    r2: Dict[str, str] = {}
-    with ThreadPoolExecutor(max_workers=4) as ex:
-        for team_name, output in ex.map(lambda t: manager_r2(t), team_names):
-            r2[team_name] = output
-
-    # ── CEO synthesises execution plan ────────────────────────────────────
-    all_r2 = "\n\n".join(
-        f"{ROLES[MANAGER_ROLES[t]]['title']} (final):\n{r2[t]}" for t in team_names
-    )
-    plan_output = _llm(
-        f"You are the CEO.\n\n"
-        f"PROJECT BRIEF:\n{brief}\n\n"
-        f"Meeting summary:\n{all_r1}\n\nFinal positions:\n{all_r2}\n\n"
-        f"Produce the execution plan. Your job is ONLY to decide the order and dependencies — "
-        f"each team will figure out internally what to build and who does what.\n\n"
-        f"Format EXACTLY as:\n\n"
-        f"PHASE_1: <comma-separated team names that start immediately>\n"
-        f"PHASE_2: <teams that start after Phase 1 completes>\n"
-        f"PHASE_3: <teams that start after Phase 2 completes>\n"
-        f"PHASE_4: <teams that start after Phase 3 completes>\n\n"
-        f"(Only include phases that are needed. Skip empty phases.)\n\n"
-        f"NOTES: <why this ordering — what each waiting team needs from the phase before it>",
-        label="ceo_plan",
-        system=_SYSTEM_CEO,
-    )
-
-    # Parse phases
-    phases: List[List[str]] = []
-    for i in range(1, 5):
-        m = re.search(rf"PHASE_{i}:\s*(.+)", plan_output, re.IGNORECASE)
-        if m:
-            teams_in_phase = [t.strip() for t in m.group(1).split(",")]
-            # Normalise to canonical names matching TEAM_RUNNERS keys
-            canonical = {"Architecture", "Design", "Engineering", "QA"}
-            normalised = [
-                next((c for c in canonical if c.lower() in t.lower()), t.strip().capitalize())
-                for t in teams_in_phase
-            ]
-            phases.append(normalised)
-
-    if not phases:  # fallback
-        phases = [["Architecture"], ["Design"], ["Engineering"], ["QA"]]
-
-    notes_m = re.search(r"NOTES:\s*(.+)", plan_output, re.DOTALL | re.IGNORECASE)
-    notes_text = notes_m.group(1).strip() if notes_m else ""
-
-    # Log the plan
-    logger.info(f"\nEXECUTION PLAN:")
-    for i, phase in enumerate(phases, 1):
-        logger.info(f"  Phase {i}: {' + '.join(phase)}")
-    logger.info(f"  Notes: {notes_text[:120]}")
-
-    full_transcript = (
-        f"CEO opening:\n{ceo_opening}\n\n"
-        f"Manager round 1:\n{all_r1}\n\n"
-        f"Manager round 2:\n{all_r2}\n\n"
-        f"CEO plan:\n{plan_output}"
-    )
-
-    # Update rolling contexts
-    for team_name, role_key in MANAGER_ROLES.items():
-        rolling_ctxs[role_key].add("executive meeting", r2[team_name])
-
-    # Save conversation log
-    turns = [{"speaker": "CEO", "text": ceo_opening}]
-    for t in team_names:
-        turns.append({"speaker": f"{ROLES[MANAGER_ROLES[t]]['title']} (R1)", "text": r1[t]})
-    for t in team_names:
-        turns.append({"speaker": f"{ROLES[MANAGER_ROLES[t]]['title']} (R2)", "text": r2[t]})
-    turns.append({"speaker": "CEO — Execution Plan", "text": plan_output})
-    # Local import avoids circular import: orchestration imports this module at load time.
-    from .orchestration import _save_conversation as _save_exec_meeting_conv
-
-    _save_exec_meeting_conv("Executive Meeting", turns)
-
-    return ExecutionPlan(
-        raw=full_transcript,
-        phases=phases,
-        team_notes={"all": notes_text},
-    )
-
-
 # ── Sprint planning: engineering manager + devs discuss together ──────────────
 
 def _generate_contracts(
     task: str,
-    dev_assignments: Dict[str, str],
-    pool: Dict[str, str] = None,
+    component_graph: Optional[Any] = None,
+    task_tree: Optional[Any] = None,
 ) -> None:
     """
-    After sprint planning assigns work items, ask the manager to generate
-    typed interface contracts that all agents must follow.
+    Generate typed interface contracts from the component graph / task tree.
+    No developer assignment — the orchestrator decides who works on what.
     """
     logger.info(f"\n{'─'*55}\nCONTRACT GENERATION: Engineering\n{'─'*55}")
 
-    assignment_list = "\n".join(
-        f"  {dev}: owns {desc}" for dev, desc in dev_assignments.items()
-    )
-    if pool:
-        pool_list = "\n".join(f"  [Pool] {iid}: {desc}" for iid, desc in pool.items())
-        assignment_list += f"\n\nUNASSIGNED BACKLOG POOL:\n{pool_list}"
+    # Build the file list from the component graph if available, else task tree leaves
+    if component_graph and component_graph.nodes:
+        assignment_list = "\n".join(
+            f"  {component_graph.nodes[cid].file_path}  — {component_graph.nodes[cid].description[:120]}"
+            for cid in component_graph.topological_order
+            if cid in component_graph.nodes and component_graph.nodes[cid].file_path
+        ) or "(see component graph)"
+    elif task_tree:
+        leaves = task_tree.get_leaf_tasks()
+        assignment_list = "\n".join(
+            f"  {leaf.suggested_file or '(tbd)'}  — {leaf.description[:120]}"
+            for leaf in leaves
+        ) or "(see task tree)"
+    else:
+        assignment_list = "(no pre-planned file list — infer from project description)"
     
     # Inject Architect's intended structure if available
     struct_ctx = ""
@@ -276,10 +106,10 @@ def _generate_contracts(
         contract_prompt = (
             f"You are the Engineering Manager.\n\n"
             f"PROJECT:\n{task[:600]}\n\n"
-            f"DEV ASSIGNMENTS:\n{assignment_list}\n"
+            f"FILES TO IMPLEMENT:\n{assignment_list}\n"
             f"{struct_ctx}\n\n"
             f"Currently we are in AGILE MODE. Do NOT generate rigid typed signatures or exact data models. "
-            f"Instead, generate a Collaborative Task List that maps files to owners and gives high-level feature descriptions. "
+            f"Instead, generate a Collaborative Task List that describes files and gives high-level feature descriptions. "
             f"The developers will use broadcasting and messaging to agree on the exact interfaces as they build them.\n\n"
             f"Output EXACTLY this JSON structure (no markdown fences, just raw JSON):\n"
             f'{{\n'
@@ -291,9 +121,9 @@ def _generate_contracts(
             f'  "models": [],\n'
             f'  "endpoints": [],\n'
             f'  "files": [\n'
-            f'    {{"file": "models.py", "owner": "dev_1", "imports_from": [], '
+            f'    {{"file": "models.py", "owner": "tbd", "imports_from": [], '
             f'"exports": [], "depends_on": [], "description": "Collaborative data models — define as needed and broadcast changes"}},\n'
-            f'    {{"file": "routes.py", "owner": "dev_2", "imports_from": ["models.py"], '
+            f'    {{"file": "routes.py", "owner": "tbd", "imports_from": ["models.py"], '
             f'"exports": [], "depends_on": ["models.py"], "description": "API routes — negotiate signatures with frontend"}}\n'
             f'  ],\n'
             f'  "entry_point": "server.py",\n'
@@ -302,8 +132,8 @@ def _generate_contracts(
             f"RULES:\n"
             f"- Set 'primary_language' to the project's main stack: python, rust, go, javascript, typescript, "
             f"java, csharp, cpp, kotlin, ruby, php, mixed, etc. The orchestrator uses this for env and verification.\n"
-            f"- Every dev must own at least one file\n"
-            f"- Use 'files' to define ownership and 'description' to give the collaborative goal\n"
+            f"- Set 'owner' to 'tbd' for all files — the orchestrator assigns developers at runtime\n"
+            f"- Use 'files' to define the file list and 'description' to give the collaborative goal\n"
             f"- The entry point file is SYSTEM-MANAGED — set its owner to 'system'\n"
             f"- 'depends_on' should only be used for high-level file ordering\n"
         )
@@ -311,7 +141,7 @@ def _generate_contracts(
         contract_prompt = (
             f"You are the Engineering Manager.\n\n"
             f"PROJECT:\n{task[:600]}\n\n"
-            f"DEV ASSIGNMENTS:\n{assignment_list}\n"
+            f"FILES TO IMPLEMENT:\n{assignment_list}\n"
             f"{struct_ctx}\n\n"
             f"Generate typed interface contracts so all developers use identical "
             f"signatures, import paths, and data models. This prevents integration failures.\n\n"
@@ -329,9 +159,9 @@ def _generate_contracts(
             f'    {{"method": "POST", "path": "/items", "request_model": "ItemCreate", "response_model": "Item"}}\n'
             f'  ],\n'
             f'  "files": [\n'
-            f'    {{"file": "models.py", "owner": "dev_1", "imports_from": [], '
+            f'    {{"file": "models.py", "owner": "tbd", "imports_from": [], '
             f'"exports": ["Item"], "depends_on": [], "description": "data models"}},\n'
-            f'    {{"file": "routes.py", "owner": "dev_2", "imports_from": ["models.py"], '
+            f'    {{"file": "routes.py", "owner": "tbd", "imports_from": ["models.py"], '
             f'"exports": ["create_item"], "depends_on": ["models.py"], "description": "API routes"}}\n'
             f'  ],\n'
             f'  "entry_point": "server.py",\n'
@@ -341,11 +171,11 @@ def _generate_contracts(
             f"RULES:\n"
             f"- Set 'primary_language' to the project's main stack (python, rust, go, javascript, typescript, "
             f"java, csharp, cpp, kotlin, mixed, …). Use 'mixed' if several languages are first-class.\n"
-            f"- Every dev must own at least one file\n"
+            f"- Set 'owner' to 'tbd' for all files — the orchestrator assigns developers at runtime\n"
             f"- Shared models/types go in ONE file that everyone imports from\n"
             f"- The entry point file is SYSTEM-MANAGED — set its owner to 'system'\n"
             f"  (The entry point will be auto-generated to wire all modules together)\n"
-            f"- NO two devs should own the same file — split into separate modules instead\n"
+            f"- Include ALL files needed for a working application\n"
             f"- Include ALL files needed for a working application\n"
             f"- 'depends_on' MUST list files that must be complete before this file can be written.\n"
             f"  Files with no dependencies have 'depends_on': []. The entry point depends on ALL other files.\n"
@@ -401,22 +231,22 @@ def run_sprint_planning(
     task: str,
     health_states: Dict[str, ActiveInferenceState],
     rolling_ctxs: Dict[str, RollingContext],
-) -> Tuple[Dict[str, str], Dict[str, str], Optional[Any]]:
+) -> Tuple[Dict[str, str], Dict[str, str], Optional[Any], Optional[Any]]:
     """
-    Engineering sprint planning: assign work items via blackboard,
-    then generate typed interface contracts for all agents.
-    Returns (dev_assignments, pool, component_graph).
+    Engineering sprint planning: decompose the goal, build the component graph,
+    and generate typed interface contracts. Developer assignment is handled by the
+    orchestrator at runtime — no blackboard planning phase.
+    Returns (dev_assignments={}, pool={}, component_graph, task_tree).
     """
     from .task_decomposition import run_recursive_decomposition, run_component_graph_generation
 
     sprint_num = _get_sprint_num()
     logger.info(f"  [eng] Recursively decomposing sprint goal (sprint {sprint_num})...")
     tree = run_recursive_decomposition(task, sprint_num)
-    tree_text = tree.format_tree()
     leaf_count = len(tree.get_leaf_tasks())
     logger.info(f"  [eng] Decomposition complete — {leaf_count} atomic tasks identified")
 
-    # ComponentGraph: single LLM call for typed dependency graph
+    # ComponentGraph: typed dependency graph with public interfaces
     component_graph = None
     try:
         logger.info(f"  [eng] Generating ComponentGraph (sprint {sprint_num})...")
@@ -430,60 +260,92 @@ def run_sprint_planning(
         logger.warning(f"  [eng] ComponentGraph failed ({exc}) — TaskTree fallback")
         component_graph = None
 
-    enriched_task = (
-        task
-        + "\n\n\u2500\u2500\u2500 PRE-DECOMPOSED TASK TREE \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n"
-        + tree_text
-        + "\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n"
-        "The tree above shows the full file breakdown. Write blackboard items that align\n"
-        "with these atomic files so developers can claim and implement them directly."
-    )
+    # Generate typed contracts from the component graph / task tree.
+    # No developer assignment here — the orchestrator decides at runtime.
+    _generate_contracts(task, component_graph, tree)
 
-    dev_assignments, pool = run_team_planning(
-        "Engineering", "eng_manager", ENG_WORKERS, enriched_task, rolling_ctxs, health_states
-    )
-
-    # Generate typed contracts so agents share exact signatures
-    _generate_contracts(enriched_task, dev_assignments, pool)
-
-    return dev_assignments, pool, component_graph
+    return {}, {}, component_graph, tree
 
 
-def run_ceo_summary(
-    brief: str,
-    results: Dict[str, Optional[TeamResult]],
-    plan: ExecutionPlan,
-    ctx: RollingContext,
-) -> str:
-    team_text = "\n\n".join(
-        f"{name} (confidence {t.confidence:.0%}, H={t.H_swarm:.3f}):\n{t.manager_synthesis[:500]}"
-        for name, t in results.items() if t is not None
-    )
-    plan_text = ""
-    if plan:
-        phase_lines = "\n".join(
-            f"  Phase {i}: {' + '.join(teams)}"
-            for i, teams in enumerate(plan.phases, 1)
-        )
-        notes = plan.team_notes.get("all", "")
-        plan_text = (
-            f"Phases:\n{phase_lines}\n"
-            + (f"Notes: {notes[:300]}" if notes else "")
-        )
-    summary = _llm(
-        f"You are the CEO.\n\nPROJECT: {brief}\n\n"
-        + (f"EXECUTION PLAN:\n{plan_text}\n\n" if plan_text else "")
-        + f"TEAM RESULTS:\n{team_text}\n\n"
-        f"Write an executive summary:\n"
-        f"1. Project Overview\n2. Key Architecture Decisions\n3. Design Highlights\n"
-        f"4. Implementation Highlights\n5. Quality & Risk Assessment\n6. Next Steps\n\n"
-        f"Flag any elevated H_swarm teams. Be concise and actionable.",
-        label="ceo_summary",
-        system=_SYSTEM_CEO,
-    )
-    ctx.add(brief, summary)
-    return summary
+# ── Orchestrator prompt ───────────────────────────────────────────────────────
 
+_ORCHESTRATOR_PROMPT_TEMPLATE = """\
+You are Engineering Manager orchestrating {n_devs} developers to implement the sprint goal.
+The task tree and component graph have already been planned — your job is to dispatch
+developer subagents in dependency order until ALL tasks are done.
+
+SPRINT GOAL:
+{goal}
+
+TASK TREE:
+{task_tree_ascii}
+
+COMPONENT GRAPH:
+{component_graph_ascii}
+
+AVAILABLE DEVELOPERS: {dev_list}
+
+PROCESS:
+1. Call list_ready_tasks() to see which tasks can start right now (all dependencies met).
+2. Call dispatch_parallel(assignments_json) with up to {n_devs} tasks in parallel.
+   - Assign LEAF tasks first (depth=0, no dependencies).
+   - Spread work across different developers to maximise parallelism.
+   - Higher complexity tasks should go to fresh (unloaded) developers.
+3. After each wave, call get_progress() and list_ready_tasks() to plan the next wave.
+4. If a task failed: use read_file() / run_shell() to diagnose, then retry via
+   dispatch_parallel with an extra_context key explaining what went wrong and how to fix it.
+5. Continue until get_progress() shows 0 pending tasks and 0 in-progress tasks.
+6. Once all tasks are complete, attempt to verify Docker (best-effort, non-blocking):
+   a. run_shell("docker info") — if it returns an error, Docker is not running; skip to step 7.
+   b. If Docker is available: run_shell("docker compose up --build -d") from the code directory.
+   c. run_shell("docker compose ps") to confirm the container started.
+   d. If it is a web app: run_shell("curl -s http://localhost:<port>/") to confirm it responds.
+   e. If build fails: read_file the Dockerfile/docker-compose.yml, fix with write_code_file, retry.
+   f. run_shell("docker compose down") to clean up.
+   g. If Docker is unavailable, note it in the synthesis — do NOT retry endlessly.
+7. Write a brief final synthesis: what was built, Docker test result (or "Docker not available"), any concerns.
+
+RULES:
+- Always dispatch the largest parallel batch you can (up to {n_devs} at once).
+- Never dispatch a task whose dependencies are not yet in "completed" status.
+- A developer can handle a new task as soon as their previous one finishes.
+- If a task fails twice, diagnose before a third attempt — never blindly retry.
+- assignments_json must be a JSON array of objects, e.g.:
+  [{{"task_id": "task_comp_abc_p1", "dev_key": "dev_1"}}, ...]
+  Optionally add "extra_context" key for retry hints.
+
+DOCKER REQUIREMENT (mandatory for every project):
+- Every project MUST include a Dockerfile and docker-compose.yml so it can be run with
+  `docker compose up` and nothing else.
+- The Dockerfile must install all dependencies and define the correct CMD/ENTRYPOINT.
+- Ensure one developer is assigned to write these files before the final integration task.
+- If no task in the tree covers Docker setup, add it yourself by assigning a developer to
+  create Dockerfile + docker-compose.yml as an extra task after all code tasks are done.
+- IMPORTANT: Docker files must be written with write_code_file using filenames "Dockerfile"
+  and "docker-compose.yml" (no subdirectory prefix) so they land in the code root.
+  Do NOT use write_config_file for Docker files — it puts them in the wrong directory.
+
+GUI ACCESSIBILITY REQUIREMENT (mandatory for GUI projects):
+- Every interactive widget (buttons, inputs, checkboxes, menus) MUST have an explicit
+  accessible name set so Windows UIA can locate it without vision:
+    tkinter:  widget.configure(name="add_button")  — use snake_case, unique per window
+    PyQt/PySide: widget.setObjectName("add_button")
+    wx:  widget.SetName("add_button")
+- This allows the manager to click via desktop_uia_click('window title', 'add_button')
+  which is pixel-perfect and never misses, instead of relying on vision coordinates.
+
+SELF-CONTAINED REQUIREMENT (mandatory for every project):
+- The project must run completely locally with zero external setup.
+- NO .env files, NO environment variables, NO external API keys, NO cloud services.
+- All configuration (ports, credentials, database URLs, secrets) must be hardcoded
+  as sensible defaults directly in the source code or docker-compose.yml.
+- Use only local storage: SQLite instead of PostgreSQL/MySQL, local filesystem instead
+  of S3, in-process cache instead of Redis — unless the task explicitly requires otherwise.
+- Any database must be seeded with enough sample data to demonstrate the app immediately
+  on first `docker compose up` with no manual steps.
+- If a developer writes code that requires an external service or .env key, the orchestrator
+  must reassign the task with explicit instructions to remove that dependency.
+"""
 
 # ── Engineering team: sprint planning → parallel build → synthesize ──────────
 
@@ -646,10 +508,6 @@ class EngTaskQueue:
                     if d in file_to_task_id
                 ]
                 desc = f"PHASE 1: Implementation and local drafting for {fname}"
-                for dk, assignment in dev_assignments.items():
-                    if fname in assignment:
-                        desc = f"PHASE 1: {assignment}"
-                        break
 
                 self.tasks[tid] = EngTask(
                     id=tid, file=fname, description=desc,
@@ -674,7 +532,7 @@ class EngTaskQueue:
                         self.tasks[tid] = EngTask(
                             id=tid,
                             file=fn,
-                            description=f"PHASE 1 (no contracts): {assign_blob[:280]}",
+                            description=f"PHASE 1: Implement {fn}",
                             depends_on=[],
                             status="pending",
                             phase=PHASE_IMPLEMENTATION,
@@ -690,18 +548,6 @@ class EngTaskQueue:
         )
 
         # Any files NOT covered by dev assignments (pool tasks)
-        for iid, pool_desc in pool_tasks.items():
-            # Try to extract file if it's there
-            file_match = re.search(r"\[([^\]]+)\]", pool_desc)
-            if file_match:
-                p_files = [f.strip() for f in file_match.group(1).split(",") if f.strip()]
-                for pf in p_files:
-                    if pf in file_to_task_id:
-                        # Existing file is now part of an unassigned Pool Task
-                        tid = file_to_task_id[pf] + "_p1"
-                        if tid in self.tasks:
-                            self.tasks[tid].description = f"POOL TASK: {pool_desc}"
-
         n_pending = sum(1 for t in self.tasks.values() if t.status == "pending")
         n_blocked = sum(1 for t in self.tasks.values() if t.status == "blocked")
         logger.info(f"[TaskQueue] initialized {len(self.tasks)} tasks ({n_pending} pending, {n_blocked} blocked) + final integration.")
@@ -728,8 +574,7 @@ class EngTaskQueue:
                         "id": t.id, "file": t.file, "description": t.description,
                         "depends_on": t.depends_on, "assigned_to": t.assigned_to,
                         "status": t.status, "retries": t.retries,
-                        "primary_owner": t.primary_owner, "phase": t.phase,
-                        "waiting_for": t.waiting_for,
+                        "phase": t.phase, "waiting_for": t.waiting_for,
                     }
                     for tid, t in self.tasks.items()
                 },
@@ -768,6 +613,18 @@ class EngTaskQueue:
             task.status = "in_progress"
             task.assigned_to = dev_key
             logger.info(f"[TaskQueue] {dev_key} claimed '{task.id}' (depth={task.depth}, {task.file})")
+            self._persist()
+            return task
+
+    def claim_specific(self, task_id: str, dev_key: str) -> Optional["EngTask"]:
+        """Claim a specific task by ID (orchestrator assigns directly)."""
+        with self._lock:
+            task = self.tasks.get(task_id)
+            if task is None or task.status != "pending":
+                return None
+            task.status = "in_progress"
+            task.assigned_to = dev_key
+            logger.info(f"[TaskQueue] {dev_key} claimed specific '{task.id}' (depth={task.depth}, {task.file})")
             self._persist()
             return task
 
@@ -922,11 +779,9 @@ class EngTaskQueue:
         logger.critical("[TaskQueue] ALL TASKS CANCELLED — token budget kill-switch triggered")
 
 
-def emit_skeleton(dev_assignments: Dict[str, str], sprint_num: int = 1) -> None:
+def emit_skeleton(sprint_num: int = 1) -> None:
     """
     Write skeleton/stub files based on interface contracts before Round 1.
-    Pre-populates dashboard domain claims so agents don't fight over files.
-    Entry point is registered as a SHARED file (system-managed).
     Agents fill in the stubs rather than inventing their own file structure.
     """
     registry = get_contracts()
@@ -1748,17 +1603,13 @@ def _manager_fix_loop(
         if _re_inferred != app_type:
             logger.info(f"[ManagerFix] app_type upgraded {app_type!r} -> {_re_inferred!r} via code inspection")
             app_type = _re_inferred
-    # Every app type with a visible interface requires desktop proof.
-    # cli/library are exempt (they have no window to screenshot).
+    # Feature testing disabled — manager only needs to run the app, not interact with it.
+    # Re-enable by setting MANAGER_FEATURE_TEST=1 in environment.
+    _feature_test_enabled = os.getenv("MANAGER_FEATURE_TEST", "0").strip() in ("1", "true", "yes")
     _desktop_proof_required = (
-        app_type in ("gui",) and MANAGER_GUI_DESKTOP_PROOF
+        _feature_test_enabled and app_type in ("gui",) and MANAGER_GUI_DESKTOP_PROOF
     )
-    # Every app type must produce functional proof:
-    #   gui    → launch + screenshot triplet
-    #   web    → launch + http_request
-    #   cli    → run and produce non-empty meaningful output
-    #   worker → launch + confirm process is running
-    _functional_proof_required = app_type not in ("library",)
+    _functional_proof_required = _feature_test_enabled and app_type not in ("library",)
     logger.info(
         f"[ManagerFix] app_type={app_type!r}  "
         f"gui_desktop_proof_required={_desktop_proof_required}  "
@@ -1821,7 +1672,7 @@ def _manager_fix_loop(
                 _desktop_ok = _cu.actions >= 1 and _cu.screenshots >= 2
         else:
             _desktop_ok = True
-        _web_ok = (app_type != "web") or manager_ran_http_request
+        _web_ok = (not _feature_test_enabled) or (app_type != "web") or manager_ran_http_request
         if tests_build_ok and manager_ran_start_service and _desktop_ok and _web_ok:
             logger.info(
                 f"[ManagerFix] ALL GREEN + app verified after "
@@ -1914,9 +1765,11 @@ def _manager_fix_loop(
                 f"  3. Use run_shell() to re-run specific commands if needed.\n"
                 f"  3b. Use web_search() when the failure involves an unfamiliar stack or CLI you are guessing.\n"
                 f"  4. Focus on the FIRST error — fixing it often resolves cascading failures.\n"
-                f"NON-NEGOTIABLE: Before integration is complete you MUST run the real application "
-                f"at least once (method depends on app_type='{app_type}' — see mandatory boot "
-                f"instructions you will receive once tests are green).\n"
+                f"NON-NEGOTIABLE: Before integration is complete you MUST:\n"
+                f"  1. Run the real application at least once (app_type='{app_type}').\n"
+                f"  2. Run `docker compose up --build -d` and confirm the container starts.\n"
+                f"     If docker-compose.yml or Dockerfile is missing, create them first.\n"
+                f"     Then run `docker compose down` to clean up.\n"
                 f"{_gui_cumulative}"
                 f"{_gui_extra}"
                 f"{_web_extra}"
@@ -2225,8 +2078,8 @@ def run_engineering_team(
     logger.info(f"\n{'─'*55}\nTEAM: ENGINEERING ({n} devs, async mode)\n{'─'*55}")
     clear_sprint_files()   # reset file tracking for this sprint
 
-    dev_assignments, pool, component_graph = run_sprint_planning(task, health_states, rolling_ctxs)
-    emit_skeleton(dev_assignments, sprint_num)
+    dev_assignments, pool, component_graph, task_tree = run_sprint_planning(task, health_states, rolling_ctxs)
+    emit_skeleton(sprint_num)
 
     code_dir = OUTPUT_DIR / "code"
     code_dir.mkdir(parents=True, exist_ok=True)
@@ -2259,13 +2112,26 @@ def run_engineering_team(
         completed_files = task_queue.get_completed_files()
         peer_context = ""
         if completed_files:
+            # Direct dependencies of this task get full content; others get a short preview
+            task_deps = set(eng_task.depends_on or [])
+            direct_dep_files: set[str] = set()
+            if component_graph and hasattr(component_graph, "nodes"):
+                for dep_id in task_deps:
+                    node = component_graph.nodes.get(dep_id)
+                    if node and node.file_path:
+                        direct_dep_files.add(node.file_path)
+
             previews = []
-            for cf in completed_files[:6]:
+            for cf in completed_files[:12]:
                 fpath = code_dir / cf
                 if fpath.exists():
                     try:
-                        src = fpath.read_text(encoding="utf-8")[:300]
-                        previews.append(f"  {cf}:\n    {src[:200]}...")
+                        src = fpath.read_text(encoding="utf-8", errors="replace")
+                        if cf in direct_dep_files:
+                            # Show full content for direct deps so the dev can see exact exports
+                            previews.append(f"  {cf} [DIRECT DEPENDENCY — read carefully]:\n```\n{src[:1500]}\n```")
+                        else:
+                            previews.append(f"  {cf}:\n    {src[:200]}...")
                     except Exception:
                         pass
             if previews:
@@ -2534,6 +2400,16 @@ def run_engineering_team(
                 f"  d) Quality improvements beyond the minimum spec\n"
                 f"─────────────────────────────────────────────────────────────\n"
                 f"THEN call write_code_file('{eng_task.file}', <complete code>).\n"
+                f"\n⛔ STRICT RULES — VIOLATIONS CAUSE TASK FAILURE:\n"
+                f"  1. Write ONLY '{eng_task.file}' — do NOT write other files.\n"
+                f"  2. Do NOT run the application (python main.py, python app.py, etc.).\n"
+                f"     The manager runs the app after ALL files are merged. You will break\n"
+                f"     things by running before your teammates' files exist.\n"
+                f"  3. You MAY run: validate_python, unit tests for YOUR file only.\n"
+                f"  4. Do NOT call list_files more than once.\n"
+                f"  5. VERIFY IMPORTS: Before writing any 'from X import Y', check the\n"
+                f"     COMPLETED FILES shown above to confirm Y is actually defined in X.\n"
+                f"     If it is not there, use what IS defined — never assume a name exists.\n"
                 f"End with: STANCE: [MINIMAL|ROBUST|SCALABLE|PRAGMATIC]"
             )
         logger.info(f"[{dev_key}] prompt built ({len(prompt)}c) — handing off to ReAct agent")
@@ -2653,6 +2529,224 @@ def run_engineering_team(
                         )
             if _any_unblocked:
                 task_queue._persist()
+
+    # ── Orchestrator tools + dispatch ─────────────────────────────────────
+
+    _orch_worker_outputs: List[WorkerOutput] = []
+
+    def _list_ready_tasks() -> str:
+        with task_queue._lock:
+            ready = [t for t in task_queue.tasks.values() if t.status == "pending"]
+            ready.sort(key=lambda t: (t.depth, t.id))
+        if not ready:
+            return "No tasks ready right now (all pending tasks still blocked on dependencies)."
+        lines = [f"{'TASK ID':<45} {'DEPTH':>5}  {'FILE':<40}  COMPLEXITY"]
+        for t in ready:
+            cplx = getattr(t, "complexity", "medium") or "medium"
+            lines.append(f"{t.id:<45} {t.depth:>5}  {t.file:<40}  {cplx}")
+        return "\n".join(lines)
+
+    def _get_task_details(task_id: str) -> str:
+        task = task_queue.tasks.get(task_id)
+        if not task:
+            return f"ERROR: task '{task_id}' not found."
+        deps_status = []
+        for dep in task.depends_on:
+            dep_task = task_queue.tasks.get(dep)
+            deps_status.append(f"  {dep}: {dep_task.status if dep_task else 'MISSING'}")
+        return (
+            f"Task ID   : {task.id}\n"
+            f"File      : {task.file}\n"
+            f"Status    : {task.status}\n"
+            f"Depth     : {task.depth}\n"
+            f"Complexity: {getattr(task, 'complexity', 'medium') or 'medium'}\n"
+            f"Depends on:\n" + ("\n".join(deps_status) if deps_status else "  none") + "\n"
+            f"Description:\n{task.description[:600]}"
+        )
+
+    def _dispatch_parallel(assignments_json: str) -> str:
+        import json as _json
+        try:
+            assignments = _json.loads(assignments_json)
+        except Exception as e:
+            return f"ERROR: could not parse assignments_json: {e}\nExpected a JSON array of {{task_id, dev_key}} objects."
+
+        if not isinstance(assignments, list) or not assignments:
+            return "ERROR: assignments_json must be a non-empty JSON array."
+
+        claimed: List[tuple] = []
+        skipped: List[str] = []
+        for entry in assignments:
+            tid = entry.get("task_id", "")
+            dev = entry.get("dev_key", "")
+            extra_ctx = entry.get("extra_context", "")
+            eng_task = task_queue.claim_specific(tid, dev)
+            if eng_task is None:
+                task = task_queue.tasks.get(tid)
+                status = task.status if task else "NOT FOUND"
+                skipped.append(f"  {tid} → skipped (status={status})")
+            else:
+                claimed.append((dev, eng_task, extra_ctx))
+
+        if not claimed:
+            msg = "No tasks claimed (all were unavailable)."
+            if skipped:
+                msg += "\nSkipped:\n" + "\n".join(skipped)
+            return msg
+
+        result_lines: List[str] = []
+        if skipped:
+            result_lines.append("Skipped (not pending):\n" + "\n".join(skipped))
+
+        def _run_one(dev_key: str, eng_task: "EngTask", extra_ctx: str) -> str:
+            wt = GitWorktreeManager(code_dir, [dev_key])
+            try:
+                wt.create_worktrees()
+                _set_worktree_manager(wt)
+                wo = build_feature(dev_key, eng_task, retry_count=task_queue.get_retries(eng_task.id))
+                with _built_lock:
+                    built[dev_key] = wo
+                    _tasks_completed_by[dev_key] += 1
+                    _orch_worker_outputs.append(wo)
+
+                wrote = any(
+                    ("write_code_file" in tr) or ("write_file_section" in tr) or ("write_config_file" in tr)
+                    for tr in (wo.tool_results or [])
+                )
+                if not wrote and eng_task.file != "__integration__":
+                    rolling_ctxs[dev_key].add(
+                        f"FAILED: no write_code_file call for '{eng_task.file}'",
+                        f"Your previous attempt did NOT call write_code_file() for '{eng_task.file}'. "
+                        f"REQUIRED: call write_code_file('{eng_task.file}', <full content>) first. "
+                        f"Do NOT use run_shell with echo/cat — those are invisible to the project."
+                    )
+                    task_queue.fail(eng_task.id)
+                    return f"✗ {dev_key} → {eng_task.file}: NO WRITE (requeued)"
+
+                committed = wt.commit_agent(dev_key)
+                with _merge_lock:
+                    merge_result = wt.merge_all()
+                if dev_key in merge_result.failed_agents:
+                    task_queue.fail(eng_task.id)
+                    return f"✗ {dev_key} → {eng_task.file}: MERGE FAILED"
+
+                if not committed and eng_task.file != "__integration__":
+                    target = code_dir / eng_task.file
+                    if not target.exists() or target.read_text(encoding="utf-8", errors="ignore").lstrip().startswith("# AUTO-GENERATED SKELETON"):
+                        task_queue.fail(eng_task.id)
+                        rolling_ctxs[dev_key].add(
+                            f"EMPTY OUTPUT — {eng_task.file}",
+                            f"You were assigned '{eng_task.file}' but wrote nothing. "
+                            f"Use write_code_file to write the file content."
+                        )
+                        return f"✗ {dev_key} → {eng_task.file}: EMPTY (requeued)"
+
+                task_queue.complete(eng_task.id)
+                _broadcast_task_completion(dev_key, eng_task, code_dir, sprint_num, task_queue)
+                try:
+                    get_rag().update()
+                except Exception:
+                    pass
+                snippet = (wo.output or "")[:120].replace("\n", " ")
+                return f"✓ {dev_key} → {eng_task.file}: {snippet}"
+
+            except Exception as exc:
+                logger.error(f"[{dev_key}] orch task {eng_task.id} crashed: {exc}", exc_info=True)
+                task_queue.fail(eng_task.id)
+                with _built_lock:
+                    _orch_worker_outputs.append(WorkerOutput(
+                        role=dev_key, title="Software Developer (error)",
+                        round=_tasks_completed_by[dev_key] + 1,
+                        output=f"[task crashed: {exc}]",
+                        tool_results=[], stance="pragmatic",
+                        stance_probs=[0.1, 0.1, 0.1, 0.7],
+                        F_health=9.9, anomaly=True,
+                    ))
+                return f"✗ {dev_key} → {eng_task.file}: EXCEPTION — {exc}"
+            finally:
+                wt.cleanup()
+                _set_worktree_manager(None)
+
+        with ThreadPoolExecutor(max_workers=len(claimed)) as _ex:
+            futs = {_ex.submit(_run_one, d, t, ec): (d, t) for d, t, ec in claimed}
+            for fut in as_completed(futs):
+                try:
+                    result_lines.append(fut.result())
+                except Exception as exc:
+                    d, t = futs[fut]
+                    result_lines.append(f"✗ {d} → {t.file}: FUTURE ERROR — {exc}")
+
+        ActiveInferenceState.interfere_all(
+            [health_states[d] for d in ENG_WORKERS], alpha=INTERFERENCE_ALPHA
+        )
+        return "\n".join(result_lines)
+
+    def _get_progress() -> str:
+        with task_queue._lock:
+            counts: Dict[str, int] = {}
+            for t in task_queue.tasks.values():
+                counts[t.status] = counts.get(t.status, 0) + 1
+        total = sum(counts.values())
+        done = counts.get("completed", 0) + counts.get("failed", 0)
+        pct = int(100 * done / total) if total else 0
+        lines = [f"Progress: {done}/{total} ({pct}%)"]
+        for status, cnt in sorted(counts.items()):
+            lines.append(f"  {status:<15} {cnt}")
+        return "\n".join(lines)
+
+    def _run_orchestrated_dispatch() -> List[WorkerOutput]:
+        from .tool_registry import _TOOL_CALLABLES, _ROLE_TOOL_NAMES
+
+        # Must be real named defs (not lambdas) — the registry introspects __name__
+        # and parameter annotations to build the Gemini tool schema.
+        def list_ready_tasks() -> str:
+            """Return a table of tasks whose dependencies are all completed and can start now."""
+            return _list_ready_tasks()
+
+        def get_task_details(task_id: str) -> str:
+            """Return full description, file path, depth, and dependency status for a task."""
+            return _get_task_details(task_id)
+
+        def dispatch_parallel(assignments_json: str) -> str:
+            """Run developer subagents in parallel for the given task assignments.
+            assignments_json: JSON array of {task_id, dev_key} objects, e.g.
+            [{"task_id": "task_comp_abc_p1", "dev_key": "dev_1"}, ...]
+            Optionally add "extra_context" key with retry hints."""
+            return _dispatch_parallel(assignments_json)
+
+        def get_progress() -> str:
+            """Return task counts by status and overall completion percentage."""
+            return _get_progress()
+
+        _TOOL_CALLABLES["list_ready_tasks"] = list_ready_tasks
+        _TOOL_CALLABLES["get_task_details"] = get_task_details
+        _TOOL_CALLABLES["dispatch_parallel"] = dispatch_parallel
+        _TOOL_CALLABLES["get_progress"] = get_progress
+
+        n_devs = len(ENG_WORKERS)
+        cg_ascii = component_graph.format_ascii() if component_graph else "(no component graph)"
+        tree_ascii = task_tree.format_tree() if task_tree else "(no task tree)"
+        prompt = _ORCHESTRATOR_PROMPT_TEMPLATE.format(
+            n_devs=n_devs,
+            goal=task[:400],
+            task_tree_ascii=tree_ascii[:3000],
+            component_graph_ascii=cg_ascii[:2000],
+            dev_list=", ".join(ENG_WORKERS),
+        )
+        _set_agent_ctx("orch_manager", sprint_num)
+        logger.info(f"[Orchestrator] starting orchestrated dispatch (sprint {sprint_num})")
+        try:
+            _run_with_tools_pkg(prompt, "orch_manager", f"orchestrator_s{sprint_num}")
+        except Exception as exc:
+            logger.error(f"[Orchestrator] orchestrator loop crashed: {exc}", exc_info=True)
+        finally:
+            for name in ("list_ready_tasks", "get_task_details", "dispatch_parallel", "get_progress"):
+                _TOOL_CALLABLES.pop(name, None)
+
+        # Ensure any tasks not yet completed are force-failed so the rest of the
+        # pipeline (manager fix loop, health states) can proceed.
+        task_queue.force_fail_remaining()
+        return list(_orch_worker_outputs)
 
     # ── Agent worker loop ─────────────────────────────────────────────────
 
@@ -3141,45 +3235,19 @@ def run_engineering_team(
             for msg in amendment_broadcasts:
                 get_dashboard().broadcast("eng_manager", msg, sprint_num, ENG_WORKERS)
 
-    # ── Launch all agents + monitor ───────────────────────────────────────
+    # ── Orchestrated dispatch (LLM orchestrator assigns tasks explicitly) ──
 
     import time as _eng_time
     start_time = _eng_time.time()
 
-    with ThreadPoolExecutor(max_workers=n + 1) as ex:
-        agent_futures = {
-            ex.submit(_agent_worker_loop, dev): dev for dev in ENG_WORKERS
-        }
-        monitor_future = ex.submit(_manager_monitor)
-
-        while not task_queue.all_done():
-            elapsed = _eng_time.time() - start_time
-            if elapsed > MAX_WALL_CLOCK:
-                logger.warning(
-                    f"[Engineering] hit MAX_WALL_CLOCK={MAX_WALL_CLOCK}s — "
-                    f"forcing completion after {elapsed:.0f}s"
-                )
-                task_queue.force_fail_remaining()
-                break
-            all_agents_exited = all(f.done() for f in agent_futures)
-            if all_agents_exited and not task_queue.all_done():
-                logger.warning("[Engineering] all agents exited but tasks remain — forcing completion")
-                task_queue.force_fail_remaining()
-                break
-            _eng_time.sleep(3)
-
-        try:
-            for fut in as_completed(list(agent_futures.keys()), timeout=60):
-                dev = agent_futures.get(fut, "unknown")
-                try:
-                    fut.result()
-                except Exception as exc:
-                    logger.error(f"[{dev}] worker loop error: {exc}", exc_info=True)
-        except TimeoutError:
-            logger.warning("[Engineering] timeout waiting for agent threads to finish")
+    worker_outputs_from_orch = _run_orchestrated_dispatch()
+    # Backfill `built` dict so the downstream health/consensus code finds results
+    for wo in worker_outputs_from_orch:
+        if wo.role not in built:
+            built[wo.role] = wo
 
     elapsed = _eng_time.time() - start_time
-    logger.info(f"\n[Engineering] async phase completed in {elapsed:.1f}s")
+    logger.info(f"\n[Engineering] orchestrated dispatch completed in {elapsed:.1f}s")
     logger.info(f"[Engineering] final queue status:\n{task_queue.get_status()}")
 
     # ── Final enforcement + build ─────────────────────────────────────────
@@ -3188,7 +3256,14 @@ def run_engineering_team(
         logger.info(f"\n[FINAL ENFORCEMENT]\n{final_enforce}")
 
     # ── Manager fix-until-green loop ──────────────────────────────────────
-    fix_result = _manager_fix_loop(code_dir, task_queue, rolling_ctxs)
+    from .config import MANAGER_FIX_MAX_ROUNDS as _mfmr
+    _manager_testing_enabled = _mfmr > 0
+    if not _manager_testing_enabled:
+        logger.info("[Engineering] Manager fix loop SKIPPED (MANAGER_FIX_MAX_ROUNDS=0)")
+        fix_result = ManagerFixResult(passed=True, rounds_used=0,
+                                      final_output="Skipped.", app_run_verified=False)
+    else:
+        fix_result = _manager_fix_loop(code_dir, task_queue, rolling_ctxs)
     if fix_result.passed:
         logger.info(
             f"[Engineering] Manager fix loop PASSED in {fix_result.rounds_used} round(s) "
@@ -3235,8 +3310,7 @@ def run_engineering_team(
 
     # ── Final manager synthesis ───────────────────────────────────────────
     feature_summaries = "\n\n".join(
-        f"=== Dev {dev.split('_')[1]} — {dev_assignments[dev]} "
-        f"(tasks: {_tasks_completed_by[dev]}) ===\n{built[dev].output[:700]}"
+        f"=== Dev {dev.split('_')[1]} (tasks: {_tasks_completed_by[dev]}) ===\n{built[dev].output[:700]}"
         for dev in ENG_WORKERS if dev in built
     )
     _fix_status = (

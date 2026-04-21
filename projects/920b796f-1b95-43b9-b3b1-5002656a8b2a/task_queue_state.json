@@ -1,0 +1,179 @@
+{
+  "tasks": {
+    "task_comp_comp_001_p1": {
+      "id": "task_comp_comp_001_p1",
+      "file": "src/config.py",
+      "description": "PHASE 1: Implement Config (src/config.py)\nCentralized configuration management. Holds constants like window dimensions, themes, and decimal precision settings globally.\n\nREQUIRED PUBLIC INTERFACE:\nConstants: WINDOW_WIDTH: int = 400, WINDOW_HEIGHT: int = 600, DEFAULT_PRECISION: int = 100",
+      "depends_on": [],
+      "assigned_to": "dev_1",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_009_p1": {
+      "id": "task_comp_comp_009_p1",
+      "file": "src/services/logger.py",
+      "description": "PHASE 1: Implement LoggerService (src/services/logger.py)\nCaptures application runtime errors and logs state transitions, critical for production debugging of high-precision calculations.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: Logger\nFunctions:\n  Logger.error(self, msg: str)\n  Logger.info(self, msg: str)",
+      "depends_on": [],
+      "assigned_to": "dev_2",
+      "status": "completed",
+      "retries": 1,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_005_p1": {
+      "id": "task_comp_comp_005_p1",
+      "file": "src/ui/display.py",
+      "description": "PHASE 1: Implement DisplayUI (src/ui/display.py)\nWraps tkinter Text/Entry widgets. Includes horizontal scrolling for large numbers exceeding display width.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: DisplayFrame\nFunctions:\n  DisplayFrame.update_text(self, text: str) -> None\n  DisplayFrame.enable_scroll(self) -> None",
+      "depends_on": [
+        "task_comp_comp_001_p1"
+      ],
+      "assigned_to": "dev_3",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_006_p1": {
+      "id": "task_comp_comp_006_p1",
+      "file": "src/ui/buttons.py",
+      "description": "PHASE 1: Implement ButtonUI (src/ui/buttons.py)\nCustom button widgets. Manages click events and visual feedback for the user grid.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: CalcButton\nFunctions:\n  CalcButton.set_active(self, active: bool) -> None",
+      "depends_on": [
+        "task_comp_comp_001_p1"
+      ],
+      "assigned_to": "dev_4",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_002_p1": {
+      "id": "task_comp_comp_002_p1",
+      "file": "src/models/calculator.py",
+      "description": "PHASE 1: Implement CalcModel (src/models/calculator.py)\nManages calculator state using Decimal. Includes serialization methods for persistent state and type-safe property setters for validation.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: CalculatorState\nFunctions:\n  CalculatorState.to_dict(self) -> dict\n  CalculatorState.from_dict(self, data: dict) -> None\n  CalculatorState.set_value(self, val: str) -> None",
+      "depends_on": [
+        "task_comp_comp_001_p1",
+        "task_comp_comp_009_p1"
+      ],
+      "assigned_to": "dev_5",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_003_p1": {
+      "id": "task_comp_comp_003_p1",
+      "file": "src/services/math_engine.py",
+      "description": "PHASE 1: Implement MathEngine (src/services/math_engine.py)\nHigh-precision arithmetic using decimal.Context. Handles division by zero and invalid operation exceptions explicitly.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: MathEngine\nFunctions:\n  MathEngine.add(self, a: str, b: str) -> str\n  MathEngine.divide(self, a: str, b: str) -> str",
+      "depends_on": [
+        "task_comp_comp_001_p1",
+        "task_comp_comp_009_p1"
+      ],
+      "assigned_to": "dev_6",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_010_p1": {
+      "id": "task_comp_comp_010_p1",
+      "file": "src/services/sanitizer.py",
+      "description": "PHASE 1: Implement StringSanitizer (src/services/sanitizer.py)\nHandles numeric string sanitization. Strips whitespace, converts locales, and normalizes scientific notation for the MathEngine.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: Sanitizer\nFunctions:\n  Sanitizer.sanitize(self, input: str) -> str",
+      "depends_on": [
+        "task_comp_comp_009_p1"
+      ],
+      "assigned_to": "dev_7",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_007_p1": {
+      "id": "task_comp_comp_007_p1",
+      "file": "src/ui/layout.py",
+      "description": "PHASE 1: Implement MainLayout (src/ui/layout.py)\nOrganizes the display and button grid. Provides the main window interface for the Controller to trigger screen updates.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: CalculatorWindow\nFunctions:\n  CalculatorWindow.get_controller(self) -> CalcController",
+      "depends_on": [
+        "task_comp_comp_001_p1",
+        "task_comp_comp_005_p1",
+        "task_comp_comp_006_p1"
+      ],
+      "assigned_to": "dev_8",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_004_p1": {
+      "id": "task_comp_comp_004_p1",
+      "file": "src/controller.py",
+      "description": "PHASE 1: Implement Controller (src/controller.py)\nOrchestrates UI and model. Bridges input handling, mathematical execution, and UI updates, including dependency injection of the main layout.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: CalcController\nFunctions:\n  CalcController.handle_input(self, input: str) -> None",
+      "depends_on": [
+        "task_comp_comp_002_p1",
+        "task_comp_comp_003_p1",
+        "task_comp_comp_007_p1",
+        "task_comp_comp_009_p1",
+        "task_comp_comp_010_p1"
+      ],
+      "assigned_to": "dev_1",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_008_p1": {
+      "id": "task_comp_comp_008_p1",
+      "file": "src/main.py",
+      "description": "PHASE 1: Implement AppEntry (src/main.py)\nApplication root. Implements a DI container to instantiate the model, engine, and controller before binding them to the root TK instance.\n\nREQUIRED PUBLIC INTERFACE:\nFunctions:\n  main() -> None",
+      "depends_on": [
+        "task_comp_comp_001_p1",
+        "task_comp_comp_002_p1",
+        "task_comp_comp_003_p1",
+        "task_comp_comp_004_p1",
+        "task_comp_comp_007_p1",
+        "task_comp_comp_009_p1",
+        "task_comp_comp_010_p1"
+      ],
+      "assigned_to": "dev_2",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_integration_test": {
+      "id": "task_integration_test",
+      "file": "__integration__",
+      "description": "Final integration: final build check and smoke tests",
+      "depends_on": [
+        "task_comp_comp_001_p1",
+        "task_comp_comp_009_p1",
+        "task_comp_comp_005_p1",
+        "task_comp_comp_006_p1",
+        "task_comp_comp_002_p1",
+        "task_comp_comp_003_p1",
+        "task_comp_comp_010_p1",
+        "task_comp_comp_007_p1",
+        "task_comp_comp_004_p1",
+        "task_comp_comp_008_p1"
+      ],
+      "assigned_to": null,
+      "status": "failed",
+      "retries": 0,
+      "phase": 2,
+      "waiting_for": []
+    }
+  },
+  "completed_tasks": [
+    "task_comp_comp_001_p1",
+    "task_comp_comp_003_p1",
+    "task_integration_test",
+    "task_comp_comp_008_p1",
+    "task_comp_comp_010_p1",
+    "task_comp_comp_006_p1",
+    "task_comp_comp_009_p1",
+    "task_comp_comp_004_p1",
+    "task_comp_comp_002_p1",
+    "task_comp_comp_005_p1",
+    "task_comp_comp_007_p1"
+  ]
+}

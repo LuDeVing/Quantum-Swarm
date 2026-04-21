@@ -1,0 +1,350 @@
+{
+  "sprint": 1,
+  "goal": "create a gui app with python and test it",
+  "nodes": {
+    "comp_001": {
+      "id": "comp_001",
+      "name": "AppConfig",
+      "file_path": "src/config.py",
+      "description": "This module acts as the centralized source of truth for all application configuration, constants, and environment settings. It manages static application metadata such as window dimensions, theme constants, and default application paths, providing a single point of truth to avoid magic values across the GUI layers.",
+      "public_interface": {
+        "classes": [],
+        "functions": [],
+        "constants": [
+          "APP_TITLE: str = 'Quantum Task Manager'",
+          "DEFAULT_WIDTH: int = 800",
+          "DEFAULT_HEIGHT: int = 600",
+          "THEME_COLOR: str = '#2E3440'"
+        ]
+      },
+      "depends_on": [],
+      "consumers": [
+        "comp_005",
+        "comp_006",
+        "comp_010"
+      ],
+      "complexity": "low",
+      "depth": 0
+    },
+    "comp_002": {
+      "id": "comp_002",
+      "name": "TaskModel",
+      "file_path": "src/models/task.py",
+      "description": "Defines the core data schema for a task entity within the application. It encapsulates the task's state using Python dataclasses to ensure type safety, consistency, and easy serialization when saving or loading data from the persistence layer.",
+      "public_interface": {
+        "classes": [
+          "Task"
+        ],
+        "functions": [
+          "Task.__init__(self, id: str, title: str, completed: bool = False) -> None"
+        ],
+        "constants": [
+          "id: str",
+          "title: str",
+          "completed: bool = False"
+        ]
+      },
+      "depends_on": [],
+      "consumers": [
+        "comp_003",
+        "comp_004",
+        "comp_007"
+      ],
+      "complexity": "low",
+      "depth": 0
+    },
+    "comp_003": {
+      "id": "comp_003",
+      "name": "TaskRepository",
+      "file_path": "src/data/repository.py",
+      "description": "Handles all CRUD operations for task entities, abstracting the persistence layer from the business logic. It provides methods to fetch, add, update, and remove tasks, ensuring that the rest of the application interacts with a consistent interface regardless of the underlying storage mechanism.",
+      "public_interface": {
+        "classes": [
+          "TaskRepository"
+        ],
+        "functions": [
+          "TaskRepository.__init__(self, storage_path: str) -> None",
+          "TaskRepository.get_all(self) -> list[Task]",
+          "TaskRepository.add_task(self, task: Task) -> None",
+          "TaskRepository.remove_task(self, task_id: str) -> None"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_002"
+      ],
+      "consumers": [
+        "comp_004",
+        "comp_011"
+      ],
+      "complexity": "medium",
+      "depth": 1
+    },
+    "comp_004": {
+      "id": "comp_004",
+      "name": "TaskService",
+      "file_path": "src/services/task_service.py",
+      "description": "Contains the business logic layer that orchestrates interaction between the UI and the repository. It validates task data, processes state transitions, and notifies the UI layer of any relevant updates to the task list, maintaining a clean separation of concerns.",
+      "public_interface": {
+        "classes": [
+          "TaskService"
+        ],
+        "functions": [
+          "TaskService.__init__(self, repository: TaskRepository) -> None",
+          "TaskService.create_task(self, title: str) -> Task",
+          "TaskService.toggle_task(self, task_id: str) -> None",
+          "TaskService.list_tasks(self) -> list[Task]"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_002",
+        "comp_003"
+      ],
+      "consumers": [
+        "comp_009",
+        "comp_011"
+      ],
+      "complexity": "medium",
+      "depth": 2
+    },
+    "comp_005": {
+      "id": "comp_005",
+      "name": "ThemeManager",
+      "file_path": "src/utils/theme.py",
+      "description": "Provides utility functions to manage and apply application-wide styling and color schemes to GUI components. It ensures visual consistency by translating abstract theme constants into concrete widget configurations, facilitating easy skinning of the application.",
+      "public_interface": {
+        "classes": [
+          "ThemeManager"
+        ],
+        "functions": [
+          "ThemeManager.__init__(self) -> None",
+          "ThemeManager.apply_theme(self, widget: object) -> None"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_001"
+      ],
+      "consumers": [
+        "comp_006"
+      ],
+      "complexity": "low",
+      "depth": 1
+    },
+    "comp_006": {
+      "id": "comp_006",
+      "name": "MainLayout",
+      "file_path": "src/ui/layout.py",
+      "description": "Defines the primary graphical container and top-level structure of the desktop application. It composes child UI components, handles window-level events, and establishes the grid or box layout that organizes all functional widgets within the main window.",
+      "public_interface": {
+        "classes": [
+          "MainLayout"
+        ],
+        "functions": [
+          "MainLayout.__init__(self, parent: object) -> None",
+          "MainLayout.setup_ui(self) -> None"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_001",
+        "comp_005"
+      ],
+      "consumers": [
+        "comp_009",
+        "comp_010"
+      ],
+      "complexity": "medium",
+      "depth": 2
+    },
+    "comp_007": {
+      "id": "comp_007",
+      "name": "TaskListView",
+      "file_path": "src/ui/components/list_view.py",
+      "description": "A specific UI component responsible for rendering the list of tasks and reacting to user interaction within that list. It encapsulates the drawing logic for task items, selection handling, and event dispatching for task modifications.",
+      "public_interface": {
+        "classes": [
+          "TaskListView"
+        ],
+        "functions": [
+          "TaskListView.__init__(self, parent: object) -> None",
+          "TaskListView.update_list(self, tasks: list[Task]) -> None"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_002"
+      ],
+      "consumers": [
+        "comp_009",
+        "comp_010"
+      ],
+      "complexity": "medium",
+      "depth": 1
+    },
+    "comp_008": {
+      "id": "comp_008",
+      "name": "TaskInputView",
+      "file_path": "src/ui/components/input_view.py",
+      "description": "Provides a user interface widget for accepting input for new tasks. It handles validation of the input string and exposes an event or signal when the user successfully submits a new task title.",
+      "public_interface": {
+        "classes": [
+          "TaskInputView"
+        ],
+        "functions": [
+          "TaskInputView.__init__(self, parent: object) -> None",
+          "TaskInputView.get_text(self) -> str",
+          "TaskInputView.clear(self) -> None"
+        ],
+        "constants": []
+      },
+      "depends_on": [],
+      "consumers": [
+        "comp_009",
+        "comp_010"
+      ],
+      "complexity": "low",
+      "depth": 0
+    },
+    "comp_009": {
+      "id": "comp_009",
+      "name": "AppController",
+      "file_path": "src/controller.py",
+      "description": "Acts as the central coordinator between the UI layer and the business logic layer. It receives signals from the interface components, triggers actions on the service, and updates the views accordingly, managing the application's event loop via the EventBus.",
+      "public_interface": {
+        "classes": [
+          "AppController"
+        ],
+        "functions": [
+          "AppController.__init__(self, view: MainLayout, service: TaskService, bus: EventBus) -> None",
+          "AppController.handle_add_task(self) -> None",
+          "AppController.handle_toggle_task(self, task_id: str) -> None"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_004",
+        "comp_006",
+        "comp_007",
+        "comp_008",
+        "comp_012"
+      ],
+      "consumers": [
+        "comp_010",
+        "comp_011"
+      ],
+      "complexity": "high",
+      "depth": 3
+    },
+    "comp_010": {
+      "id": "comp_010",
+      "name": "MainWindow",
+      "file_path": "src/ui/main_window.py",
+      "description": "The top-level window class that initializes the application UI environment. It sets up the main loop and ties the controller to the specific layout and components, acting as the primary entry point for the GUI application execution.",
+      "public_interface": {
+        "classes": [
+          "MainWindow"
+        ],
+        "functions": [
+          "MainWindow.__init__(self) -> None",
+          "MainWindow.run(self) -> None"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_001",
+        "comp_006",
+        "comp_007",
+        "comp_008",
+        "comp_009"
+      ],
+      "consumers": [],
+      "complexity": "medium",
+      "depth": 4
+    },
+    "comp_011": {
+      "id": "comp_011",
+      "name": "IntegrationTester",
+      "file_path": "tests/integration.py",
+      "description": "Defines the suite of automated tests for verifying full end-to-end functionality of the application. It simulates user interactions to ensure the Controller, Service, and Repository layers correctly handle state updates across the stack.",
+      "public_interface": {
+        "classes": [
+          "IntegrationTester"
+        ],
+        "functions": [
+          "IntegrationTester.run_all(self) -> bool"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_003",
+        "comp_004",
+        "comp_009"
+      ],
+      "consumers": [
+        "comp_013"
+      ],
+      "complexity": "medium",
+      "depth": 4
+    },
+    "comp_012": {
+      "id": "comp_012",
+      "name": "EventBus",
+      "file_path": "src/utils/event_bus.py",
+      "description": "A centralized messaging component that implements the Observer pattern to facilitate decoupled communication between UI components and the controller. It prevents circular dependencies by allowing components to publish events and subscribe to signals without direct references to each other.",
+      "public_interface": {
+        "classes": [
+          "EventBus"
+        ],
+        "functions": [
+          "EventBus.subscribe(self, event_name: str, callback: callable) -> None",
+          "EventBus.emit(self, event_name: str, data: any) -> None"
+        ],
+        "constants": []
+      },
+      "depends_on": [],
+      "consumers": [
+        "comp_009"
+      ],
+      "complexity": "low",
+      "depth": 0
+    },
+    "comp_013": {
+      "id": "comp_013",
+      "name": "TestRunner",
+      "file_path": "tests/runner.py",
+      "description": "Provides the primary entry point for executing the application's test suite, including unit, integration, and UI tests. It manages test discovery, environment setup, and report generation to ensure continuous quality during development.",
+      "public_interface": {
+        "classes": [
+          "TestRunner"
+        ],
+        "functions": [
+          "TestRunner.execute(self) -> None"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_011"
+      ],
+      "consumers": [],
+      "complexity": "low",
+      "depth": 5
+    }
+  },
+  "topological_order": [
+    "comp_001",
+    "comp_002",
+    "comp_008",
+    "comp_012",
+    "comp_005",
+    "comp_003",
+    "comp_007",
+    "comp_006",
+    "comp_004",
+    "comp_009",
+    "comp_010",
+    "comp_011",
+    "comp_013"
+  ]
+}

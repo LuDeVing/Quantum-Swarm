@@ -1,0 +1,219 @@
+{
+  "tasks": {
+    "task_comp_comp_001_p1": {
+      "id": "task_comp_comp_001_p1",
+      "file": "todo_app/config.py",
+      "description": "PHASE 1: Implement Config (todo_app/config.py)\nDefines application-wide constants and configuration values. This module acts as the single source of truth for UI colors, window dimensions, and file paths for persistence, ensuring consistency across the entire GUI and data layer.\n\nREQUIRED PUBLIC INTERFACE:\nConstants: APP_TITLE: str = 'Quantum Todo', WINDOW_SIZE: str = '400x500', STORAGE_FILE: str = 'tasks.json', PRIMARY_COLOR: str = '#4A90E2', BG_COLOR: str = '#F5F7FA'",
+      "depends_on": [],
+      "assigned_to": "dev_1",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_002_p1": {
+      "id": "task_comp_comp_002_p1",
+      "file": "todo_app/models.py",
+      "description": "PHASE 1: Implement TaskModel (todo_app/models.py)\nDefines the core Task data structure using dataclasses for type safety. It encapsulates the properties of a single todo item, including its content, completion status, and unique identifier for state management.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: Task\nFunctions:\n  Task.__init__(self, id: str, title: str, completed: bool = False) -> None\n  Task.to_dict(self) -> dict[str, any]\n  Task.from_dict(cls, data: dict[str, any]) -> 'Task'",
+      "depends_on": [],
+      "assigned_to": "dev_2",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_009_p1": {
+      "id": "task_comp_comp_009_p1",
+      "file": "todo_app/utils.py",
+      "description": "PHASE 1: Implement Utils (todo_app/utils.py)\nProvides shared helper functions such as ID generation or simple string manipulation. These utilities keep the domain logic and UI code clean by centralizing common repetitive tasks.\n\nREQUIRED PUBLIC INTERFACE:\nFunctions:\n  generate_unique_id() -> str",
+      "depends_on": [],
+      "assigned_to": "dev_3",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_011_p1": {
+      "id": "task_comp_comp_011_p1",
+      "file": "requirements.txt",
+      "description": "PHASE 1: Implement Requirements (requirements.txt)\nLists all necessary dependencies for the environment, specifically ensuring that standard library support is met and any external tooling for packaging is declared for the CI/CD pipeline.\n\nREQUIRED PUBLIC INTERFACE:\nnone specified",
+      "depends_on": [],
+      "assigned_to": "dev_4",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_013_p1": {
+      "id": "task_comp_comp_013_p1",
+      "file": "todo_app/events.py",
+      "description": "PHASE 1: Implement EventBus (todo_app/events.py)\nA centralized pub/sub mechanism that decouples UI components from the business logic layer. It allows signals such as 'task-added', 'task-toggled', and 'task-deleted' to be broadcasted and handled without direct coupling.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: EventBus\nFunctions:\n  EventBus.subscribe(self, event_type: str, callback: callable) -> None\n  EventBus.publish(self, event_type: str, data: any) -> None",
+      "depends_on": [],
+      "assigned_to": "dev_5",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_005_p1": {
+      "id": "task_comp_comp_005_p1",
+      "file": "todo_app/ui/components.py",
+      "description": "PHASE 1: Implement TaskEntryField (todo_app/ui/components.py)\nA reusable UI component for user text input. It wraps the tkinter Entry widget to provide a clean interface for typing new task descriptions with integrated validation logic and event handling.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: TaskEntry\nFunctions:\n  TaskEntry.__init__(self, master: any, **kwargs) -> None\n  TaskEntry.get_text(self) -> str\n  TaskEntry.clear(self) -> None",
+      "depends_on": [
+        "task_comp_comp_001_p1"
+      ],
+      "assigned_to": "dev_2",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_003_p1": {
+      "id": "task_comp_comp_003_p1",
+      "file": "todo_app/storage.py",
+      "description": "PHASE 1: Implement StorageService (todo_app/storage.py)\nHandles persistent storage of tasks to a JSON file. This service acts as the data access layer, responsible for loading and saving the list of Task objects to ensure data durability across application sessions.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: StorageManager\nFunctions:\n  StorageManager.__init__(self, file_path: str) -> None\n  StorageManager.load_tasks(self) -> list[Task]\n  StorageManager.save_tasks(self, tasks: list[Task]) -> None",
+      "depends_on": [
+        "task_comp_comp_001_p1",
+        "task_comp_comp_002_p1"
+      ],
+      "assigned_to": "dev_1",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_012_p1": {
+      "id": "task_comp_comp_012_p1",
+      "file": "Dockerfile",
+      "description": "PHASE 1: Implement DockerConfig (Dockerfile)\nDefines the container environment for the application. It captures the operating system dependencies and Python runtime, ensuring that GUI applications can execute via X11 forwarding by configuring DISPLAY environment variables and base image requirements.\n\nREQUIRED PUBLIC INTERFACE:\nnone specified",
+      "depends_on": [
+        "task_comp_comp_011_p1"
+      ],
+      "assigned_to": "dev_4",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_006_p1": {
+      "id": "task_comp_comp_006_p1",
+      "file": "todo_app/ui/components.py",
+      "description": "PHASE 1: Implement TaskItemWidget (todo_app/ui/components.py)\nA custom GUI component representing a single row in the task list. It displays the task text, a checkbox for completion, and a delete button, publishing events to the bus when interactions occur.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: TaskRow\nFunctions:\n  TaskRow.__init__(self, master: any, task: Task, bus: EventBus) -> None",
+      "depends_on": [
+        "task_comp_comp_001_p1",
+        "task_comp_comp_002_p1",
+        "task_comp_comp_013_p1"
+      ],
+      "assigned_to": "dev_3",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_004_p1": {
+      "id": "task_comp_comp_004_p1",
+      "file": "todo_app/manager.py",
+      "description": "PHASE 1: Implement TodoManager (todo_app/manager.py)\nActs as the controller that orchestrates business logic and manages the application state. It maintains the master list of tasks and provides an interface for adding, updating, and removing tasks while coordinating with the storage service and event bus.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: TodoManager\nFunctions:\n  TodoManager.__init__(self, storage: StorageManager, bus: EventBus) -> None\n  TodoManager.get_all_tasks(self) -> list[Task]\n  TodoManager.add_task(self, title: str) -> Task\n  TodoManager.toggle_task(self, task_id: str) -> None\n  TodoManager.delete_task(self, task_id: str) -> None",
+      "depends_on": [
+        "task_comp_comp_002_p1",
+        "task_comp_comp_003_p1",
+        "task_comp_comp_009_p1",
+        "task_comp_comp_013_p1"
+      ],
+      "assigned_to": "dev_1",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_007_p1": {
+      "id": "task_comp_comp_007_p1",
+      "file": "todo_app/ui/components.py",
+      "description": "PHASE 1: Implement TaskListView (todo_app/ui/components.py)\nA scrollable container that renders the list of active tasks. It manages the layout of multiple TaskItemWidget instances and provides a method to refresh the UI content based on task list state.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: TaskListView\nFunctions:\n  TaskListView.__init__(self, master: any, **kwargs) -> None\n  TaskListView.clear(self) -> None\n  TaskListView.add_row(self, row: TaskRow) -> None\n  TaskListView.render_tasks(self, tasks: list[Task]) -> None",
+      "depends_on": [
+        "task_comp_comp_001_p1",
+        "task_comp_comp_006_p1"
+      ],
+      "assigned_to": "dev_2",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_008_p1": {
+      "id": "task_comp_comp_008_p1",
+      "file": "todo_app/ui/main_window.py",
+      "description": "PHASE 1: Implement MainApplication (todo_app/ui/main_window.py)\nThe primary window class that binds the UI components to the manager. It handles window layout, listens to the event bus for state updates, and triggers refreshing the view.\n\nREQUIRED PUBLIC INTERFACE:\nClasses: TodoApp\nFunctions:\n  TodoApp.__init__(self, manager: TodoManager, bus: EventBus) -> None\n  TodoApp.run(self) -> None\n  TodoApp.refresh_list(self) -> None",
+      "depends_on": [
+        "task_comp_comp_001_p1",
+        "task_comp_comp_004_p1",
+        "task_comp_comp_005_p1",
+        "task_comp_comp_007_p1",
+        "task_comp_comp_013_p1"
+      ],
+      "assigned_to": "dev_1",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_comp_comp_010_p1": {
+      "id": "task_comp_comp_010_p1",
+      "file": "main.py",
+      "description": "PHASE 1: Implement AppEntry (main.py)\nThe system-managed entry point that initializes the dependency injection container, sets up the event bus, storage connection, launches the manager, and displays the main application window.\n\nREQUIRED PUBLIC INTERFACE:\nFunctions:\n  main() -> None",
+      "depends_on": [
+        "task_comp_comp_001_p1",
+        "task_comp_comp_003_p1",
+        "task_comp_comp_004_p1",
+        "task_comp_comp_008_p1",
+        "task_comp_comp_013_p1"
+      ],
+      "assigned_to": "dev_1",
+      "status": "completed",
+      "retries": 0,
+      "phase": 1,
+      "waiting_for": []
+    },
+    "task_integration_test": {
+      "id": "task_integration_test",
+      "file": "__integration__",
+      "description": "Final integration: final build check and smoke tests",
+      "depends_on": [
+        "task_comp_comp_001_p1",
+        "task_comp_comp_002_p1",
+        "task_comp_comp_009_p1",
+        "task_comp_comp_011_p1",
+        "task_comp_comp_013_p1",
+        "task_comp_comp_005_p1",
+        "task_comp_comp_003_p1",
+        "task_comp_comp_012_p1",
+        "task_comp_comp_006_p1",
+        "task_comp_comp_004_p1",
+        "task_comp_comp_007_p1",
+        "task_comp_comp_008_p1",
+        "task_comp_comp_010_p1"
+      ],
+      "assigned_to": "dev_1",
+      "status": "completed",
+      "retries": 0,
+      "phase": 2,
+      "waiting_for": []
+    }
+  },
+  "completed_tasks": [
+    "task_comp_comp_001_p1",
+    "task_comp_comp_012_p1",
+    "task_integration_test",
+    "task_comp_comp_002_p1",
+    "task_comp_comp_007_p1",
+    "task_comp_comp_010_p1",
+    "task_comp_comp_013_p1",
+    "task_comp_comp_005_p1",
+    "task_comp_comp_003_p1",
+    "task_comp_comp_008_p1",
+    "task_comp_comp_004_p1",
+    "task_comp_comp_006_p1",
+    "task_comp_comp_009_p1",
+    "task_comp_comp_011_p1"
+  ]
+}

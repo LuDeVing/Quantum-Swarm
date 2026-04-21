@@ -73,7 +73,7 @@ class DecomposedTask:
 
 
 class TaskTree:
-    MAX_DEPTH = 3  # root(0) → features(1) → components(2) → files(3)
+    MAX_DEPTH = 20  # safety ceiling; manager subdivides until truly atomic
     SAVE_PATH = OUTPUT_DIR / "TASK_TREE.json"
 
     def __init__(self) -> None:
@@ -148,37 +148,80 @@ class TaskTree:
 # ---------------------------------------------------------------------------
 
 _DECOMPOSE_SYSTEM = (
-    "You are an expert Engineering Manager. "
+    "You are a meticulous Engineering Manager building a fully-detailed task tree. "
+    "You visit every node and keep subdividing until nothing can be split further. "
     "Respond with JSON only — no markdown fences, no extra text."
 )
 
 _DECOMPOSE_PROMPT = """\
-You are Engineering Manager decomposing work for a software sprint.
+You are an Engineering Manager building a task tree for a software sprint.
+Your job: visit every node and keep subdividing until NOTHING can be split further.
 
 SPRINT GOAL: {sprint_goal}
 
-TASK TO DECOMPOSE:
-  Name: {task_name}
-  Description: {task_description}
-  Depth: {depth}/3  (0=goal, 1=feature, 2=component, 3=file)
+CURRENT NODE (depth {depth}):
+  Name        : {task_name}
+  Description : {task_description}
 
-Split into 2-6 subtasks. For each subtask decide: is it ATOMIC?
-ATOMIC means: implementable as a single source file by one developer.
+═══════════════════════════════════════════════════════════════════════════════
+ STEP 1 — CAN THIS NODE BE SPLIT FURTHER?
+═══════════════════════════════════════════════════════════════════════════════
+A node MUST be split (is_atomic: false) if ANY of these are true:
+  • It covers more than one source file.
+  • It contains multiple distinct responsibilities.
+  • You cannot yet write out every single class, method signature, and variable.
+  • A developer reading it would still need to make architectural decisions.
+  • It has more than ~4 public functions/methods — likely needs splitting.
+  • Its name contains words like "system", "module", "engine", "manager",
+    "handler", "pipeline", "subsystem", "layer", "component" — almost certainly
+    needs further splitting.
 
-Rules:
-- At depth 3 everything must be atomic.
-- Each atomic task needs a suggested_file path (e.g. "auth/middleware.py").
-- Non-atomic tasks will be decomposed further in the next round.
-- Prefer fewer, larger atomic tasks over many tiny ones.
-- Keep each description under 25 words.
+A node is truly atomic (is_atomic: true) ONLY when ALL of these hold:
+  1. Maps to EXACTLY ONE .py file.
+  2. You can list EVERY class with EVERY method including __init__ with ALL typed params.
+  3. You can list EVERY module-level function with full typed signature.
+  4. You can list EVERY important instance variable and its type.
+  5. You can list EVERY project-internal import this file will need.
+  6. A developer can open a blank file and implement it with ZERO ambiguity.
 
-JSON only — an object with a "subtasks" array:
+═══════════════════════════════════════════════════════════════════════════════
+ STEP 2 — HOW TO SPLIT (if not atomic)
+═══════════════════════════════════════════════════════════════════════════════
+  • Split into 2–8 subtasks, each covering a clearly distinct sub-concern.
+  • Each subtask must be narrower and more concrete than its parent.
+  • Subtasks will each be visited again and split further if still too broad.
+  • Prefer many small focused subtasks over few large vague ones.
+  • A real project of moderate complexity has 20–60+ atomic files — do not stop early.
+  • When in doubt: SPLIT. You can always stop later; you cannot recover lost detail.
+
+═══════════════════════════════════════════════════════════════════════════════
+ STEP 3 — ATOMIC NODE DESCRIPTION (ZERO AMBIGUITY — ALL fields required)
+═══════════════════════════════════════════════════════════════════════════════
+Write 4–7 sentences covering ALL of:
+  (a) File purpose — one sentence on the single responsibility of this file.
+  (b) Classes — "Contains class Foo with:
+        __init__(self, x: int, y: float) -> None,
+        method_a(self, arg: SomeType) -> ReturnType,
+        method_b(self) -> list[str],
+        property bar: int."
+  (c) Module-level functions (if any) — full typed signatures.
+  (d) State — "Holds self.position: tuple[int,int], self.active: bool."
+  (e) Connections — "Imports Vector2 from physics/vector.py and Config from
+        config.py. Consumed by main.py and game_loop.py."
+  A developer must be able to implement this file from the description alone.
+  If you cannot fill in (b)–(e) completely — the node is NOT yet atomic, split it.
+
+═══════════════════════════════════════════════════════════════════════════════
+ OUTPUT — JSON ONLY, no markdown fences, no extra text
+═══════════════════════════════════════════════════════════════════════════════
 {{"subtasks": [
-  {{"name": "short label",
-    "description": "what this does",
+  {{
+    "name": "ShortClearLabel",
+    "description": "ATOMIC: full zero-ambiguity description per Step 3. NON-ATOMIC: what this sub-concern covers and why it needs further splitting.",
     "is_atomic": true,
-    "suggested_file": "relative/path/to/file.ext",
-    "complexity": "low"}}
+    "suggested_file": "src/subdir/filename.py",
+    "complexity": "low|medium|high"
+  }}
 ]}}
 """
 
@@ -305,7 +348,7 @@ def run_recursive_decomposition(goal: str, sprint_num: int = 1) -> TaskTree:
 
                 child_depth = node.depth + 1
                 for sd in subtask_dicts:
-                    # Force atomic at max depth
+                    # Only force atomic at the hard safety ceiling
                     is_atomic = sd["is_atomic"] or child_depth >= TaskTree.MAX_DEPTH
                     child = DecomposedTask(
                         id=_new_id(),

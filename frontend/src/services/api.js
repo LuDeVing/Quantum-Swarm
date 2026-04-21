@@ -271,4 +271,30 @@ export async function sendGeneralMessage(text) {
   });
 }
 
+/**
+ * POST /api/projects/:projectId/stop
+ * Response: { success, killed, aiReply }
+ */
+export async function stopProject(projectId) {
+  return await request(`/projects/${encodeURIComponent(projectId)}/stop`, {
+    method: 'POST',
+  });
+}
+
+/**
+ * GET /api/projects/:projectId/progress
+ * Response: { status, done, total, last_line }
+ */
+export async function getProjectProgress(projectId) {
+  return await request(`/projects/${encodeURIComponent(projectId)}/progress`);
+}
+
+/**
+ * GET /api/projects/:projectId/dashboard
+ * Response: { tasks, agents, done, total }
+ */
+export async function getProjectDashboard(projectId) {
+  return await request(`/projects/${encodeURIComponent(projectId)}/dashboard`);
+}
+
 export { BASE_URL };

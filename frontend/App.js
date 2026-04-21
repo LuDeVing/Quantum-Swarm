@@ -88,10 +88,13 @@ export default function App() {
       const userJSON = await AsyncStorage.getItem('currentUser');
       if (userJSON) {
         setUser(JSON.parse(userJSON));
+        return;
       }
     } catch (e) {
       // ignore
     }
+    // No saved session — use guest account so login screen is never shown
+    setUser({ id: 'guest', name: 'Guest', email: '', avatar: '' });
   };
 
   const handleLogout = async () => {
@@ -111,17 +114,13 @@ export default function App() {
   return (
     <NavigationContainer theme={isDarkMode ? DarkTheme : LightTheme}>
       <StatusBar style={isDarkMode ? 'light' : 'dark'} />
-      {user ? (
-        <AppNavigator
-          user={user}
-          onLogout={handleLogout}
-          isDarkMode={isDarkMode}
-          onToggleDarkMode={toggleDarkMode}
-          onUpdateUser={updateUser}
-        />
-      ) : (
-        <AuthNavigator onLogin={(u) => setUser(u)} />
-      )}
+      <AppNavigator
+        user={user}
+        onLogout={handleLogout}
+        isDarkMode={isDarkMode}
+        onToggleDarkMode={toggleDarkMode}
+        onUpdateUser={updateUser}
+      />
     </NavigationContainer>
   );
 }

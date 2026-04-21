@@ -269,7 +269,7 @@ def stop_service(name: str) -> str:
 
 @_register_tool
 def write_code_file(filename: str, content: str) -> str:
-    """Write source code to company_output/code/<filename>. Content is the complete file text."""
+    """Write source code to eng_output/code/<filename>. Content is the complete file text."""
     return _tool_write_code_file(filename, content)
 
 @_register_tool
@@ -302,17 +302,17 @@ def write_file_section(filename: str, section: str, content: str) -> str:
 
 @_register_tool
 def write_test_file(filename: str, content: str) -> str:
-    """Write a test file to company_output/tests/<filename>. Content is the complete file text."""
+    """Write a test file to eng_output/tests/<filename>. Content is the complete file text."""
     return _tool_write_test_file(filename, content)
 
 @_register_tool
 def write_design_file(filename: str, content: str) -> str:
-    """Write a design artifact (markdown, spec) to company_output/design/<filename>."""
+    """Write a design artifact (markdown, spec) to eng_output/design/<filename>."""
     return _tool_write_design_file(filename, content)
 
 @_register_tool
 def write_config_file(filename: str, content: str) -> str:
-    """Write a config or infra file (Dockerfile, YAML, requirements.txt) to company_output/config/<filename>."""
+    """Write a config or infra file (Dockerfile, YAML, requirements.txt) to eng_output/config/<filename>."""
     return _tool_write_config_file(filename, content)
 
 @_register_tool
@@ -909,8 +909,15 @@ def desktop_keyboard(action: str, text: str = "", keys: str = "") -> str:
 
 
 def _desktop_vision_model() -> str:
-    """Model id for screen understanding; override with DESKTOP_VISION_MODEL for sharper clicks."""
-    return (DESKTOP_VISION_MODEL or "").strip() or GEMINI_MODEL
+    """Model id for screen understanding; override with DESKTOP_VISION_MODEL for sharper clicks.
+    Defaults to gemini-2.0-flash instead of the lite model — much better spatial localization."""
+    explicit = (DESKTOP_VISION_MODEL or "").strip()
+    if explicit:
+        return explicit
+    # Avoid lite models for vision — their spatial reasoning is poor for small UI targets
+    if "lite" in GEMINI_MODEL.lower():
+        return "gemini-2.0-flash"
+    return GEMINI_MODEL
 
 
 def _parse_click_coords_json(raw: str) -> tuple:
@@ -1290,6 +1297,16 @@ _ENG_MANAGER_TOOL_NAMES = [
     "launch_application", "close_application",
     *DESKTOP_AUTOMATION_TOOL_NAMES,
 ] + _DASHBOARD_RO_TOOLS
+
+# Orchestrator manager: eng_manager tools + orchestrator-specific dispatch tools.
+# The list is intentionally mutable — _run_orchestrated_dispatch() appends its
+# closure tools before calling _run_with_tools and removes them afterwards.
+_ROLE_TOOL_NAMES["orch_manager"] = list(_ENG_MANAGER_TOOL_NAMES) + [
+    "list_ready_tasks",
+    "get_task_details",
+    "dispatch_parallel",
+    "get_progress",
+]
 
 
 def get_role_lc_tools(role_key: str) -> List[dict]:

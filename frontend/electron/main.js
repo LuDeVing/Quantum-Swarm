@@ -1,8 +1,35 @@
 const { app, BrowserWindow, Menu, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { spawn } = require('child_process');
 
 let mainWindow;
+let apiProcess = null;
+
+function startApiServer() {
+  // Resolve project root (one level up from frontend/)
+  const projectRoot = path.join(__dirname, '..', '..');
+  const serverScript = path.join(projectRoot, 'api_server.py');
+
+  apiProcess = spawn('python', [serverScript], {
+    cwd: projectRoot,
+    stdio: 'pipe',
+  });
+
+  apiProcess.stdout.on('data', (d) => process.stdout.write(`[api] ${d}`));
+  apiProcess.stderr.on('data', (d) => process.stderr.write(`[api] ${d}`));
+  apiProcess.on('exit', (code) => {
+    apiProcess = null;
+    if (code !== 0 && code !== null) console.warn(`[api] server exited with code ${code}`);
+  });
+}
+
+function stopApiServer() {
+  if (apiProcess) {
+    apiProcess.kill();
+    apiProcess = null;
+  }
+}
 
 function fixDistPaths() {
   const indexPath = path.join(__dirname, '..', 'dist', 'index.html');
@@ -113,9 +140,13 @@ function createWindow() {
 // Remove the default menu bar
 Menu.setApplicationMenu(null);
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  startApiServer();
+  createWindow();
+});
 
 app.on('window-all-closed', () => {
+  stopApiServer();
   app.quit();
 });
 

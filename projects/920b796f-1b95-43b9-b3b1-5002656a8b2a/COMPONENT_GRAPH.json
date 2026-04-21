@@ -1,0 +1,272 @@
+{
+  "sprint": 1,
+  "goal": "alright create a tkinter calculator app that works well with very large numbers",
+  "nodes": {
+    "comp_001": {
+      "id": "comp_001",
+      "name": "Config",
+      "file_path": "src/config.py",
+      "description": "Centralized configuration management. Holds constants like window dimensions, themes, and decimal precision settings globally.",
+      "public_interface": {
+        "classes": [],
+        "functions": [],
+        "constants": [
+          "WINDOW_WIDTH: int = 400",
+          "WINDOW_HEIGHT: int = 600",
+          "DEFAULT_PRECISION: int = 100"
+        ]
+      },
+      "depends_on": [],
+      "consumers": [
+        "comp_002",
+        "comp_003",
+        "comp_005",
+        "comp_006",
+        "comp_007",
+        "comp_008"
+      ],
+      "complexity": "low",
+      "depth": 0
+    },
+    "comp_002": {
+      "id": "comp_002",
+      "name": "CalcModel",
+      "file_path": "src/models/calculator.py",
+      "description": "Manages calculator state using Decimal. Includes serialization methods for persistent state and type-safe property setters for validation.",
+      "public_interface": {
+        "classes": [
+          "CalculatorState"
+        ],
+        "functions": [
+          "CalculatorState.to_dict(self) -> dict",
+          "CalculatorState.from_dict(self, data: dict) -> None",
+          "CalculatorState.set_value(self, val: str) -> None"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_001",
+        "comp_009"
+      ],
+      "consumers": [
+        "comp_004",
+        "comp_008"
+      ],
+      "complexity": "medium",
+      "depth": 1
+    },
+    "comp_003": {
+      "id": "comp_003",
+      "name": "MathEngine",
+      "file_path": "src/services/math_engine.py",
+      "description": "High-precision arithmetic using decimal.Context. Handles division by zero and invalid operation exceptions explicitly.",
+      "public_interface": {
+        "classes": [
+          "MathEngine"
+        ],
+        "functions": [
+          "MathEngine.add(self, a: str, b: str) -> str",
+          "MathEngine.divide(self, a: str, b: str) -> str"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_001",
+        "comp_009"
+      ],
+      "consumers": [
+        "comp_004",
+        "comp_008"
+      ],
+      "complexity": "medium",
+      "depth": 1
+    },
+    "comp_004": {
+      "id": "comp_004",
+      "name": "Controller",
+      "file_path": "src/controller.py",
+      "description": "Orchestrates UI and model. Bridges input handling, mathematical execution, and UI updates, including dependency injection of the main layout.",
+      "public_interface": {
+        "classes": [
+          "CalcController"
+        ],
+        "functions": [
+          "CalcController.handle_input(self, input: str) -> None"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_002",
+        "comp_003",
+        "comp_007",
+        "comp_009",
+        "comp_010"
+      ],
+      "consumers": [
+        "comp_008"
+      ],
+      "complexity": "medium",
+      "depth": 3
+    },
+    "comp_005": {
+      "id": "comp_005",
+      "name": "DisplayUI",
+      "file_path": "src/ui/display.py",
+      "description": "Wraps tkinter Text/Entry widgets. Includes horizontal scrolling for large numbers exceeding display width.",
+      "public_interface": {
+        "classes": [
+          "DisplayFrame"
+        ],
+        "functions": [
+          "DisplayFrame.update_text(self, text: str) -> None",
+          "DisplayFrame.enable_scroll(self) -> None"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_001"
+      ],
+      "consumers": [
+        "comp_007"
+      ],
+      "complexity": "medium",
+      "depth": 1
+    },
+    "comp_006": {
+      "id": "comp_006",
+      "name": "ButtonUI",
+      "file_path": "src/ui/buttons.py",
+      "description": "Custom button widgets. Manages click events and visual feedback for the user grid.",
+      "public_interface": {
+        "classes": [
+          "CalcButton"
+        ],
+        "functions": [
+          "CalcButton.set_active(self, active: bool) -> None"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_001"
+      ],
+      "consumers": [
+        "comp_007"
+      ],
+      "complexity": "medium",
+      "depth": 1
+    },
+    "comp_007": {
+      "id": "comp_007",
+      "name": "MainLayout",
+      "file_path": "src/ui/layout.py",
+      "description": "Organizes the display and button grid. Provides the main window interface for the Controller to trigger screen updates.",
+      "public_interface": {
+        "classes": [
+          "CalculatorWindow"
+        ],
+        "functions": [
+          "CalculatorWindow.get_controller(self) -> CalcController"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_001",
+        "comp_005",
+        "comp_006"
+      ],
+      "consumers": [
+        "comp_004",
+        "comp_008"
+      ],
+      "complexity": "medium",
+      "depth": 2
+    },
+    "comp_008": {
+      "id": "comp_008",
+      "name": "AppEntry",
+      "file_path": "src/main.py",
+      "description": "Application root. Implements a DI container to instantiate the model, engine, and controller before binding them to the root TK instance.",
+      "public_interface": {
+        "classes": [],
+        "functions": [
+          "main() -> None"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_001",
+        "comp_002",
+        "comp_003",
+        "comp_004",
+        "comp_007",
+        "comp_009",
+        "comp_010"
+      ],
+      "consumers": [],
+      "complexity": "medium",
+      "depth": 4
+    },
+    "comp_009": {
+      "id": "comp_009",
+      "name": "LoggerService",
+      "file_path": "src/services/logger.py",
+      "description": "Captures application runtime errors and logs state transitions, critical for production debugging of high-precision calculations.",
+      "public_interface": {
+        "classes": [
+          "Logger"
+        ],
+        "functions": [
+          "Logger.error(self, msg: str)",
+          "Logger.info(self, msg: str)"
+        ],
+        "constants": []
+      },
+      "depends_on": [],
+      "consumers": [
+        "comp_002",
+        "comp_003",
+        "comp_004",
+        "comp_008",
+        "comp_010"
+      ],
+      "complexity": "medium",
+      "depth": 0
+    },
+    "comp_010": {
+      "id": "comp_010",
+      "name": "StringSanitizer",
+      "file_path": "src/services/sanitizer.py",
+      "description": "Handles numeric string sanitization. Strips whitespace, converts locales, and normalizes scientific notation for the MathEngine.",
+      "public_interface": {
+        "classes": [
+          "Sanitizer"
+        ],
+        "functions": [
+          "Sanitizer.sanitize(self, input: str) -> str"
+        ],
+        "constants": []
+      },
+      "depends_on": [
+        "comp_009"
+      ],
+      "consumers": [
+        "comp_004",
+        "comp_008"
+      ],
+      "complexity": "medium",
+      "depth": 1
+    }
+  },
+  "topological_order": [
+    "comp_001",
+    "comp_009",
+    "comp_005",
+    "comp_006",
+    "comp_002",
+    "comp_003",
+    "comp_010",
+    "comp_007",
+    "comp_004",
+    "comp_008"
+  ]
+}

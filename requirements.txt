@@ -17,9 +17,13 @@ ddgs>=9.0.0
 # Visualization
 matplotlib==3.10.8
 
-# Backend
+# Backend / API server
 fastapi
 uvicorn
+python-jose[cryptography]
+passlib[bcrypt]
+aiofiles
+psutil
 
 # Utils
 pydantic==2.12.5

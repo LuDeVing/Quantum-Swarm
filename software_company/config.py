@@ -25,7 +25,7 @@ except ValueError:
     DESKTOP_LIVE_SNAPSHOT_INTERVAL_SEC = 0.0
 # Comma-separated role_key values that receive the latest snapshot on each _run_with_tools turn.
 DESKTOP_LIVE_SNAPSHOT_ROLES = os.getenv("DESKTOP_LIVE_SNAPSHOT_ROLES", "eng_manager").strip()
-OUTPUT_DIR = Path("company_output")
+OUTPUT_DIR = Path("eng_output")
 
 # Canonical cross-team reference files written by each team's manager
 TEAM_CANONICAL_FILES = {
