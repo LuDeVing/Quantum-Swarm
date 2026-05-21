@@ -115,13 +115,14 @@ class BrowserPool:
         return "Browser closed. Pool slot released."
 
     def _describe(self, context: str) -> str:
-        from software_company.llm_client import get_client
+        from software_company.llm_client import generate_content_with_resilience
 
         page = self._session().get("page")
         try:
             screenshot_bytes = page.screenshot(full_page=False)
             img_b64          = base64.b64encode(screenshot_bytes).decode()
-            resp = get_client().models.generate_content(
+            resp = generate_content_with_resilience(
+                label="browser_describe",
                 model=GEMINI_MODEL,
                 contents=[{
                     "parts": [

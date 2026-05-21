@@ -1,0 +1,3 @@
+{"ts": "2026-05-13T20:20:00+04:00", "event_type": "mcp_tool_call", "event": "mcp_tool_call", "user_id": "-", "tool_name": "GET /api/auth/me", "input_hash": "6b73e93758ebfafa", "result_status": "error", "status": 401, "latency_ms": 2}
+{"ts": "2026-05-13T20:20:01+04:00", "event_type": "auth_rejected", "event": "auth_rejected", "user_id": "", "reason": "invalid_token"}
+{"ts": "2026-05-13T20:20:02+04:00", "event_type": "mcp_tool_call", "event": "mcp_tool_call", "user_id": "guest", "tool_name": "GET /api/projects", "input_hash": "d6f368f2ae9e9b72", "result_status": "ok", "status": 200, "latency_ms": 4}

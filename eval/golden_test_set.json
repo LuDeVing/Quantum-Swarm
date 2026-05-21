@@ -1,0 +1,92 @@
+[
+  {
+    "id": "g001",
+    "category": "factual",
+    "question": "How many committed LLM episode-log entries are available, and do they include cache_read_tokens, latency_ms, and fallback_triggered?",
+    "type": "file_check",
+    "check": "episode_log_100_entries",
+    "expected_answer": "At least 100 JSONL LLM-call entries exist in logs/episodes.jsonl, and every entry has the full Lab 8 schema.",
+    "pass_criteria": ">=100 entries and every entry includes ts, event_type, model, provider, token counts, cache_read_tokens, cache_write_tokens, cost_usd, latency_ms, fallback_triggered, and error"
+  },
+  {
+    "id": "g002",
+    "category": "factual",
+    "question": "What structured MCP/API audit evidence is present for tool calls?",
+    "type": "file_check",
+    "check": "mcp_audit_log_entries",
+    "expected_answer": "logs/audit.jsonl contains mcp_tool_call records with tool_name, input_hash, result_status, and latency_ms.",
+    "pass_criteria": "At least two mcp_tool_call audit entries have tool_name, input_hash, result_status, and latency_ms"
+  },
+  {
+    "id": "g003",
+    "category": "reasoning",
+    "question": "Why is the agent architecture classified as Supervisor/Worker with ReAct agents?",
+    "type": "doc_check",
+    "check": "readme_agent_architecture",
+    "expected_answer": "Managers supervise planning, assignment, and review while workers execute bounded tasks through a THINK/tool/observe ReAct loop.",
+    "pass_criteria": "README has Agent Architecture, Supervisor/Worker justification, manager/worker responsibilities, ReAct, model selection, and safety evidence sections"
+  },
+  {
+    "id": "g004",
+    "category": "reasoning",
+    "question": "Which per-agent state fields support health, token accounting, and fallback monitoring?",
+    "type": "static_code",
+    "check": "agent_state_dataclass_fields",
+    "expected_answer": "AgentState includes role/runtime fields, belief/free-energy fields, token counters, cache_read_tokens, token_budget_remaining, last_stance, and consecutive_fallbacks.",
+    "pass_criteria": "AgentState is a dataclass and exposes all required annotated fields"
+  },
+  {
+    "id": "g005",
+    "category": "refusal",
+    "question": "What should the API return when a caller uses an invalid bearer token?",
+    "type": "static_code",
+    "check": "api_security_controls",
+    "expected_answer": "The API rejects the request with structured JSON such as invalid_token and does not expose a traceback.",
+    "pass_criteria": "HTTPBearer auth, invalid-token rejection, Pydantic validation, structured audit logging, and sanitized internal-error response are present"
+  },
+  {
+    "id": "g006",
+    "category": "refusal",
+    "question": "What should happen when User B tries to access a project owned by User A?",
+    "type": "test_evidence_check",
+    "check": "cross_user_isolation_and_no_pii",
+    "expected_answer": "The owner_id guard denies access, and logs remain free of email, password, bearer token, access token, or refresh token fields.",
+    "pass_criteria": "Cross-user denial tests exist, owner_id guards are present, and logs/episodes.jsonl has no email/password/token fields"
+  },
+  {
+    "id": "g007",
+    "category": "edge_case",
+    "question": "What protects the system if a Gemini content-generation call hangs or times out?",
+    "type": "static_code",
+    "check": "all_generate_content_calls_resilient",
+    "expected_answer": "All Gemini content-generation calls route through generate_content_with_resilience or llm_call, which applies _LLM_TIMEOUT.",
+    "pass_criteria": "No direct models.generate_content calls outside software_company/llm_client.py, and the helper uses future.result(timeout=_LLM_TIMEOUT)"
+  },
+  {
+    "id": "g008",
+    "category": "edge_case",
+    "question": "What protects the system if an LLM call fails transiently or gets rate limited?",
+    "type": "static_code",
+    "check": "llm_retry_backoff_policy",
+    "expected_answer": "The shared LLM wrapper retries three times and sleeps with exponential backoff between failed attempts.",
+    "pass_criteria": "_LLM_RETRIES >= 3, _BACKOFF_BASE is defined, and time.sleep(backoff) is used after failures"
+  },
+  {
+    "id": "g009",
+    "category": "format",
+    "question": "Can the audit explain irreversible actions in a table that maps each action to its guard?",
+    "type": "doc_and_code_check",
+    "check": "irreversible_actions_guarded",
+    "expected_answer": "README includes an irreversible action map table covering write_code_file, run_shell, git_merge, message_teammate, and delete_project with checkpoints or guards.",
+    "pass_criteria": "IRREVERSIBLE_ACTIONS has at least four entries, and README maps each entry to a guard/checkpoint"
+  },
+  {
+    "id": "g010",
+    "category": "format",
+    "question": "Is the data-governance evidence presented as a data map with retention and deletion details, and are .env files excluded?",
+    "type": "doc_and_config_check",
+    "check": "data_map_and_env_ignored",
+    "expected_answer": "docs/data-map.md and docs/safety-audit.md document stored data, retention, deletion, isolation, PII controls, and .gitignore excludes .env/.env.*.",
+    "pass_criteria": "docs/data-map.md exists, docs/safety-audit.md links it, and .gitignore excludes .env/.env.*"
+  }
+]

@@ -226,7 +226,6 @@ def zoom_region_impl(
 
     try:
         from .tool_registry import _desktop_vision_model, _maybe_windows_desktop_dpi_aware  # noqa: PLC0415
-        from .llm_client import get_client  # noqa: PLC0415
 
         _maybe_windows_desktop_dpi_aware()
         screen_w, screen_h = pyautogui.size()
@@ -264,7 +263,10 @@ def zoom_region_impl(
         )
 
         try:
-            resp = get_client().models.generate_content(
+            from software_company.llm_client import generate_content_with_resilience
+
+            resp = generate_content_with_resilience(
+                label="desktop_zoom_region",
                 model=model,
                 contents=[{
                     "parts": [

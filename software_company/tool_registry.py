@@ -36,7 +36,7 @@ from .contracts import _registry_request_amendment
 from .dashboard import get_dashboard
 from .browser import get_browser_pool
 from .git_worktrees import _get_code_dir
-from .llm_client import GEMINI_MODEL, get_client
+from .llm_client import GEMINI_MODEL, generate_content_with_resilience
 from .roles import ENG_WORKERS
 from .state import _get_agent_id, _get_sprint_num
 
@@ -1028,7 +1028,8 @@ def desktop_suggest_click(target: str) -> str:
             '"x": null, "y": null, "bbox": null, "reason": "why not visible".'
         )
         try:
-            resp = get_client().models.generate_content(
+            resp = generate_content_with_resilience(
+                label="desktop_suggest_click",
                 model=vision_model,
                 contents=[{
                     "parts": [
@@ -1071,7 +1072,8 @@ def desktop_suggest_click(target: str) -> str:
                     "If not visible here: {\"x\": null, \"y\": null, \"reason\": \"...\"}."
                 )
                 try:
-                    rresp = get_client().models.generate_content(
+                    rresp = generate_content_with_resilience(
+                        label="desktop_suggest_click_refine",
                         model=vision_model,
                         contents=[{
                             "parts": [
@@ -1204,6 +1206,30 @@ def check_owasp(feature: str) -> str:
     return _tool_check_owasp(feature)
 
 # Same mapping as _TOOL_CALLABLES — tests and external code expect this name.
+@_register_tool
+def list_ready_tasks() -> str:
+    """List orchestrator tasks that are ready to dispatch."""
+    return "ERROR: list_ready_tasks is only available inside the orchestrated dispatch loop."
+
+
+@_register_tool
+def get_task_details(task_id: str) -> str:
+    """Return details for one orchestrator task."""
+    return "ERROR: get_task_details is only available inside the orchestrated dispatch loop."
+
+
+@_register_tool
+def dispatch_parallel(assignments_json: str) -> str:
+    """Dispatch one wave of orchestrator task assignments."""
+    return "ERROR: dispatch_parallel is only available inside the orchestrated dispatch loop."
+
+
+@_register_tool
+def get_progress() -> str:
+    """Return orchestrated dispatch progress."""
+    return "ERROR: get_progress is only available inside the orchestrated dispatch loop."
+
+
 _LC_TOOLS_BY_NAME: Dict[str, Callable] = _TOOL_CALLABLES
 
 # Dashboard tools available to all roles that write or review work

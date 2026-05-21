@@ -44,6 +44,10 @@ checkpoints/
 # Logs
 *.log
 logs/
+!logs/
+logs/*
+!logs/episodes.jsonl
+!logs/audit.jsonl
 
 # IDE
 .vscode/

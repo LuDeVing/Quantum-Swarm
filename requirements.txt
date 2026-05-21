@@ -33,6 +33,7 @@ tqdm==4.67.3
 python-dotenv
 
 # Desktop automation (optional at runtime; required for window tools + pyautogui flows)
+pyautogui
 PyGetWindow
 # uiautomation — optional; Windows-only desktop_uia_* tools (UI Automation list/read/click by name)
 

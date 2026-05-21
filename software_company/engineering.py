@@ -1603,13 +1603,9 @@ def _manager_fix_loop(
         if _re_inferred != app_type:
             logger.info(f"[ManagerFix] app_type upgraded {app_type!r} -> {_re_inferred!r} via code inspection")
             app_type = _re_inferred
-    # Feature testing disabled — manager only needs to run the app, not interact with it.
-    # Re-enable by setting MANAGER_FEATURE_TEST=1 in environment.
-    _feature_test_enabled = os.getenv("MANAGER_FEATURE_TEST", "0").strip() in ("1", "true", "yes")
-    _desktop_proof_required = (
-        _feature_test_enabled and app_type in ("gui",) and MANAGER_GUI_DESKTOP_PROOF
-    )
-    _functional_proof_required = _feature_test_enabled and app_type not in ("library",)
+    # Runnable apps must be booted and, where applicable, externally verified.
+    _desktop_proof_required = app_type in ("gui",) and MANAGER_GUI_DESKTOP_PROOF
+    _functional_proof_required = app_type not in ("library",)
     logger.info(
         f"[ManagerFix] app_type={app_type!r}  "
         f"gui_desktop_proof_required={_desktop_proof_required}  "
@@ -1672,7 +1668,7 @@ def _manager_fix_loop(
                 _desktop_ok = _cu.actions >= 1 and _cu.screenshots >= 2
         else:
             _desktop_ok = True
-        _web_ok = (not _feature_test_enabled) or (app_type != "web") or manager_ran_http_request
+        _web_ok = (app_type != "web") or manager_ran_http_request
         if tests_build_ok and manager_ran_start_service and _desktop_ok and _web_ok:
             logger.info(
                 f"[ManagerFix] ALL GREEN + app verified after "
@@ -3348,6 +3344,3 @@ def run_engineering_team(
         consensus_stance=consensus,
         confidence=max(0.0, 1.0 - H_swarm / (1.5 * n)),
     )
-
-
-

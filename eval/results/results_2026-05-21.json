@@ -1,0 +1,109 @@
+{
+  "date": "2026-05-21",
+  "passed": 10,
+  "total": 10,
+  "threshold": 7,
+  "pass_rate": "100%",
+  "results": [
+    {
+      "id": "g001",
+      "category": "factual",
+      "type": "file_check",
+      "question": "How many committed LLM episode-log entries are available, and do they include cache_read_tokens, latency_ms, and fallback_triggered?",
+      "expected_answer": "At least 100 JSONL LLM-call entries exist in logs/episodes.jsonl, and every entry has the full Lab 8 schema.",
+      "status": "PASS",
+      "detail": "136 entries with full Lab 8 LLM-call schema",
+      "pass_criteria": ">=100 entries and every entry includes ts, event_type, model, provider, token counts, cache_read_tokens, cache_write_tokens, cost_usd, latency_ms, fallback_triggered, and error"
+    },
+    {
+      "id": "g002",
+      "category": "factual",
+      "type": "file_check",
+      "question": "What structured MCP/API audit evidence is present for tool calls?",
+      "expected_answer": "logs/audit.jsonl contains mcp_tool_call records with tool_name, input_hash, result_status, and latency_ms.",
+      "status": "PASS",
+      "detail": "2 structured MCP/API tool-call audit entries",
+      "pass_criteria": "At least two mcp_tool_call audit entries have tool_name, input_hash, result_status, and latency_ms"
+    },
+    {
+      "id": "g003",
+      "category": "reasoning",
+      "type": "doc_check",
+      "question": "Why is the agent architecture classified as Supervisor/Worker with ReAct agents?",
+      "expected_answer": "Managers supervise planning, assignment, and review while workers execute bounded tasks through a THINK/tool/observe ReAct loop.",
+      "status": "PASS",
+      "detail": "README documents Supervisor/Worker plus ReAct architecture",
+      "pass_criteria": "README has Agent Architecture, Supervisor/Worker justification, manager/worker responsibilities, ReAct, model selection, and safety evidence sections"
+    },
+    {
+      "id": "g004",
+      "category": "reasoning",
+      "type": "static_code",
+      "question": "Which per-agent state fields support health, token accounting, and fallback monitoring?",
+      "expected_answer": "AgentState includes role/runtime fields, belief/free-energy fields, token counters, cache_read_tokens, token_budget_remaining, last_stance, and consecutive_fallbacks.",
+      "status": "PASS",
+      "detail": "AgentState dataclass has 16 typed fields, including all required audit fields",
+      "pass_criteria": "AgentState is a dataclass and exposes all required annotated fields"
+    },
+    {
+      "id": "g005",
+      "category": "refusal",
+      "type": "static_code",
+      "question": "What should the API return when a caller uses an invalid bearer token?",
+      "expected_answer": "The API rejects the request with structured JSON such as invalid_token and does not expose a traceback.",
+      "status": "PASS",
+      "detail": "Bearer auth, Pydantic validation, audit logging, and sanitized errors are present",
+      "pass_criteria": "HTTPBearer auth, invalid-token rejection, Pydantic validation, structured audit logging, and sanitized internal-error response are present"
+    },
+    {
+      "id": "g006",
+      "category": "refusal",
+      "type": "test_evidence_check",
+      "question": "What should happen when User B tries to access a project owned by User A?",
+      "expected_answer": "The owner_id guard denies access, and logs remain free of email, password, bearer token, access token, or refresh token fields.",
+      "status": "PASS",
+      "detail": "Cross-user isolation tests exist and episode log has no email/password/token markers",
+      "pass_criteria": "Cross-user denial tests exist, owner_id guards are present, and logs/episodes.jsonl has no email/password/token fields"
+    },
+    {
+      "id": "g007",
+      "category": "edge_case",
+      "type": "static_code",
+      "question": "What protects the system if a Gemini content-generation call hangs or times out?",
+      "expected_answer": "All Gemini content-generation calls route through generate_content_with_resilience or llm_call, which applies _LLM_TIMEOUT.",
+      "status": "PASS",
+      "detail": "All non-wrapper Gemini content-generation calls use generate_content_with_resilience or llm_call",
+      "pass_criteria": "No direct models.generate_content calls outside software_company/llm_client.py, and the helper uses future.result(timeout=_LLM_TIMEOUT)"
+    },
+    {
+      "id": "g008",
+      "category": "edge_case",
+      "type": "static_code",
+      "question": "What protects the system if an LLM call fails transiently or gets rate limited?",
+      "expected_answer": "The shared LLM wrapper retries three times and sleeps with exponential backoff between failed attempts.",
+      "status": "PASS",
+      "detail": "_LLM_RETRIES=3 with exponential backoff sleep",
+      "pass_criteria": "_LLM_RETRIES >= 3, _BACKOFF_BASE is defined, and time.sleep(backoff) is used after failures"
+    },
+    {
+      "id": "g009",
+      "category": "format",
+      "type": "doc_and_code_check",
+      "question": "Can the audit explain irreversible actions in a table that maps each action to its guard?",
+      "expected_answer": "README includes an irreversible action map table covering write_code_file, run_shell, git_merge, message_teammate, and delete_project with checkpoints or guards.",
+      "status": "PASS",
+      "detail": "5 irreversible actions mapped to README guards/checkpoints",
+      "pass_criteria": "IRREVERSIBLE_ACTIONS has at least four entries, and README maps each entry to a guard/checkpoint"
+    },
+    {
+      "id": "g010",
+      "category": "format",
+      "type": "doc_and_config_check",
+      "question": "Is the data-governance evidence presented as a data map with retention and deletion details, and are .env files excluded?",
+      "expected_answer": "docs/data-map.md and docs/safety-audit.md document stored data, retention, deletion, isolation, PII controls, and .gitignore excludes .env/.env.*.",
+      "status": "PASS",
+      "detail": "Standalone data map is documented and .env/.env.* are ignored",
+      "pass_criteria": "docs/data-map.md exists, docs/safety-audit.md links it, and .gitignore excludes .env/.env.*"
+    }
+  ]
+}

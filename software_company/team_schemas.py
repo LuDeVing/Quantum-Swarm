@@ -14,6 +14,8 @@ __all__ = [
     "ProjectResult",
     "MergeResult",
     "EngTask",
+    "AgentState",
+    "IRREVERSIBLE_ACTIONS",
 ]
 
 
@@ -66,6 +68,41 @@ class MergeResult:
     """Result of merge_all — tracks conflict resolutions and agents whose branches couldn't be merged."""
     resolutions: List[str] = field(default_factory=list)
     failed_agents: List[str] = field(default_factory=list)
+
+
+@dataclass
+class AgentState:
+    """Snapshot of one agent's runtime state — written into every episode log entry."""
+    agent_id: str
+    role: str
+    sprint: int
+    task_file: str
+    # Hamiltonian health
+    belief_healthy: float = 0.80
+    belief_uncertain: float = 0.15
+    belief_confused: float = 0.05
+    free_energy: float = 0.0
+    anomaly_detected: bool = False
+    # Token accounting
+    call_count: int = 0
+    tokens_in: int = 0
+    tokens_out: int = 0
+    cache_read_tokens: int = 0
+    token_budget_remaining: int = 5_000_000
+    # Stance from last output
+    last_stance: str = "PRAGMATIC"
+    # Fallback guard
+    consecutive_fallbacks: int = 0
+
+
+# Actions that cannot be undone once executed — agents must confirm before running these.
+IRREVERSIBLE_ACTIONS: dict[str, str] = {
+    "write_code_file":   "Overwrites a file on disk; prior content is lost unless git-tracked.",
+    "run_shell":         "Executes arbitrary shell commands; side-effects cannot be rolled back.",
+    "git_merge":         "Merges a branch into the shared codebase; may alter history.",
+    "message_teammate":  "Broadcasts a message to another agent; cannot be unsent.",
+    "delete_project":    "Removes a project directory and all generated artifacts permanently.",
+}
 
 
 @dataclass

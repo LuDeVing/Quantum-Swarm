@@ -21,7 +21,7 @@ from .llm_client import (
     GEMINI_MODEL,
     _perplexity_from_content,
     _track_tokens,
-    get_client,
+    generate_content_with_resilience,
     token_summary,
 )
 from .prompts_loaded import _SYSTEM_AGENT, _worker_system
@@ -162,7 +162,8 @@ def _run_with_tools(
         final_text = ""
 
         for _turn in range(_MAX_TOOL_CALLS + 2):
-            r = get_client().models.generate_content(
+            r = generate_content_with_resilience(
+                label=f"{label}:tool_turn_{_turn}",
                 model=GEMINI_MODEL,
                 contents=contents,
                 config=cfg,

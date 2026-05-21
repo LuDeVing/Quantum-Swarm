@@ -843,7 +843,8 @@ def _get_bash_path() -> str | None:
     global _BASH_PATH
     if _BASH_PATH is False:
         import sys as _sys
-        _BASH_PATH = _find_bash_on_windows() if _sys.platform == "win32" else None
+        use_bash = os.getenv("AGENT_USE_BASH_ON_WINDOWS", "").strip().lower() in ("1", "true", "yes", "on")
+        _BASH_PATH = _find_bash_on_windows() if _sys.platform == "win32" and use_bash else None
     return _BASH_PATH  # type: ignore[return-value]
 
 

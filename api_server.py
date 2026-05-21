@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 FastAPI server for Quantum Swarm frontend.
 Runs on port 3001, serves /api/* endpoints matching frontend/src/services/api.js.
@@ -6,9 +6,12 @@ Runs on port 3001, serves /api/* endpoints matching frontend/src/services/api.js
 from __future__ import annotations
 
 import json
+import logging
+import hashlib
 import shutil
 import subprocess
 import sys
+import time
 import uuid
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -16,12 +19,13 @@ from typing import Optional
 
 import psutil
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, validator
 
 # ---------------------------------------------------------------------------
 # Config
@@ -35,6 +39,30 @@ GENERAL_CHAT_FILE = PROJECTS_DIR / "_general_chat.json"
 
 PROJECTS_DIR.mkdir(exist_ok=True)
 
+# ---------------------------------------------------------------------------
+# Structured audit logging
+# ---------------------------------------------------------------------------
+AUDIT_LOG_DIR = Path("logs")
+AUDIT_LOG_DIR.mkdir(exist_ok=True)
+AUDIT_LOG_FILE = AUDIT_LOG_DIR / "audit.jsonl"
+_audit_logger = logging.getLogger("audit")
+
+def _audit(event: str, user_id: str, detail: dict | None = None) -> None:
+    """Append one structured JSON line to the audit log â€” never raises."""
+    try:
+        record = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "event_type": event,
+            "event": event,
+            "user_id": user_id,
+            **(detail or {}),
+        }
+        with open(AUDIT_LOG_FILE, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record) + "\n")
+    except Exception:
+        pass
+
+
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 bearer = HTTPBearer(auto_error=False)
 
@@ -47,8 +75,41 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def _request_audit_middleware(request: Request, call_next):
+    """Log every request/response pair; sanitise exceptions before they reach the client."""
+    t0 = time.monotonic()
+    tool_name = f"{request.method} {request.url.path}"
+    audit_input = f"{tool_name}?{request.url.query}".encode("utf-8")
+    input_hash = hashlib.sha256(audit_input).hexdigest()[:16]
+    try:
+        response = await call_next(request)
+        latency_ms = int((time.monotonic() - t0) * 1000)
+        _audit("mcp_tool_call", user_id="-", detail={
+            "tool_name": tool_name,
+            "input_hash": input_hash,
+            "result_status": "ok" if response.status_code < 400 else "error",
+            "status": response.status_code,
+            "latency_ms": latency_ms,
+        })
+        return response
+    except Exception as exc:
+        # Return a sanitised error â€” never leak internal tracebacks to callers.
+        _audit("mcp_tool_call", user_id="-", detail={
+            "tool_name": tool_name,
+            "input_hash": input_hash,
+            "result_status": "error",
+            "latency_ms": int((time.monotonic() - t0) * 1000),
+            "error_type": type(exc).__name__,
+        })
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error"},
+        )
+
 # ---------------------------------------------------------------------------
-# Helpers — users
+# Helpers â€” users
 # ---------------------------------------------------------------------------
 
 def _load_users() -> list[dict]:
@@ -89,16 +150,28 @@ def _current_user(creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer
         return GUEST_USER
     uid = _decode_token(creds.credentials)
     if not uid:
-        return GUEST_USER
+        _audit("auth_rejected", user_id="", detail={"reason": "invalid_token"})
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error": "invalid_token"},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     user = _find_user_by_id(uid)
-    return user if user else GUEST_USER
+    if not user:
+        _audit("auth_rejected", user_id=uid, detail={"reason": "unknown_user"})
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error": "invalid_token"},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
 
 
 def _public_user(u: dict) -> dict:
     return {"id": u["id"], "name": u["name"], "email": u["email"], "avatar": u.get("avatar", "")}
 
 # ---------------------------------------------------------------------------
-# Helpers — projects
+# Helpers â€” projects
 # ---------------------------------------------------------------------------
 
 def _project_dir(pid: str) -> Path:
@@ -133,10 +206,10 @@ def _is_runner_alive(pid: Optional[int]) -> bool:
 
 
 def _project_status(meta: dict) -> str:
-    """Recalculate live status — marks Completed if runner finished."""
+    """Recalculate live status â€” marks Completed if runner finished."""
     stored = meta.get("status", "Planning")
     if stored == "In Progress" and not _is_runner_alive(meta.get("runner_pid")):
-        # Runner exited — check for explicit status written by project_runner.py
+        # Runner exited â€” check for explicit status written by project_runner.py
         return meta.get("status", "Completed")
     return stored
 
@@ -195,29 +268,47 @@ def _make_message(text: str, sender: str) -> dict:
 # ---------------------------------------------------------------------------
 
 class LoginBody(BaseModel):
-    email: str
-    password: str
+    email: str = Field(..., min_length=3, max_length=254)
+    password: str = Field(..., min_length=8, max_length=128)
+
+    @validator("email")
+    def _login_email_has_basic_shape(cls, value: str) -> str:
+        value = value.strip().lower()
+        if "@" not in value or "." not in value.rsplit("@", 1)[-1]:
+            raise ValueError("invalid email address")
+        return value
 
 class RegisterBody(BaseModel):
-    name: str
-    email: str
-    password: str
+    name: str = Field(..., min_length=1, max_length=80)
+    email: str = Field(..., min_length=3, max_length=254)
+    password: str = Field(..., min_length=8, max_length=128)
+
+    @validator("name", "email")
+    def _strip_text(cls, value: str) -> str:
+        return value.strip()
+
+    @validator("email")
+    def _register_email_has_basic_shape(cls, value: str) -> str:
+        value = value.lower()
+        if "@" not in value or "." not in value.rsplit("@", 1)[-1]:
+            raise ValueError("invalid email address")
+        return value
 
 class GoogleBody(BaseModel):
-    idToken: str
+    idToken: str = Field(..., min_length=8, max_length=4096)
 
 class GithubBody(BaseModel):
-    code: str
+    code: str = Field(..., min_length=4, max_length=512)
 
 class CreateProjectBody(BaseModel):
-    name: str
+    name: str = Field(..., min_length=1, max_length=120)
 
 class UpdateProjectBody(BaseModel):
-    name: Optional[str] = None
-    status: Optional[str] = None
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    status: Optional[str] = Field(default=None, min_length=1, max_length=40)
 
 class SendMessageBody(BaseModel):
-    text: str
+    text: str = Field(..., min_length=1, max_length=8000)
 
 # ---------------------------------------------------------------------------
 # AUTH routes
@@ -227,6 +318,7 @@ class SendMessageBody(BaseModel):
 def auth_register(body: RegisterBody):
     users = _load_users()
     if any(u["email"] == body.email for u in users):
+        _audit("register_failed", user_id="", detail={"reason": "duplicate_email"})
         raise HTTPException(400, "Email already registered")
     uid = str(uuid.uuid4())
     user = {
@@ -239,6 +331,7 @@ def auth_register(body: RegisterBody):
     users.append(user)
     _save_users(users)
     token = _make_token(uid)
+    _audit("register_ok", user_id=uid)
     return {"user": _public_user(user), "token": token}
 
 
@@ -246,14 +339,16 @@ def auth_register(body: RegisterBody):
 def auth_login(body: LoginBody):
     user = _find_user(body.email)
     if not user or not pwd_ctx.verify(body.password, user.get("password_hash", "")):
+        _audit("login_failed", user_id="", detail={"reason": "bad_credentials"})
         raise HTTPException(401, "Invalid email or password")
     token = _make_token(user["id"])
+    _audit("login_ok", user_id=user["id"])
     return {"user": _public_user(user), "token": token}
 
 
 @app.post("/api/auth/google")
 def auth_google(body: GoogleBody):
-    """Stub — creates/returns a placeholder user for the Google token."""
+    """Stub â€” creates/returns a placeholder user for the Google token."""
     stub_email = f"google_{body.idToken[:8]}@stub.local"
     user = _find_user(stub_email)
     if not user:
@@ -269,7 +364,7 @@ def auth_google(body: GoogleBody):
 
 @app.post("/api/auth/github")
 def auth_github(body: GithubBody):
-    """Stub — creates/returns a placeholder user for the GitHub code."""
+    """Stub â€” creates/returns a placeholder user for the GitHub code."""
     stub_email = f"github_{body.code[:8]}@stub.local"
     user = _find_user(stub_email)
     if not user:
@@ -400,7 +495,7 @@ def send_project_message(project_id: str, body: SendMessageBody,
     meta["status"] = live_status
 
     if live_status == "Planning":
-        # First substantive message → kick off engineering run
+        # First substantive message â†’ kick off engineering run
         meta["status"] = "In Progress"
         log_path = _project_dir(project_id) / "run.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -418,7 +513,7 @@ def send_project_message(project_id: str, body: SendMessageBody,
     elif live_status == "In Progress":
         ai_text = _summarize_progress(project_id)
     else:
-        # Completed or Failed — summarize what was built
+        # Completed or Failed â€” summarize what was built
         cg = _project_dir(project_id) / "COMPONENT_GRAPH.json"
         if cg.exists():
             try:
@@ -438,7 +533,7 @@ def send_project_message(project_id: str, body: SendMessageBody,
     return {"userMessage": user_msg, "aiReply": ai_msg}
 
 # ---------------------------------------------------------------------------
-# DASHBOARD endpoint — task tree + agent health
+# DASHBOARD endpoint â€” task tree + agent health
 # ---------------------------------------------------------------------------
 
 @app.get("/api/projects/{project_id}/dashboard")
@@ -513,7 +608,7 @@ def get_project_dashboard(project_id: str, user: dict = Depends(_current_user)):
 
 
 # ---------------------------------------------------------------------------
-# STOP endpoint — kill running engineering subprocess
+# STOP endpoint â€” kill running engineering subprocess
 # ---------------------------------------------------------------------------
 
 @app.post("/api/projects/{project_id}/stop")
@@ -539,7 +634,7 @@ def stop_project(project_id: str, user: dict = Depends(_current_user)):
 
     meta["status"] = "Stopped"
     meta["runner_pid"] = None
-    stop_msg = _make_message("⛔ Project stopped by user.", "ai")
+    stop_msg = _make_message("â›” Project stopped by user.", "ai")
     meta.setdefault("messages", []).append(stop_msg)
     _save_project(meta)
 
@@ -552,7 +647,7 @@ def stop_project(project_id: str, user: dict = Depends(_current_user)):
 
 @app.get("/api/projects/{project_id}/progress")
 def get_project_progress(project_id: str, user: dict = Depends(_current_user)):
-    """Lightweight poll endpoint — returns latest task counts + last log line."""
+    """Lightweight poll endpoint â€” returns latest task counts + last log line."""
     meta = _load_project(project_id)
     if meta.get("owner_id") and meta["owner_id"] != user["id"] and user["id"] != "guest":
         raise HTTPException(403, "Forbidden")
@@ -621,24 +716,26 @@ def send_general_message(body: SendMessageBody, user: dict = Depends(_current_us
 
 def _general_chat_reply(text: str, history: list[dict]) -> str:
     try:
-        import google.generativeai as genai
         import os
         api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY", "")
         if not api_key:
             return "I'm here! (Set GEMINI_API_KEY env var to enable real AI replies.)"
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        os.environ.setdefault("GEMINI_API_KEY", api_key)
+        from software_company.llm_client import llm_call
         conversation = "\n".join(
             f"{'User' if m['sender'] == 'user' else 'Assistant'}: {m['text']}"
             for m in history
         )
-        resp = model.generate_content(
+        return llm_call(
             f"You are a helpful AI assistant for a software project management tool.\n\n"
             f"Conversation:\n{conversation}\n\nAssistant:"
+            "\n\nReply concisely and do not include internal errors or tracebacks.",
+            label="api_general_chat",
+            system="",
         )
-        return resp.text.strip()
     except Exception as exc:
-        return f"(AI unavailable: {exc})"
+        _audit("chat_llm_unavailable", user_id="-", detail={"reason": type(exc).__name__})
+        return "(AI unavailable. Please try again later.)"
 
 
 # ---------------------------------------------------------------------------
