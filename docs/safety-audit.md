@@ -2,8 +2,8 @@
 
 **Team Name:** Vector Visions  
 **Team Members:** Luka, Rezo, Giorgi  
-**Repository:** https://github.com/ZA-KIU-Classroom/AI-POWERED-SOFTWARE-DEV-SP26/vector-visions  
-**Audit Commit:** run `git rev-parse HEAD` in the team repo after committing  
+**Repository:** https://github.com/LuDeVing/Quantum-Swarm  
+**Audit Commit:** 847b776403195a52a7220e23f4b3c604487e9843 (`Complete safety audit evidence`)  
 **Submitted:** 2026-05-13
 
 ---
@@ -228,7 +228,7 @@ py -m pytest tests/test_cross_user_isolation.py::test_episode_log_no_pii -q
 git log --all --full-history -- .env
 ```
 
-**Output:** must be empty in the actual team Git checkout. This local folder is not currently a Git repository, so commit-history verification must be run after copying these changes into the team repo. `.gitignore` includes `.env` and `.env.*`.
+**Output:** empty in `LuDeVing/Quantum-Swarm`; `.gitignore` includes `.env` and `.env.*`.
 
 ---
 
@@ -250,3 +250,4 @@ git log --all --full-history -- .env
 - [x] MCP auth rejection demo is documented and reproducible once dependencies are installed
 - [x] Cross-user isolation test script is documented and runnable
 - [x] Team members should assign who demos eval, auth rejection, and isolation before Friday 15 May
+
