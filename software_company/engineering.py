@@ -34,6 +34,7 @@ from .state import (
     _set_agent_ctx,
     _set_task_file,
     _set_worktree_manager,
+    _set_wt_agent_override,
 )
 from .tools_impl import (
     clear_sprint_files,
@@ -313,6 +314,12 @@ RULES:
 - assignments_json must be a JSON array of objects, e.g.:
   [{{"task_id": "task_comp_abc_p1", "dev_key": "dev_1"}}, ...]
   Optionally add "extra_context" key for retry hints.
+- LARGE / MULTI-CONCERN FILE: you may split ONE file across several developers by
+  listing the same task_id multiple times with different "dev_key" and "section"
+  values (e.g. sections "models", "routes", "helpers"). They collaborate on that
+  single file — each owns its section, they run sequentially, and there are no
+  merge conflicts. Use this sparingly: only when a file is genuinely too big for
+  one developer. Default to one developer per file.
 
 DOCKER REQUIREMENT (mandatory for every project):
 - Every project MUST include a Dockerfile and docker-compose.yml so it can be run with
@@ -2098,12 +2105,27 @@ def run_engineering_team(
 
     # ── build_feature: adapted for task-based work ────────────────────────
 
-    def build_feature(dev_key: str, eng_task: EngTask, retry_count: int = 0) -> WorkerOutput:
+    def build_feature(
+        dev_key: str, eng_task: EngTask, retry_count: int = 0, section: Optional[str] = None
+    ) -> WorkerOutput:
         _set_agent_ctx(dev_key, sprint_num)
         _set_task_file(eng_task.file)
+        is_shared = bool(section)
+        # The write directive depends on whether this file is collaboratively owned.
+        if is_shared:
+            write_tool_hint = (
+                f"write_file_section('{eng_task.file}', '{section}', <code for the "
+                f"'{section}' section ONLY>)"
+            )
+        else:
+            write_tool_hint = f"write_code_file('{eng_task.file}', <complete code>)"
         dashboard_status = get_dashboard().get_status()
         task_num = _tasks_completed_by[dev_key] + 1
-        logger.info(f"[{dev_key}] ▶ Task START — {eng_task.file}: {eng_task.description[:60]}")
+        logger.info(
+            f"[{dev_key}] ▶ Task START — {eng_task.file}"
+            + (f" [section: {section}]" if is_shared else "")
+            + f": {eng_task.description[:60]}"
+        )
 
         completed_files = task_queue.get_completed_files()
         peer_context = ""
@@ -2330,6 +2352,20 @@ def run_engineering_team(
             f"{task_instruction}\n\n"
             f"PROJECT: {task[:300]}\n\n"
         )
+        if is_shared:
+            prompt += (
+                f"╔══ SHARED FILE — SECTION OWNERSHIP ════════════════════╗\n"
+                f"║ '{eng_task.file}' is built collaboratively by multiple developers.\n"
+                f"║ You own ONLY the '{section}' section.\n"
+                f"║ • Call {write_tool_hint}.\n"
+                f"║ • Do NOT call write_code_file for this file — it would overwrite\n"
+                f"║   your teammates' sections. Use write_file_section ONLY.\n"
+                f"║ • Put imports your section needs at the TOP of your section;\n"
+                f"║   duplicate imports are de-duplicated automatically.\n"
+                f"║ • Define ONLY what belongs to '{section}'. Do not redefine\n"
+                f"║   symbols owned by other sections.\n"
+                f"╚═══════════════════════════════════════════════════════╝\n\n"
+            )
         # Add contract if available (concise)
         if contract_section:
             prompt += f"YOUR CONTRACT:{contract_section}\n"
@@ -2376,10 +2412,10 @@ def run_engineering_team(
                 f"\n{'='*60}\n"
                 f"RETRY {retry_count} — WRITE IS REQUIRED\n"
                 f"{'='*60}\n"
-                f"Your previous attempt did NOT call write_code_file.\n"
+                f"Your previous attempt did NOT write your code.\n"
                 f"All tools are still available — do NOT loop on list_files.\n"
                 f"{_file_context}"
-                f"ACTION REQUIRED: Call write_code_file('{eng_task.file}', <complete code>) NOW.\n"
+                f"ACTION REQUIRED: Call {write_tool_hint} NOW.\n"
                 f"End with: STANCE: [MINIMAL|ROBUST|SCALABLE|PRAGMATIC]\n"
             )
             logger.info(
@@ -2395,10 +2431,15 @@ def run_engineering_team(
                 f"  c) Integration risks with teammate code\n"
                 f"  d) Quality improvements beyond the minimum spec\n"
                 f"─────────────────────────────────────────────────────────────\n"
-                f"THEN call write_code_file('{eng_task.file}', <complete code>).\n"
+                f"THEN call {write_tool_hint}.\n"
                 f"\n⛔ STRICT RULES — VIOLATIONS CAUSE TASK FAILURE:\n"
-                f"  1. Write ONLY '{eng_task.file}' — do NOT write other files.\n"
-                f"  2. Do NOT run the application (python main.py, python app.py, etc.).\n"
+                + (
+                    f"  1. Write ONLY your '{section}' section of '{eng_task.file}' via "
+                    f"write_file_section — do NOT write other files or other sections.\n"
+                    if is_shared else
+                    f"  1. Write ONLY '{eng_task.file}' — do NOT write other files.\n"
+                )
+                + f"  2. Do NOT run the application (python main.py, python app.py, etc.).\n"
                 f"     The manager runs the app after ALL files are merged. You will break\n"
                 f"     things by running before your teammates' files exist.\n"
                 f"  3. You MAY run: validate_python, unit tests for YOUR file only.\n"
@@ -2570,21 +2611,31 @@ def run_engineering_team(
         if not isinstance(assignments, list) or not assignments:
             return "ERROR: assignments_json must be a non-empty JSON array."
 
-        claimed: List[tuple] = []
-        skipped: List[str] = []
+        # Group assignments by task_id (preserving order). Multiple entries for the
+        # same task_id = a SHARED FILE: those devs collaborate on one file, each
+        # owning a named section, run sequentially in a single worktree.
+        from collections import OrderedDict
+        groups: "OrderedDict[str, List[tuple]]" = OrderedDict()
         for entry in assignments:
             tid = entry.get("task_id", "")
             dev = entry.get("dev_key", "")
+            section = entry.get("section") or None
             extra_ctx = entry.get("extra_context", "")
-            eng_task = task_queue.claim_specific(tid, dev)
+            groups.setdefault(tid, []).append((dev, section, extra_ctx))
+
+        claimed_groups: List[tuple] = []   # (eng_task, members)
+        skipped: List[str] = []
+        for tid, members in groups.items():
+            primary_dev = members[0][0]
+            eng_task = task_queue.claim_specific(tid, primary_dev)
             if eng_task is None:
                 task = task_queue.tasks.get(tid)
                 status = task.status if task else "NOT FOUND"
                 skipped.append(f"  {tid} → skipped (status={status})")
             else:
-                claimed.append((dev, eng_task, extra_ctx))
+                claimed_groups.append((eng_task, members))
 
-        if not claimed:
+        if not claimed_groups:
             msg = "No tasks claimed (all were unavailable)."
             if skipped:
                 msg += "\nSkipped:\n" + "\n".join(skipped)
@@ -2663,14 +2714,86 @@ def run_engineering_team(
                 wt.cleanup()
                 _set_worktree_manager(None)
 
-        with ThreadPoolExecutor(max_workers=len(claimed)) as _ex:
-            futs = {_ex.submit(_run_one, d, t, ec): (d, t) for d, t, ec in claimed}
+        def _run_shared(eng_task: "EngTask", members: List[tuple]) -> str:
+            """Multiple devs collaborate on ONE file by section. They run SEQUENTIALLY
+            in a single shared worktree (owned by the primary dev), each writing its
+            section via write_file_section, then one commit + merge. This eliminates
+            same-file git conflicts entirely while keeping per-dev section ownership."""
+            primary_dev = members[0][0]
+            section_labels = [f"{d}:{s}" for d, s, _ in members]
+            wt = GitWorktreeManager(code_dir, [primary_dev])
+            try:
+                wt.create_worktrees()
+                _set_worktree_manager(wt)
+                _set_wt_agent_override(primary_dev)  # all members write into primary's worktree
+                _set_task_file(eng_task.file)
+
+                wrote_any = False
+                for dev_key, section, _ctx in members:
+                    wo = build_feature(
+                        dev_key, eng_task,
+                        retry_count=task_queue.get_retries(eng_task.id),
+                        section=section,
+                    )
+                    with _built_lock:
+                        built[dev_key] = wo
+                        _tasks_completed_by[dev_key] += 1
+                        _orch_worker_outputs.append(wo)
+                    if any(
+                        ("write_code_file" in tr) or ("write_file_section" in tr) or ("write_config_file" in tr)
+                        for tr in (wo.tool_results or [])
+                    ):
+                        wrote_any = True
+
+                if not wrote_any and eng_task.file != "__integration__":
+                    task_queue.fail(eng_task.id)
+                    return f"✗ shared {eng_task.file} [{', '.join(section_labels)}]: NO WRITE (requeued)"
+
+                committed = wt.commit_agent(primary_dev)
+                with _merge_lock:
+                    merge_result = wt.merge_all()
+                if primary_dev in merge_result.failed_agents:
+                    task_queue.fail(eng_task.id)
+                    return f"✗ shared {eng_task.file}: MERGE FAILED"
+
+                if not committed and eng_task.file != "__integration__":
+                    target = code_dir / eng_task.file
+                    if not target.exists() or target.read_text(encoding="utf-8", errors="ignore").lstrip().startswith("# AUTO-GENERATED SKELETON"):
+                        task_queue.fail(eng_task.id)
+                        return f"✗ shared {eng_task.file}: EMPTY (requeued)"
+
+                task_queue.complete(eng_task.id)
+                _broadcast_task_completion(primary_dev, eng_task, code_dir, sprint_num, task_queue)
+                try:
+                    get_rag().update()
+                except Exception:
+                    pass
+                return f"✓ shared {eng_task.file} ← [{', '.join(section_labels)}]"
+
+            except Exception as exc:
+                logger.error(f"[shared] task {eng_task.id} crashed: {exc}", exc_info=True)
+                task_queue.fail(eng_task.id)
+                return f"✗ shared {eng_task.file}: EXCEPTION — {exc}"
+            finally:
+                wt.cleanup()
+                _set_worktree_manager(None)
+                _set_wt_agent_override("")
+
+        def _run_group(eng_task: "EngTask", members: List[tuple]) -> str:
+            # Single dev with no section → normal isolated path; otherwise shared-file.
+            if len(members) == 1 and members[0][1] is None:
+                dev_key, _section, extra_ctx = members[0]
+                return _run_one(dev_key, eng_task, extra_ctx)
+            return _run_shared(eng_task, members)
+
+        with ThreadPoolExecutor(max_workers=len(claimed_groups)) as _ex:
+            futs = {_ex.submit(_run_group, t, m): (t, m) for t, m in claimed_groups}
             for fut in as_completed(futs):
                 try:
                     result_lines.append(fut.result())
                 except Exception as exc:
-                    d, t = futs[fut]
-                    result_lines.append(f"✗ {d} → {t.file}: FUTURE ERROR — {exc}")
+                    t, _m = futs[fut]
+                    result_lines.append(f"✗ {t.file}: FUTURE ERROR — {exc}")
 
         ActiveInferenceState.interfere_all(
             [health_states[d] for d in ENG_WORKERS], alpha=INTERFERENCE_ALPHA
@@ -2707,7 +2830,17 @@ def run_engineering_team(
             """Run developer subagents in parallel for the given task assignments.
             assignments_json: JSON array of {task_id, dev_key} objects, e.g.
             [{"task_id": "task_comp_abc_p1", "dev_key": "dev_1"}, ...]
-            Optionally add "extra_context" key with retry hints."""
+            Optionally add "extra_context" key with retry hints.
+
+            SHARED FILE (multiple devs on ONE large file): list the SAME task_id
+            multiple times, each with a different "dev_key" and a "section" name.
+            Those devs collaborate on that one file — each owns its named section,
+            they run sequentially on a shared copy, and there are no merge conflicts.
+            Only do this for genuinely large/multi-concern files; prefer one dev per
+            file otherwise. Example:
+            [{"task_id":"task_comp_app_p1","dev_key":"dev_1","section":"models"},
+             {"task_id":"task_comp_app_p1","dev_key":"dev_2","section":"routes"}]
+            Different task_ids still run fully in parallel."""
             return _dispatch_parallel(assignments_json)
 
         def get_progress() -> str:

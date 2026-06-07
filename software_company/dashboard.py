@@ -95,24 +95,59 @@ class WorkDashboard:
             return None
 
     def write_section(self, filename: str, section: str, owner: str, content: str) -> str:
-        """Write a named section of a shared file. Returns error string or empty string on success."""
+        """Write a named section of a shared file. Returns error string or empty string on success.
+
+        Sections are keyed by "owner:section" and assembled in INSERTION order, so
+        the sequence in which collaborators write determines the layout (callers
+        run same-file devs sequentially in dependency order for this reason)."""
         with self._lock:
             if filename not in self._sections:
                 self._sections[filename] = {}
-            existing_owner = None
-            for s, c in self._sections[filename].items():
-                if s != section and c.strip() and s.startswith(owner + ":"):
-                    existing_owner = s
             self._sections[filename][f"{owner}:{section}"] = content
+            self._save()
         return ""
 
+    @staticmethod
+    def _hoist_python_sections(ordered: List) -> str:
+        """Assemble Python sections: dedup/hoist imports to the top, banner each section."""
+        import re
+
+        import_re = re.compile(r"^\s*(?:import\s+\w|from\s+[.\w]+\s+import\s+)")
+        seen_imports: set = set()
+        import_lines: List[str] = []
+        body_parts: List[str] = []
+        for key, content in ordered:
+            kept: List[str] = []
+            for line in (content or "").splitlines():
+                if import_re.match(line):
+                    norm = line.strip()
+                    if norm not in seen_imports:
+                        seen_imports.add(norm)
+                        import_lines.append(norm)
+                    continue  # hoisted — drop from body
+                kept.append(line)
+            body = "\n".join(kept).strip("\n")
+            if body:
+                body_parts.append(f"# --- section: {key} ---\n{body}")
+        parts: List[str] = []
+        if import_lines:
+            parts.append("\n".join(import_lines))
+        parts.extend(body_parts)
+        return "\n\n".join(parts).strip() + "\n"
+
     def assemble_shared_file(self, filename: str) -> str:
-        """Assemble all sections of a shared file into one string."""
+        """Assemble all sections of a shared file into one deterministic string.
+
+        Python files get import hoisting + dedup and per-section banners; other
+        file types are concatenated verbatim in insertion order (no comments
+        injected, so JSON/YAML/etc. stay valid)."""
         with self._lock:
-            sections = self._sections.get(filename, {})
-            if not sections:
-                return ""
-            return "\n\n".join(content for _, content in sorted(sections.items()))
+            ordered = list(self._sections.get(filename, {}).items())
+        if not ordered:
+            return ""
+        if filename.lower().endswith(".py"):
+            return self._hoist_python_sections(ordered)
+        return "\n\n".join((c or "") for _, c in ordered).strip() + "\n"
 
     def release_sprint(self, sprint: int):
         """Mark domains in this sprint complete and persist."""
@@ -201,6 +236,7 @@ class WorkDashboard:
                 json.dumps({
                     "messages": self.messages,
                     "domains": self.domains,
+                    "sections": self._sections,
                 }, indent=2),
                 encoding="utf-8",
             )
@@ -214,6 +250,11 @@ class WorkDashboard:
                 self.messages = data.get("messages", {})
                 raw_domains = data.get("domains", {})
                 self.domains = {str(k): dict(v) for k, v in raw_domains.items()} if raw_domains else {}
+                raw_sections = data.get("sections", {})
+                self._sections = {
+                    str(f): {str(s): str(c) for s, c in secs.items()}
+                    for f, secs in raw_sections.items()
+                } if raw_sections else {}
                 logger.info(f"[Dashboard] loaded coordination dashboard")
         except Exception as e:
             logger.warning(f"[Dashboard] load failed: {e}")

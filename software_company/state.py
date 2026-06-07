@@ -18,6 +18,8 @@ __all__ = [
     "_wt_manager_ctx",
     "_get_worktree_manager",
     "_set_worktree_manager",
+    "_get_wt_agent_override",
+    "_set_wt_agent_override",
 ]
 
 # Per-thread agent identity — each worker thread sets its own context so parallel
@@ -66,3 +68,19 @@ def _get_worktree_manager() -> Optional["GitWorktreeManager"]:
 
 def _set_worktree_manager(mgr: Optional["GitWorktreeManager"]) -> None:
     _wt_manager_ctx.set(mgr)
+
+
+# When multiple developers collaborate on ONE file, they run sequentially inside a
+# single shared worktree. Each dev keeps its own agent identity (for section
+# ownership, health state, prompts), but code-dir resolution must point at the
+# shared worktree rather than a per-dev one. This override carries the worktree
+# owner's id for the duration of a shared-file group.
+_wt_agent_override_ctx: _cv.ContextVar[str] = _cv.ContextVar("wt_agent_override", default="")
+
+
+def _get_wt_agent_override() -> str:
+    return _wt_agent_override_ctx.get()
+
+
+def _set_wt_agent_override(agent_id: str) -> None:
+    _wt_agent_override_ctx.set(agent_id or "")

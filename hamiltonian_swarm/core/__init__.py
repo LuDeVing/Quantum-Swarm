@@ -3,7 +3,7 @@ from .phase_space import PhaseSpaceState
 from .hamiltonian import HamiltonianFunction, ResourceHamiltonian
 from .hamiltonian_nn import HamiltonianNN
 from .conservation_monitor import ConservationMonitor
-from .embedding_monitor import EmbeddingHamiltonianNN
+from .embedding_monitor import EmbeddingKalmanMonitor, EmbeddingHamiltonianNN
 from .information_entropy import InformationEntropy
 
 __all__ = [
@@ -12,6 +12,7 @@ __all__ = [
     "ResourceHamiltonian",
     "HamiltonianNN",
     "ConservationMonitor",
+    "EmbeddingKalmanMonitor",
     "EmbeddingHamiltonianNN",
     "InformationEntropy",
 ]

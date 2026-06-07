@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
+import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
@@ -21,6 +23,79 @@ from .config import OUTPUT_DIR
 logger = logging.getLogger("company")
 
 _DEPTH_LABELS = {0: "GOAL", 1: "FEATURE", 2: "COMPONENT", 3: "FILE"}
+
+# ---------------------------------------------------------------------------
+# Best-of-N (local beam search) decomposition config
+# ---------------------------------------------------------------------------
+# For each node we sample DECOMP_BEAM_WIDTH candidate decompositions, score them
+# with a deterministic heuristic, then let an architect-critic LLM pick the best
+# survivor. Width <= 1 falls back to the legacy single-shot behaviour (but still
+# benefits from the file registry + parse-failure retries).
+_DEFAULT_BEAM_WIDTH = 3
+
+# Blend weight between the deterministic heuristic and the critic's choice when
+# logging a combined score. The critic decides the winner; heuristic prefilters.
+_HEURISTIC_WEIGHT = 0.4
+
+# Per-candidate stylistic nudges to diversify samples beyond raw LLM sampling.
+_VARIATION_HINTS = [
+    "",
+    "Bias toward MORE, smaller single-responsibility files where reasonable.",
+    "Bias toward a FLATTER layout: group tightly-cohesive logic, avoid over-splitting.",
+    "Emphasise clean separation between data models, business logic, and I/O boundaries.",
+    "Emphasise explicit shared utilities/config so siblings can depend on them.",
+]
+
+
+def _resolve_beam_width(explicit: Optional[int]) -> int:
+    if explicit is not None:
+        return max(1, explicit)
+    try:
+        return max(1, int(os.getenv("DECOMP_BEAM_WIDTH", str(_DEFAULT_BEAM_WIDTH))))
+    except (TypeError, ValueError):
+        return _DEFAULT_BEAM_WIDTH
+
+
+class _FileRegistry:
+    """Thread-safe set of file paths already planned across the BFS.
+
+    Injected into decomposition prompts so parallel branches stop reinventing the
+    same file, and consumed by the heuristic scorer to penalise collisions.
+    """
+
+    def __init__(self) -> None:
+        self.files: set[str] = set()
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def _norm(path: Optional[str]) -> str:
+        return (path or "").strip().replace("\\", "/").lower()
+
+    def add_many(self, paths: List[Optional[str]]) -> None:
+        with self._lock:
+            for p in paths:
+                n = self._norm(p)
+                if n:
+                    self.files.add(n)
+
+    def has(self, path: Optional[str]) -> bool:
+        with self._lock:
+            return self._norm(path) in self.files
+
+    def context_block(self, limit: int = 40) -> str:
+        with self._lock:
+            if not self.files:
+                return ""
+            sample = sorted(self.files)[:limit]
+        body = "\n".join(f"  - {f}" for f in sample)
+        return (
+            "\n═══════════════════════════════════════════════════════════════\n"
+            " FILES ALREADY PLANNED ELSEWHERE IN THIS SPRINT\n"
+            "═══════════════════════════════════════════════════════════════\n"
+            "Do NOT recreate these files. If you need their behaviour, treat them\n"
+            "as existing dependencies you import from. Only introduce NEW files.\n"
+            f"{body}\n"
+        )
 
 
 def _llm(prompt: str, label: str = "") -> str:
@@ -230,53 +305,254 @@ def _new_id() -> str:
     return str(uuid.uuid4())[:8]
 
 
+def _parse_subtasks(raw: str) -> List[dict]:
+    """Parse raw LLM text into a normalised list of subtask dicts ([] on failure)."""
+    raw = re.sub(r"^```[a-z]*\n?", "", raw.strip())
+    raw = re.sub(r"\n?```$", "", raw.strip())
+    try:
+        parsed = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        return []
+    subtasks = parsed.get("subtasks", parsed) if isinstance(parsed, dict) else parsed
+    if not isinstance(subtasks, list):
+        return []
+    result = []
+    for s in subtasks:
+        if not isinstance(s, dict) or "name" not in s:
+            continue
+        result.append({
+            "name": str(s.get("name", "task")),
+            "description": str(s.get("description", "")),
+            "is_atomic": bool(s.get("is_atomic", False)),
+            "suggested_file": s.get("suggested_file") or None,
+            "complexity": str(s.get("complexity", "medium")),
+        })
+    return result
+
+
 def _call_decompose(
     sprint_goal: str,
     task_name: str,
     task_description: str,
     depth: int,
     label: str,
+    registry_context: str = "",
+    variation_hint: str = "",
+    max_retries: int = 1,
 ) -> List[dict]:
-    """Call the LLM to decompose one task. Returns list of subtask dicts."""
-    prompt = _DECOMPOSE_PROMPT.format(
+    """Call the LLM to decompose one task. Returns list of subtask dicts.
+
+    Retries on an empty parse result (almost always a malformed-JSON response)
+    so a single flaky generation cannot silently prune an entire subtree.
+    """
+    base_prompt = _DECOMPOSE_PROMPT.format(
         sprint_goal=sprint_goal[:300],
         task_name=task_name,
         task_description=task_description[:200],
         depth=depth,
     )
+    if registry_context:
+        base_prompt += registry_context
+    if variation_hint:
+        base_prompt += f"\nCANDIDATE STYLE: {variation_hint}\n"
+
+    for attempt in range(max_retries + 1):
+        prompt = base_prompt
+        if attempt > 0:
+            prompt += (
+                "\nIMPORTANT: Your previous response could not be parsed. "
+                "Return STRICTLY valid JSON only — no prose, no markdown fences.\n"
+            )
+        raw = _llm(prompt, label=f"{label}_r{attempt}" if attempt else label)
+        result = _parse_subtasks(raw)
+        if result:
+            return result
+        if attempt < max_retries:
+            logger.warning(f"Decompose empty/parse-fail [{label}] attempt {attempt + 1} — retrying")
+    logger.warning(f"Decompose produced no subtasks [{label}] after {max_retries + 1} attempts")
+    return []
+
+
+# ---------------------------------------------------------------------------
+# Best-of-N candidate scoring (local beam search)
+# ---------------------------------------------------------------------------
+
+def _heuristic_score(subtasks: List[dict], registry: "_FileRegistry") -> float:
+    """Fast, deterministic quality proxy for a candidate decomposition.
+
+    Rewards a sensible fan-out (2–8), well-specified atomic leaves, and penalises
+    intra-candidate duplicate files plus collisions with already-planned files.
+    Returns >= 0; higher is better. Used to prefilter before the (costly) critic.
+    """
+    if not subtasks:
+        return 0.0
+
+    n = len(subtasks)
+    if 2 <= n <= 8:
+        fanout = 1.0
+    elif n == 1:
+        fanout = 0.2
+    else:  # too fragmented
+        fanout = max(0.0, 1.0 - 0.1 * (n - 8))
+
+    files: List[str] = []
+    spec = 0.0
+    for s in subtasks:
+        f = _FileRegistry._norm(s.get("suggested_file"))
+        desc = s.get("description") or ""
+        if s.get("is_atomic"):
+            if f and len(desc) >= 80:
+                spec += 1.0          # fully specified leaf
+            elif f:
+                spec += 0.5          # has a file but thin description
+            # atomic with no file is suspect → no credit
+        else:
+            spec += 0.6              # non-atomic node is fine, will recurse
+        if f:
+            files.append(f)
+    specificity = spec / n
+
+    dup_penalty = 0.5 * (len(files) - len(set(files)))
+    collision_penalty = 0.3 * sum(1 for f in set(files) if registry.has(f))
+
+    return max(0.0, fanout + specificity - dup_penalty - collision_penalty)
+
+
+_CRITIC_SYSTEM = (
+    "You are a strict principal software architect choosing the best way to break "
+    "down a task. Respond with JSON only — no markdown fences, no extra text."
+)
+
+_CRITIC_PROMPT = """\
+Choose the BEST decomposition of the task below from the numbered candidates.
+
+SPRINT GOAL: {goal}
+
+PARENT TASK (depth {depth}):
+  Name        : {task_name}
+  Description : {task_description}
+
+Judge each candidate on:
+  1. COVERAGE     — together the subtasks fully cover the parent's responsibility.
+  2. COHESION     — each subtask is ONE clear responsibility / one file.
+  3. NO OVERLAP   — subtasks do not duplicate each other or already-planned files.
+  4. GRANULARITY  — not too coarse, not fragmented into trivia.
+  5. REALISM      — the implied file layout is what a senior engineer would ship.
+
+CANDIDATES:
+{candidates}
+
+Return JSON only:
+{{"best": <candidate_index>, "scores": [<0.0-1.0 per candidate in order>], "reason": "<one sentence>"}}
+"""
+
+
+def _critic_rank(
+    goal: str,
+    node: "DecomposedTask",
+    candidates: List[List[dict]],
+    label: str,
+) -> Optional[int]:
+    """Ask an architect-critic LLM to pick the best candidate. Returns its index or None."""
+    blocks = []
+    for i, cand in enumerate(candidates):
+        compact = [
+            {
+                "name": s.get("name"),
+                "is_atomic": s.get("is_atomic"),
+                "suggested_file": s.get("suggested_file"),
+                "description": (s.get("description") or "")[:240],
+            }
+            for s in cand
+        ]
+        blocks.append(f"[{i}] " + json.dumps(compact, ensure_ascii=False))
+    prompt = _CRITIC_PROMPT.format(
+        goal=goal[:400],
+        depth=node.depth,
+        task_name=node.name,
+        task_description=node.description[:300],
+        candidates="\n".join(blocks),
+    )
     raw = _llm(prompt, label=label)
-
-    # Strip markdown fences if model added them anyway
-    raw = re.sub(r"^```[a-z]*\n?", "", raw.strip())
-    raw = re.sub(r"\n?```$", "", raw.strip())
-
     try:
-        parsed = json.loads(raw)
-        subtasks = parsed.get("subtasks", parsed) if isinstance(parsed, dict) else parsed
-        if not isinstance(subtasks, list):
-            return []
-        result = []
-        for s in subtasks:
-            if not isinstance(s, dict) or "name" not in s:
-                continue
-            result.append({
-                "name": str(s.get("name", "task")),
-                "description": str(s.get("description", "")),
-                "is_atomic": bool(s.get("is_atomic", False)),
-                "suggested_file": s.get("suggested_file") or None,
-                "complexity": str(s.get("complexity", "medium")),
-            })
-        return result
-    except (json.JSONDecodeError, ValueError) as exc:
-        logger.warning(f"Decompose parse error [{label}]: {exc} — raw: {raw[:200]}")
+        start = raw.find("{")
+        end = raw.rfind("}") + 1
+        parsed = json.loads(raw[start:end]) if start != -1 else {}
+        best = int(parsed.get("best"))
+        if 0 <= best < len(candidates):
+            return best
+    except (ValueError, TypeError, json.JSONDecodeError):
+        pass
+    return None
+
+
+def _decompose_node_best_of_n(
+    goal: str,
+    node: "DecomposedTask",
+    beam_width: int,
+    registry: "_FileRegistry",
+) -> List[dict]:
+    """Sample `beam_width` candidate decompositions, prefilter by heuristic, then
+    let the critic choose. Falls back gracefully at every stage."""
+    reg_ctx = registry.context_block()
+
+    if beam_width <= 1:
+        return _call_decompose(
+            goal, node.name, node.description, node.depth,
+            f"decompose_d{node.depth}_{node.id}", registry_context=reg_ctx,
+        )
+
+    candidates: List[List[dict]] = []
+    with ThreadPoolExecutor(max_workers=beam_width) as pool:
+        futures = [
+            pool.submit(
+                _call_decompose,
+                goal, node.name, node.description, node.depth,
+                f"decompose_d{node.depth}_{node.id}_c{k}",
+                reg_ctx,
+                _VARIATION_HINTS[k % len(_VARIATION_HINTS)],
+            )
+            for k in range(beam_width)
+        ]
+        for fut in as_completed(futures):
+            try:
+                res = fut.result()
+            except Exception as exc:  # noqa: BLE001 - candidate failure is non-fatal
+                logger.warning(f"Candidate decompose error for {node.id}: {exc}")
+                res = []
+            if res:
+                candidates.append(res)
+
+    if not candidates:
         return []
+    if len(candidates) == 1:
+        return candidates[0]
+
+    scored = sorted(
+        candidates, key=lambda c: _heuristic_score(c, registry), reverse=True
+    )
+    # Keep candidates that scored above zero; if all are zero, keep them all.
+    viable = [c for c in scored if _heuristic_score(c, registry) > 0] or scored
+    if len(viable) == 1:
+        return viable[0]
+
+    best_idx = _critic_rank(goal, node, viable, f"decompose_critic_d{node.depth}_{node.id}")
+    chosen = viable[best_idx] if best_idx is not None else viable[0]
+    logger.info(
+        f"[beam] node {node.id} d{node.depth}: {len(candidates)} candidates → "
+        f"critic picked {'#' + str(best_idx) if best_idx is not None else 'heuristic-best'} "
+        f"({len(chosen)} subtasks)"
+    )
+    return chosen
 
 
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
-def run_recursive_decomposition(goal: str, sprint_num: int = 1) -> TaskTree:
+def run_recursive_decomposition(
+    goal: str, sprint_num: int = 1, beam_width: Optional[int] = None
+) -> TaskTree:
     """
     Recursively decompose the sprint goal into a tree of atomic leaf tasks.
 
@@ -301,6 +577,13 @@ def run_recursive_decomposition(goal: str, sprint_num: int = 1) -> TaskTree:
     )
     tree.add_node(root)
 
+    beam_width = _resolve_beam_width(beam_width)
+    registry = _FileRegistry()
+    logger.info(
+        f"[decompose] beam_width={beam_width} "
+        f"({'best-of-N + critic' if beam_width > 1 else 'single-shot'})"
+    )
+
     # BFS level by level so each level can be parallelised
     current_level = [root.id]
 
@@ -318,17 +601,12 @@ def run_recursive_decomposition(goal: str, sprint_num: int = 1) -> TaskTree:
 
         next_level: List[str] = []
 
-        # Decompose all nodes at this level in parallel
-        with ThreadPoolExecutor(max_workers=min(len(to_decompose), 8)) as pool:
+        # Decompose all nodes at this level in parallel. Each node internally runs
+        # its own best-of-N beam, so cap the outer pool to keep concurrency sane.
+        outer_workers = min(len(to_decompose), max(1, 8 // max(1, beam_width)) or 1, 8)
+        with ThreadPoolExecutor(max_workers=outer_workers) as pool:
             futures = {
-                pool.submit(
-                    _call_decompose,
-                    goal,
-                    node.name,
-                    node.description,
-                    node.depth,
-                    f"decompose_d{node.depth}_{node.id}",
-                ): node
+                pool.submit(_decompose_node_best_of_n, goal, node, beam_width, registry): node
                 for node in to_decompose
             }
             for fut in as_completed(futures):
@@ -344,9 +622,11 @@ def run_recursive_decomposition(goal: str, sprint_num: int = 1) -> TaskTree:
                     node.is_atomic = True
                     if subtask_dicts:
                         node.suggested_file = subtask_dicts[0].get("suggested_file")
+                    registry.add_many([node.suggested_file])
                     continue
 
                 child_depth = node.depth + 1
+                new_leaf_files: List[Optional[str]] = []
                 for sd in subtask_dicts:
                     # Only force atomic at the hard safety ceiling
                     is_atomic = sd["is_atomic"] or child_depth >= TaskTree.MAX_DEPTH
@@ -362,8 +642,12 @@ def run_recursive_decomposition(goal: str, sprint_num: int = 1) -> TaskTree:
                     )
                     tree.add_node(child)
                     node.children.append(child.id)
-                    if not is_atomic:
+                    if is_atomic:
+                        new_leaf_files.append(child.suggested_file)
+                    else:
                         next_level.append(child.id)
+                # Register finalized leaf files so later branches avoid duplicating them.
+                registry.add_many(new_leaf_files)
 
         current_level = next_level
 

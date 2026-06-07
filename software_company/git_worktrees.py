@@ -11,7 +11,12 @@ from typing import List, Optional
 
 from .config import GIT_CMD_TIMEOUT, OUTPUT_DIR
 from .contracts import get_contracts
-from .state import _get_agent_id, _get_task_file, _get_worktree_manager
+from .state import (
+    _get_agent_id,
+    _get_task_file,
+    _get_worktree_manager,
+    _get_wt_agent_override,
+)
 from .team_schemas import MergeResult
 
 logger = logging.getLogger("company")
@@ -28,7 +33,10 @@ def _get_code_dir() -> Path:
     from . import _monolith as _m
 
     _m._sync_public_config_from_package()
-    agent_id = _get_agent_id()
+    # During a shared-file group, every collaborating dev resolves to the single
+    # worktree owned by the group's primary dev (override), while keeping its own
+    # agent identity for section ownership elsewhere.
+    agent_id = _get_wt_agent_override() or _get_agent_id()
     wt = _get_worktree_manager()
     if wt and agent_id:
         agent_dir = wt.get_agent_code_dir(agent_id)

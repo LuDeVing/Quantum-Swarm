@@ -1,151 +1,209 @@
 """
-Embedding-space Hamiltonian monitor.
+Kalman filter for tracking semantic drift in embedding space.
 
-Correct placement of HNN: monitoring semantic drift in embedding space.
+State vector x = [q, p]:
+    q = agent's current output embedding  (position in semantic space)
+    p = embedding velocity = q(t) - q(t-1), estimated by the filter
 
-q = agent's current output embedding vector (e.g. 1536-dim)
-p = velocity of embedding = current_embedding - previous_embedding
-H = "semantic energy" — how far the agent has drifted from its goal embedding
+Drift detection via Kalman innovation:
+    High z-score  → embedding jumped unexpectedly  (semantic drift)
+    Near-zero p   → agent looping / repeating output
+    Low z-score   → agent on track
 
-Conservation law:
-    H should stay near H_0 (initial goal embedding energy).
-    H increase → agent drifting away from original goal (semantic drift).
-    Sudden H drop → collapsed to degenerate state (looping/repetition).
+Diagonal covariance is used throughout for O(emb_dim) memory and compute,
+which makes this practical for 1536-dim embeddings.
 """
 
 from __future__ import annotations
 import logging
-from typing import Optional
+from typing import Optional, Tuple
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 
 logger = logging.getLogger(__name__)
 
 
-class EmbeddingHamiltonianNN(nn.Module):
+class EmbeddingKalmanMonitor:
     """
-    Hamiltonian Neural Network operating in embedding space.
+    Kalman filter monitor for semantic position and velocity in embedding space.
 
-    Architecture:
-        Input : [q_emb, p_emb] — concatenated current + velocity embeddings
-        Hidden: MLP with Tanh activations
-        Output: scalar semantic energy H_θ(q, p)
+    Constant-velocity model:
+        q(t+1) = q(t) + p(t)  + w_q    (position advances by velocity)
+        p(t+1) = p(t)          + w_p    (velocity changes slowly)
+        z(t)   = q(t)          + v      (we observe position directly)
+
+    where w_q, w_p ~ N(0, process_noise * I) and v ~ N(0, observation_noise * I).
 
     Parameters
     ----------
     emb_dim : int
-        Dimensionality of the embedding (e.g. 1536 for OpenAI, 768 for BERT).
-    hidden_dim : int
-        Width of hidden layers.
-    n_layers : int
-        Number of hidden layers.
+        Embedding dimensionality (e.g. 1536 for OpenAI, 768 for BERT).
+    process_noise : float
+        Variance of per-step state noise. Higher = faster adaptation.
+    observation_noise : float
+        Variance of embedding observation noise. Higher = smoother estimates.
+    drift_threshold : float
+        Mean innovation z-score above which is_drifting() returns True.
     """
 
     def __init__(
         self,
         emb_dim: int = 64,
-        hidden_dim: int = 128,
-        n_layers: int = 2,
+        process_noise: float = 1e-3,
+        observation_noise: float = 1e-2,
+        drift_threshold: float = 3.0,
     ) -> None:
-        super().__init__()
         self.emb_dim = emb_dim
-        self._prev_embedding: Optional[torch.Tensor] = None
-        self._goal_embedding: Optional[torch.Tensor] = None
-        self._H0: Optional[float] = None
+        self._q_noise = process_noise
+        self._r_noise = observation_noise
+        self._drift_threshold = drift_threshold
 
-        layers: list[nn.Module] = []
-        in_features = emb_dim * 2
-        for _ in range(n_layers):
-            layers.extend([nn.Linear(in_features, hidden_dim), nn.Tanh()])
-            in_features = hidden_dim
-        layers.append(nn.Linear(hidden_dim, 1))
-        self.net = nn.Sequential(*layers)
+        # Estimated state (position and velocity), each shape [emb_dim]
+        self._x_q: Optional[torch.Tensor] = None
+        self._x_p: Optional[torch.Tensor] = None
+
+        # Diagonal covariance — stored as three [emb_dim] variance vectors
+        # representing the 2x2 block structure [[P_qq, P_qp], [P_qp, P_pp]]
+        self._P_qq: Optional[torch.Tensor] = None
+        self._P_qp: Optional[torch.Tensor] = None
+        self._P_pp: Optional[torch.Tensor] = None
+
+        self._goal_embedding: Optional[torch.Tensor] = None
+        self._initialized: bool = False
 
         logger.info(
-            "EmbeddingHamiltonianNN: emb_dim=%d, hidden=%d, layers=%d",
-            emb_dim, hidden_dim, n_layers,
+            "EmbeddingKalmanMonitor: emb_dim=%d, process_noise=%.2e, obs_noise=%.2e, threshold=%.1f",
+            emb_dim, process_noise, observation_noise, drift_threshold,
         )
+
+    # ------------------------------------------------------------------
+    # Initialization
+    # ------------------------------------------------------------------
 
     def set_goal(self, goal_embedding: torch.Tensor) -> None:
         """
-        Register the goal embedding and compute H_0 (conserved baseline).
+        Initialize the filter at the goal embedding with zero velocity.
 
         Parameters
         ----------
         goal_embedding : torch.Tensor
-            Shape [emb_dim]. Represents the agent's target semantic state.
+            Shape [emb_dim]. The agent's target semantic state.
         """
-        self._goal_embedding = goal_embedding.float().detach()
-        p_zero = torch.zeros_like(goal_embedding)
-        with torch.no_grad():
-            self._H0 = float(self.forward(goal_embedding, p_zero).item())
-        logger.info("Goal embedding set. H_0 = %.6f", self._H0)
+        g = goal_embedding.float().detach()
+        self._goal_embedding = g.clone()
+        self._x_q = g.clone()
+        self._x_p = torch.zeros_like(g)
+        # Start confident about position (low variance), uncertain about velocity
+        self._P_qq = torch.full((self.emb_dim,), self._r_noise)
+        self._P_qp = torch.zeros(self.emb_dim)
+        self._P_pp = torch.ones(self.emb_dim)
+        self._initialized = True
+        logger.info("EmbeddingKalmanMonitor: goal set, filter initialized.")
 
-    def forward(self, q: torch.Tensor, p: torch.Tensor) -> torch.Tensor:
+    # ------------------------------------------------------------------
+    # Core filter steps
+    # ------------------------------------------------------------------
+
+    def _predict(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
-        Compute semantic energy H_θ(q, p).
-
-        Parameters
-        ----------
-        q : torch.Tensor
-            Current embedding, shape [emb_dim] or [batch, emb_dim].
-        p : torch.Tensor
-            Embedding velocity, same shape as q.
+        Kalman predict step.
 
         Returns
         -------
-        torch.Tensor
-            Scalar energy (or batch of scalars).
+        x_q_pred, x_p_pred, P_qq_pred, P_qp_pred, P_pp_pred
         """
-        x = torch.cat([q, p], dim=-1)
-        return self.net(x).squeeze(-1)
+        x_q_pred = self._x_q + self._x_p
+        x_p_pred = self._x_p.clone()
 
-    def embedding_velocity(
-        self, current_emb: torch.Tensor
-    ) -> torch.Tensor:
+        # P_pred = F @ P @ F.T + Q, F = [[I, I], [0, I]]
+        P_qq_pred = self._P_qq + 2.0 * self._P_qp + self._P_pp + self._q_noise
+        P_qp_pred = self._P_qp + self._P_pp
+        P_pp_pred = self._P_pp + self._q_noise
+
+        return x_q_pred, x_p_pred, P_qq_pred, P_qp_pred, P_pp_pred
+
+    def update(self, current_emb: torch.Tensor) -> float:
         """
-        Compute p = emb(t) - emb(t-1), the direction of semantic movement.
+        Run one predict-update cycle with a new embedding observation.
 
-        On the first call, returns a zero vector.
+        Call this once per agent step with the latest output embedding.
 
         Parameters
         ----------
         current_emb : torch.Tensor
             Shape [emb_dim].
-
-        Returns
-        -------
-        torch.Tensor
-            Velocity vector, shape [emb_dim].
-        """
-        current_emb = current_emb.float()
-        if self._prev_embedding is None:
-            self._prev_embedding = current_emb.clone()
-            return torch.zeros_like(current_emb)
-        velocity = current_emb - self._prev_embedding
-        self._prev_embedding = current_emb.clone()
-        return velocity
-
-    def semantic_drift_score(
-        self, current_emb: torch.Tensor, goal_emb: Optional[torch.Tensor] = None
-    ) -> float:
-        """
-        Cosine distance between current embedding and goal embedding.
-
-        Distance ∈ [0, 2]. 0 = identical direction, 2 = opposite.
-
-        Parameters
-        ----------
-        current_emb : torch.Tensor
-            Shape [emb_dim].
-        goal_emb : torch.Tensor, optional
-            Defaults to self._goal_embedding if set.
 
         Returns
         -------
         float
+            Mean innovation z-score. 0 = on track, high = unexpected jump.
+        """
+        z = current_emb.float().detach()
+
+        if not self._initialized:
+            self._x_q = z.clone()
+            self._x_p = torch.zeros_like(z)
+            self._P_qq = torch.full((self.emb_dim,), self._r_noise)
+            self._P_qp = torch.zeros(self.emb_dim)
+            self._P_pp = torch.ones(self.emb_dim)
+            self._initialized = True
+            return 0.0
+
+        x_q_pred, x_p_pred, P_qq_pred, P_qp_pred, P_pp_pred = self._predict()
+
+        # Innovation and its variance
+        innovation = z - x_q_pred
+        S = P_qq_pred + self._r_noise
+
+        # Kalman gain
+        K_q = P_qq_pred / S
+        K_p = P_qp_pred / S
+
+        # State update
+        self._x_q = x_q_pred + K_q * innovation
+        self._x_p = x_p_pred + K_p * innovation
+
+        # Covariance update: P = (I - K @ H) @ P_pred
+        self._P_qq = (1.0 - K_q) * P_qq_pred
+        self._P_qp = (1.0 - K_q) * P_qp_pred
+        self._P_pp = P_pp_pred - K_p * P_qp_pred
+
+        z_score = float((innovation.abs() / (S.sqrt() + 1e-8)).mean().item())
+        logger.debug("Kalman update: mean_z_score=%.4f", z_score)
+        return z_score
+
+    # ------------------------------------------------------------------
+    # Public monitoring API
+    # ------------------------------------------------------------------
+
+    def embedding_velocity(self, current_emb: torch.Tensor) -> torch.Tensor:
+        """
+        Update the filter and return the estimated velocity p.
+
+        Parameters
+        ----------
+        current_emb : torch.Tensor
+            Shape [emb_dim].
+
+        Returns
+        -------
+        torch.Tensor
+            Kalman-estimated velocity, shape [emb_dim].
+        """
+        self.update(current_emb)
+        return self._x_p.clone() if self._x_p is not None else torch.zeros(self.emb_dim)
+
+    def semantic_drift_score(
+        self,
+        current_emb: torch.Tensor,
+        goal_emb: Optional[torch.Tensor] = None,
+    ) -> float:
+        """
+        Cosine distance between current embedding and goal embedding.
+
+        Range [0, 2]. 0 = identical direction, 2 = opposite.
+        Does not advance filter state.
         """
         goal = goal_emb if goal_emb is not None else self._goal_embedding
         if goal is None:
@@ -159,43 +217,40 @@ class EmbeddingHamiltonianNN(nn.Module):
     def is_drifting(
         self,
         current_emb: torch.Tensor,
-        threshold: float = 0.15,
+        threshold: Optional[float] = None,
     ) -> bool:
         """
-        True if semantic drift score exceeds threshold.
+        True if the Kalman innovation z-score exceeds the drift threshold.
+
+        Advances filter state.
 
         Parameters
         ----------
         current_emb : torch.Tensor
-        threshold : float
-            Default 0.15 (cosine distance).
+        threshold : float, optional
+            Overrides the default drift_threshold set at construction.
 
         Returns
         -------
         bool
         """
-        score = self.semantic_drift_score(current_emb)
-        if score > threshold:
+        z_score = self.update(current_emb)
+        limit = threshold if threshold is not None else self._drift_threshold
+        if z_score > limit:
             logger.warning(
-                "Semantic drift detected: score=%.4f > threshold=%.4f",
-                score, threshold,
+                "Semantic drift detected: z_score=%.4f > threshold=%.4f", z_score, limit
             )
-        return score > threshold
+        return z_score > limit
 
     def energy_drift(self, current_emb: torch.Tensor) -> float:
         """
-        Compute |H(current) - H_0| / |H_0| as a relative drift measure.
+        Mean innovation z-score after updating the filter.
 
-        Returns
-        -------
-        float
-            Relative energy drift. 0 = no drift.
+        Drop-in replacement for the old HNN energy_drift() method.
+        0 = no drift, higher = more unexpected semantic change.
         """
-        if self._H0 is None:
-            return 0.0
-        p = self.embedding_velocity(current_emb)
-        with torch.no_grad():
-            H_current = float(self.forward(current_emb.float(), p).item())
-        drift = abs(H_current - self._H0) / (abs(self._H0) + 1e-8)
-        logger.debug("Embedding H drift: %.4f", drift)
-        return drift
+        return self.update(current_emb)
+
+
+# Backward-compatible alias
+EmbeddingHamiltonianNN = EmbeddingKalmanMonitor
