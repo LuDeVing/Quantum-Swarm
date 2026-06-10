@@ -1,4 +1,4 @@
-﻿# Quantum Swarm — AI Software Company
+# Quantum Swarm — AI Software Company
 
 An autonomous multi-agent system that builds software end-to-end. You give it a product brief. It produces a working, tested codebase.
 
@@ -10,6 +10,10 @@ python -m software_company "Brief" --sprints 3
 Requires `GEMINI_API_KEY` in the environment. Outputs land in `company_output/`.
 
 ---
+
+## Demo Video
+
+https://github.com/user-attachments/assets/8be92bd8-9a70-46cb-9c51-01295018720b
 
 ## How it works
 
