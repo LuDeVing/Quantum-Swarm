@@ -16,12 +16,12 @@ Requires `GEMINI_API_KEY` in the environment. Outputs land in `company_output/`.
 The system runs like a real company, broken into sprints. Each sprint has four teams that run in sequence:
 
 ```
-CEO  â†’  plans the sprint goal
-  â”‚
-  â”œâ”€â”€ Architecture team   defines structure, APIs, database schemas
-  â”œâ”€â”€ Design team         UX flows, component specs, visual style
-  â”œâ”€â”€ Engineering team    writes the actual code (8 parallel agents)
-  â””â”€â”€ QA team             tests, security checks, validation
+CEO  →  plans the sprint goal
+  │
+  ├── Architecture team   defines structure, APIs, database schemas
+  ├── Design team         UX flows, component specs, visual style
+  ├── Engineering team    writes the actual code (8 parallel agents)
+  └── QA team             tests, security checks, validation
 ```
 
 Each team has a **manager** (coordinates, merges work) and **specialist workers** (do the deep work). After every sprint the CEO reviews output and decides whether to continue.
@@ -32,17 +32,17 @@ Each team has a **manager** (coordinates, merges work) and **specialist workers*
 
 Every agent runs the same cycle:
 
-1. **THINK** â€” mandatory architecture analysis before writing anything; may call `web_search()` and `recall_memory()` here
-2. **DISCOVER** â€” read existing code, grep the codebase, check past lessons
-3. **WRITE** â€” produce complete, runnable code (no stubs)
-4. **VALIDATE** â€” compile / lint / run tests
-5. **FIX** â€” iterate if validation fails
+1. **THINK** — mandatory architecture analysis before writing anything; may call `web_search()` and `recall_memory()` here
+2. **DISCOVER** — read existing code, grep the codebase, check past lessons
+3. **WRITE** — produce complete, runnable code (no stubs)
+4. **VALIDATE** — compile / lint / run tests
+5. **FIX** — iterate if validation fails
 
 Engineering agents get isolated git worktrees so all 8 can write in parallel without conflicts. Branches merge into the shared codebase when done.
 
 ---
 
-## Memory â€” three layers
+## Memory — three layers
 
 | Layer | Lives | What it stores |
 |-------|-------|----------------|
@@ -50,34 +50,34 @@ Engineering agents get isolated git worktrees so all 8 can write in parallel wit
 | **Vector RAG** | Across sprints (disk) | All written code, searchable by semantic similarity |
 | **Graph RAG** | Permanent, grows forever | Domain lessons, causal patterns, expertise |
 
-### Graph RAG â€” how agents get better over time
+### Graph RAG — how agents get better over time
 
-After every task, a background LLM call extracts 1â€“3 concrete lessons and wires them into a **knowledge graph** (NetworkX DiGraph):
+After every task, a background LLM call extracts 1–3 concrete lessons and wires them into a **knowledge graph** (NetworkX DiGraph):
 
 ```
-concept:sqlalchemy â”€â”€[appears_in]â”€â”€â–º fact:"use async context managers for sessions"
-concept:missing_context_manager â”€â”€[causes]â”€â”€â–º concept:connection_leak
-concept:async_context_manager  â”€â”€[fixes]â”€â”€â–º  concept:connection_leak
+concept:sqlalchemy ──[appears_in]──► fact:"use async context managers for sessions"
+concept:missing_context_manager ──[causes]──► concept:connection_leak
+concept:async_context_manager  ──[fixes]──►  concept:connection_leak
 ```
 
 **Nodes** are concepts (libraries, patterns, error types). **Edges** are causal or structural relationships. **Facts** are lessons attached to relevant concept nodes.
 
 When a new task arrives, retrieval uses **spreading activation** (the same mechanism HippoRAG borrows from neuroscience):
 
-1. Find concept nodes whose names overlap with the query â€” these are the "seeds"
-2. Spread activation outward through edges for 2 hops, decaying by 0.7Ã— per hop
+1. Find concept nodes whose names overlap with the query — these are the "seeds"
+2. Spread activation outward through edges for 2 hops, decaying by 0.7× per hop
 3. Collect fact nodes with the highest accumulated activation
 4. Return the top 5 as bullets injected into the agent's prompt
 
-This means querying "database connection pooling" will surface lessons about SQLAlchemy connection leaks â€” even though those words don't appear in the query â€” because the graph path `pooling â†’ connection_leak â†’ sqlalchemy` connects them.
+This means querying "database connection pooling" will surface lessons about SQLAlchemy connection leaks â€” even though those words don't appear in the query â€” because the graph path `pooling → connection_leak → sqlalchemy` connects them.
 
-All `dev_1`..`dev_8` share one `dev_engineer` graph. Knowledge found by any engineer instantly benefits all of them. Each other role (QA, architect, designer) has its own independent graph.
+All `dev_1`...`dev_8` share one `dev_engineer` graph. Knowledge found by any engineer instantly benefits all of them. Each other role (QA, architect, designer) has its own independent graph.
 
 Memory files live at `company_output/memory/{role}.json` and persist across every run.
 
 ---
 
-## Hamiltonian Swarm â€” agent health monitoring
+## Hamiltonian Swarm — agent health monitoring
 
 Every agent carries a **belief state**: a probability vector over three hypotheses about how well it is performing.
 
@@ -87,28 +87,28 @@ Every agent carries a **belief state**: a probability vector over three hypothes
 | `uncertain` | 15% |
 | `confused` | 5% |
 
-After each task, the output is compared against prototype vectors via cosine similarity. This updates the belief via **Bayes' rule** (posterior âˆ prior Ã— likelihood). The result is a single number called **Free Energy (F)**:
+After each task, the output is compared against prototype vectors via cosine similarity. This updates the belief via **Bayes' rule** (posterior ∝ prior × likelihood). The result is a single number called **Free Energy (F)**:
 
-- **F â‰ˆ 0** â†’ agent is on-role, behaving as expected
-- **F rising** â†’ agent is drifting, output diverging from its role
+- **F ≈ 0 → agent is on-role, behaving as expected
+- **F rising** → agent is drifting, output diverging from its role
 
-This is the **Free Energy Principle** from theoretical neuroscience â€” the brain minimizes the gap between what it predicts and what it observes. Here, agents minimize the gap between expected role behaviour and actual output.
+This is the **Free Energy Principle** from theoretical neuroscience — the brain minimizes the gap between what it predicts and what it observes. Here, agents minimize the gap between expected role behaviour and actual output.
 
 Anomaly detection uses a **z-score over the agent's own history** (not a fixed global threshold), so it adapts to each agent's individual baseline rather than penalizing consistently expressive agents.
 
-### Quantum interference â€” collective recalibration
+### Quantum interference — collective recalibration
 
 At the end of each sprint, all agents' belief states are synchronized through **mean-field quantum interference**:
 
 1. Convert each agent's probability vector to quantum amplitudes: `a = sqrt(p)` (Born rule)
 2. Average all agents' amplitudes together (mean field)
-3. Normalize and convert back to probabilities: `p = aÂ²`
-4. Blend each agent's individual state with the shared result at Î± = 0.5:
-   `p_new = 0.5 Ã— p_individual + 0.5 Ã— p_shared`
+3. Normalize and convert back to probabilities: `p = a²`
+4. Blend each agent's individual state with the shared result at α = 0.5:
+   `p_new = 0.5 × p_individual + 0.5 × p_shared`
 
-The practical effect: if most agents are healthy but one is confused, interference pulls the confused agent toward the healthy mean â€” a soft recalibration that preserves individual identity while correcting outliers.
+The practical effect: if most agents are healthy but one is confused, interference pulls the confused agent toward the healthy mean — a soft recalibration that preserves individual identity while correcting outliers.
 
-The word *quantum* refers to using the mathematical formalism of quantum mechanics (amplitudes, Born rule, superposition) as a coordination primitive â€” not literal quantum hardware.
+The word *quantum* refers to using the mathematical formalism of quantum mechanics (amplitudes, Born rule, superposition) as a coordination primitive — not literal quantum hardware.
 
 ---
 
@@ -116,7 +116,7 @@ The word *quantum* refers to using the mathematical formalism of quantum mechani
 
 | Tool | What it does |
 |------|-------------|
-| `think(thought)` | Log architecture analysis before writing â€” mandatory |
+| `think(thought)` | Log architecture analysis before writing — mandatory |
 | `recall_memory(query)` | Spreading-activation search of the Graph RAG |
 | `grep_codebase(pattern, glob)` | Exact regex search across project files |
 | `search_codebase(query)` | Semantic / vector search across project files |
@@ -133,7 +133,7 @@ The word *quantum* refers to using the mathematical formalism of quantum mechani
 
 ```
 software_company/
-  orchestration.py      sprint runner â€” CEO, teams, retro
+  orchestration.py      sprint runner — CEO, teams, retro
   engineering.py        engineering team: task queue, parallel builds, test gate
   workers.py            non-engineering workers (arch, design, QA)
   long_term_memory.py   Graph RAG per role (NetworkX + JSON persistence)
@@ -153,7 +153,7 @@ prompts/
 
 company_output/         all generated artifacts (created at runtime)
   code/                 the software being built
-  memory/               Graph RAG files â€” one per role, persist forever
+  memory/               Graph RAG files — one per role, persist forever
   design/               architecture spec, design spec, QA findings
   rag_index.pkl         vector search index
 ```
