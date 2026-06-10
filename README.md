@@ -15,6 +15,8 @@ Requires `GEMINI_API_KEY` in the environment. Outputs land in `company_output/`.
 
 https://github.com/user-attachments/assets/8be92bd8-9a70-46cb-9c51-01295018720b
 
+---
+
 ## How it works
 
 The system runs like a real company, broken into sprints. Each sprint has four teams that run in sequence:
