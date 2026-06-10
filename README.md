@@ -1,4 +1,4 @@
-﻿# Quantum Swarm â€” AI Software Company
+﻿# Quantum Swarm — AI Software Company
 
 An autonomous multi-agent system that builds software end-to-end. You give it a product brief. It produces a working, tested codebase.
 
@@ -69,7 +69,7 @@ When a new task arrives, retrieval uses **spreading activation** (the same mecha
 3. Collect fact nodes with the highest accumulated activation
 4. Return the top 5 as bullets injected into the agent's prompt
 
-This means querying "database connection pooling" will surface lessons about SQLAlchemy connection leaks â€” even though those words don't appear in the query â€” because the graph path `pooling → connection_leak → sqlalchemy` connects them.
+This means querying "database connection pooling" will surface lessons about SQLAlchemy connection leaks — even though those words don't appear in the query — because the graph path `pooling → connection_leak → sqlalchemy` connects them.
 
 All `dev_1`...`dev_8` share one `dev_engineer` graph. Knowledge found by any engineer instantly benefits all of them. Each other role (QA, architect, designer) has its own independent graph.
 
@@ -89,7 +89,7 @@ Every agent carries a **belief state**: a probability vector over three hypothes
 
 After each task, the output is compared against prototype vectors via cosine similarity. This updates the belief via **Bayes' rule** (posterior ∝ prior × likelihood). The result is a single number called **Free Energy (F)**:
 
-- **F ≈ 0 → agent is on-role, behaving as expected
+- **F ≈ 0** → agent is on-role, behaving as expected
 - **F rising** → agent is drifting, output diverging from its role
 
 This is the **Free Energy Principle** from theoretical neuroscience — the brain minimizes the gap between what it predicts and what it observes. Here, agents minimize the gap between expected role behaviour and actual output.
@@ -167,12 +167,12 @@ company_output/         all generated artifacts (created at runtime)
 Quantum Swarm uses a **Supervisor/Worker** pattern: manager agents plan, assign, and review work while specialist workers execute bounded tasks. Each manager and worker uses a **ReAct** inner loop: it reasons (THINK) before each action, then acts with a registered tool, then observes the result and repeats. This keeps coordination centralized while forcing grounded decisions before file writes, shell commands, and other side-effecting actions.
 
 ```
-THINK â†’ tool_call â†’ observe â†’ THINK â†’ tool_call â†’ ... â†’ write_code_file
+THINK → tool_call → observe → THINK → tool_call → ... → write_code_file
 ```
 
 The loop runs for up to `MANAGER_FIX_MAX_ROUNDS` (default 10) before the manager escalates.
 
-### AgentState â€” per-agent runtime snapshot
+### AgentState — per-agent runtime snapshot
 
 Every agent's live state is tracked in an `AgentState` dataclass (defined in `software_company/team_schemas.py`):
 
@@ -184,9 +184,9 @@ class AgentState:
     sprint: int             # 1-based sprint number
     task_file: str          # file the agent is currently writing
     # Hamiltonian health
-    belief_healthy: float   # posterior P(healthy)  â€” starts at 0.80
-    belief_uncertain: float # posterior P(uncertain) â€” starts at 0.15
-    belief_confused: float  # posterior P(confused)  â€” starts at 0.05
+    belief_healthy: float   # posterior P(healthy)  — starts at 0.80
+    belief_uncertain: float # posterior P(uncertain) — starts at 0.15
+    belief_confused: float  # posterior P(confused)  — starts at 0.05
     free_energy: float      # KL divergence from expected role behaviour
     anomaly_detected: bool  # True when z-score > 2Ïƒ over agent's own history
     # Token accounting
@@ -255,6 +255,6 @@ The most recent full local test run passed: `383 passed, 12 skipped`.
 ```bash
 python -m pytest tests/ -v
 
-# Manager smoke test â€” live LLM + desktop tools
+# Manager smoke test — live LLM + desktop tools
 RUN_MANAGER_STAGE_SMOKE=1 AGENT_DESKTOP_CONTROL_ENABLED=1 python run_manager_stage_smoke.py
 ```
