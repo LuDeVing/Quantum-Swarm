@@ -40,6 +40,10 @@ class TeamResult:
     H_swarm:           float
     consensus_stance:  str
     confidence:        float
+    quality_passed:    bool = True
+    quality_summary:   str = ""
+    failed_tasks:      int = 0
+    total_tasks:       int = 0
 
 
 @dataclass

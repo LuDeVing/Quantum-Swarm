@@ -321,13 +321,18 @@ RULES:
   merge conflicts. Use this sparingly: only when a file is genuinely too big for
   one developer. Default to one developer per file.
 
-DOCKER REQUIREMENT (mandatory for every project):
-- Every project MUST include a Dockerfile and docker-compose.yml so it can be run with
+FRONTEND COMPLETENESS REQUIREMENT:
+- Visual frontend tasks are incomplete until every visible control is wired and core interactions
+  are exercised with browser tools.
+- Tests must contain real assertions for core behavior and error cases. Never replace tests with
+  scripts that only print "passed", "verified manually", or "skipping".
+- Do not leave skeleton/TODO files in the delivered project.
+
+DOCKER POLICY (optional unless explicitly requested):
+- Only projects that explicitly request Docker must include Dockerfile and docker-compose.yml to run with
   `docker compose up` and nothing else.
 - The Dockerfile must install all dependencies and define the correct CMD/ENTRYPOINT.
-- Ensure one developer is assigned to write these files before the final integration task.
-- If no task in the tree covers Docker setup, add it yourself by assigning a developer to
-  create Dockerfile + docker-compose.yml as an extra task after all code tasks are done.
+- Do not create Docker files unless the user explicitly requested Docker.
 - IMPORTANT: Docker files must be written with write_code_file using filenames "Dockerfile"
   and "docker-compose.yml" (no subdirectory prefix) so they land in the code root.
   Do NOT use write_config_file for Docker files — it puts them in the wrong directory.
@@ -925,6 +930,8 @@ _SERVER_CMD_PATTERNS = [
     "uvicorn ", "gunicorn ", "flask run", "python server", "python app",
     "python main", "python -m uvicorn", "python -m flask", "python -m http.server",
     "npm start", "npm run dev", "npm run start", "node server", "node index",
+    "npx serve", "npx http-server", "npx vite", "vite ", "http-server ",
+    "live-server ", "serve ",
     "node app", "daphne ", "hypercorn ", "php artisan serve", "rails server",
     "rails s", "django", "manage.py runserver",
 ]
@@ -959,6 +966,7 @@ def _run_build_command(registry: InterfaceContractRegistry) -> str:
     if not code_dir.exists():
         return ""
     try:
+        logger.info(f"[build] running build_command {registry.build_command!r}")
         result = subprocess.run(
             registry.build_command, shell=True, cwd=str(code_dir),
             env=_subprocess_env_for_project(code_dir),
@@ -1163,8 +1171,28 @@ def _run_test_gate(code_dir: Path) -> TestGateResult:
             )
     elif _makefile_has_test():
         cmd = "make test"
-    elif _has_test_files("*.spec.ts", "*.spec.js", "*.test.ts", "*.test.js") or _has_file("package.json"):
-        cmd = "npm test --if-present"
+    elif _has_test_files("*.spec.ts", "*.spec.js", "*.test.ts", "*.test.js", "test_*.js", "*_test.js") or _has_file("package.json"):
+        package_test = ""
+        package_path = code_dir / "package.json"
+        if package_path.exists():
+            try:
+                package = json.loads(package_path.read_text(encoding="utf-8"))
+                package_test = str(package.get("scripts", {}).get("test", "")).strip()
+            except (OSError, ValueError, TypeError):
+                package_test = ""
+        if package_test and "no test specified" not in package_test.lower():
+            cmd = "npm test"
+        elif (tests_dir / "runner.js").exists():
+            cmd = "node tests/runner.js"
+        elif _has_test_files("*.spec.js", "*.test.js", "test_*.js", "*_test.js"):
+            cmd = "node --test"
+        else:
+            return TestGateResult(
+                passed=False,
+                skipped=False,
+                output="package.json exists, but no executable JavaScript test command or test runner was found.",
+                command="(missing JavaScript test command)",
+            )
     elif _has_test_files("*_spec.rb", "*_test.rb"):
         cmd = "bundle exec rspec"
     else:
@@ -1494,6 +1522,30 @@ class ManagerFixResult:
 def _manager_fix_collect_errors(code_dir: Path, registry: "InterfaceContractRegistry") -> List[str]:
     """Run test gate + build; return a list of error strings (empty if all green)."""
     errors: List[str] = []
+    placeholder_hits: List[str] = []
+    placeholder_patterns = (
+        "todo: implement this file",
+        "auto-generated skeleton",
+        "skipping npm tests",
+        "tests as the environment does not support",
+        "verified manually",
+        "ui logic would hook up listeners here",
+    )
+    for path in code_dir.rglob("*"):
+        if not path.is_file() or _is_ignored_project_path(path):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace").lower()
+        except Exception:
+            continue
+        if any(pattern in text for pattern in placeholder_patterns):
+            placeholder_hits.append(path.relative_to(code_dir).as_posix())
+    if placeholder_hits:
+        errors.append(
+            "PLACEHOLDER / INCOMPLETE IMPLEMENTATION DETECTED:\n"
+            + "\n".join(f"- {path}" for path in placeholder_hits[:30])
+            + "\nReplace placeholders with working code and real assertions."
+        )
     gate = _run_test_gate(code_dir)
     if gate.skipped:
         logger.info("[ManagerFix] test gate skipped (no tests detected)")
@@ -1770,9 +1822,10 @@ def _manager_fix_loop(
                 f"  4. Focus on the FIRST error — fixing it often resolves cascading failures.\n"
                 f"NON-NEGOTIABLE: Before integration is complete you MUST:\n"
                 f"  1. Run the real application at least once (app_type='{app_type}').\n"
-                f"  2. Run `docker compose up --build -d` and confirm the container starts.\n"
-                f"     If docker-compose.yml or Dockerfile is missing, create them first.\n"
-                f"     Then run `docker compose down` to clean up.\n"
+                f"  2. Replace every placeholder, skeleton, manual-verification claim, skipped test, "
+                f"and unwired UI control with working implementation and real assertions.\n"
+                f"  3. Docker is optional. Check it once only when Docker files already exist; "
+                f"if unavailable, skip it permanently.\n"
                 f"{_gui_cumulative}"
                 f"{_gui_extra}"
                 f"{_web_extra}"
@@ -1803,6 +1856,8 @@ def _manager_fix_loop(
                     f"  3. http_request('GET', 'http://localhost:<port>/health') — confirm response.\n"
                     f"  4. Verify EACH item in the test checklist with http_request().\n"
                     f"  5. stop_service('app') when done.\n"
+                    f"  6. For frontend apps, use open_app('http://localhost:<port>/') and browser_action() "
+                    f"to exercise core controls. Never use OS `start`, launch_application, or broad disk searches.\n"
                 )
             elif app_type == "gui":
                 if _desktop_proof_required:
@@ -3398,6 +3453,29 @@ def run_engineering_team(
             f"[Engineering] Manager fix loop PASSED in {fix_result.rounds_used} round(s) "
             f"(app_run_verified={fix_result.app_run_verified})"
         )
+        # Worker tasks can be marked failed before the manager repairs or recreates
+        # their files. Once final verification is green, reconcile those stale
+        # statuses with the verified output so a healthy project is not reported
+        # as failed.
+        reconciled = 0
+        with task_queue._lock:
+            for queued_task in task_queue.tasks.values():
+                output_exists = (
+                    queued_task.file == "__integration__"
+                    or (code_dir / queued_task.file).is_file()
+                )
+                if output_exists and queued_task.status != "completed":
+                    queued_task.status = "completed"
+                    queued_task.assigned_to = None
+                    queued_task.waiting_for = []
+                    task_queue._completed_tasks.add(queued_task.id)
+                    reconciled += 1
+            task_queue._persist()
+        if reconciled:
+            logger.info(
+                f"[Engineering] reconciled {reconciled} task status(es) "
+                "after successful manager verification"
+            )
     else:
         logger.warning(
             f"[Engineering] Manager fix loop FAILED after {fix_result.rounds_used} rounds\n"
@@ -3476,4 +3554,10 @@ def run_engineering_team(
         H_swarm=H_swarm,
         consensus_stance=consensus,
         confidence=max(0.0, 1.0 - H_swarm / (1.5 * n)),
+        quality_passed=fix_result.passed and not any(
+            t.status == "failed" for t in task_queue.tasks.values()
+        ),
+        quality_summary=_fix_status,
+        failed_tasks=sum(1 for t in task_queue.tasks.values() if t.status == "failed"),
+        total_tasks=len(task_queue.tasks),
     )

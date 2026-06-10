@@ -62,16 +62,40 @@ health_states = {
 }
 
 final_status = "Failed"
+run_result = {
+    "status": final_status,
+    "quality_passed": False,
+    "quality_summary": "Engineering run did not start.",
+    "failed_tasks": 0,
+    "total_tasks": 0,
+}
 try:
-    run_engineering_team(
+    result = run_engineering_team(
         task=goal,
         rolling_ctxs=rolling_ctxs,
         health_states=health_states,
         sprint_num=1,
     )
-    final_status = "Completed"
+    final_status = "Completed" if result.quality_passed and result.failed_tasks == 0 else "Failed"
+    run_result = {
+        "status": final_status,
+        "quality_passed": result.quality_passed,
+        "quality_summary": result.quality_summary,
+        "failed_tasks": result.failed_tasks,
+        "total_tasks": result.total_tasks,
+        "confidence": result.confidence,
+        "swarm_health": result.H_swarm,
+        "consensus": result.consensus_stance,
+        "manager_synthesis": result.manager_synthesis,
+    }
 except Exception as exc:
     logging.exception(f"[project_runner] ERROR: {exc}")
+    run_result["quality_summary"] = f"Engineering run crashed: {type(exc).__name__}: {exc}"
+
+(output_dir / "run_result.json").write_text(
+    json.dumps(run_result, indent=2, ensure_ascii=False),
+    encoding="utf-8",
+)
 
 # Update project.json status
 meta_file = output_dir / "project.json"
@@ -80,6 +104,8 @@ if meta_file.exists():
         meta = json.loads(meta_file.read_text(encoding="utf-8"))
         meta["status"] = final_status
         meta["runner_pid"] = None
+        meta["quality_passed"] = run_result["quality_passed"]
+        meta["last_run_summary"] = run_result["quality_summary"]
         meta_file.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
     except Exception:
         pass

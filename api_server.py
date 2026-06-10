@@ -8,6 +8,8 @@ from __future__ import annotations
 import json
 import logging
 import hashlib
+import os
+import re
 import shutil
 import subprocess
 import sys
@@ -30,7 +32,7 @@ from pydantic import BaseModel, Field, validator
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-SECRET_KEY = "quantum-swarm-dev-secret-do-not-use-in-prod"
+SECRET_KEY = os.environ.get("QUANTUM_SWARM_SECRET_KEY", "quantum-swarm-dev-secret-do-not-use-in-prod")
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_HOURS = 72
 PROJECTS_DIR = Path("projects")
@@ -206,12 +208,76 @@ def _is_runner_alive(pid: Optional[int]) -> bool:
 
 
 def _project_status(meta: dict) -> str:
-    """Recalculate live status â€” marks Completed if runner finished."""
+    """Return a truthful live status for the project runner."""
     stored = meta.get("status", "Planning")
+    if stored == "Completed":
+        tasks = _read_queue_tasks(meta["id"])
+        if any(task.get("status") == "failed" for task in tasks):
+            return "Failed"
     if stored == "In Progress" and not _is_runner_alive(meta.get("runner_pid")):
-        # Runner exited â€” check for explicit status written by project_runner.py
-        return meta.get("status", "Completed")
+        result_file = _project_dir(meta["id"]) / "run_result.json"
+        if result_file.exists():
+            try:
+                return json.loads(result_file.read_text(encoding="utf-8")).get("status", "Failed")
+            except Exception:
+                pass
+        return "Failed"
     return stored
+
+
+def _authorize_project(meta: dict, user: dict) -> None:
+    """Allow owners and legacy unowned projects; guest only owns guest projects."""
+    owner = meta.get("owner_id")
+    if owner and owner != user["id"]:
+        raise HTTPException(403, "Forbidden")
+
+
+def _read_json(path: Path, default):
+    try:
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else default
+    except Exception:
+        return default
+
+
+def _read_queue_tasks(pid: str) -> list[dict]:
+    data = _read_json(_project_dir(pid) / "task_queue_state.json", {})
+    tasks = data.get("tasks", {})
+    return list(tasks.values()) if isinstance(tasks, dict) else tasks
+
+
+def _project_summary(meta: dict) -> dict:
+    pid = meta["id"]
+    tasks = _read_queue_tasks(pid)
+    total = len(tasks)
+    done = sum(1 for task in tasks if task.get("status") == "completed")
+    failed = sum(1 for task in tasks if task.get("status") == "failed")
+    blocked = sum(1 for task in tasks if task.get("status") in ("blocked", "waiting"))
+    active_agents = len({
+        task.get("assigned_to")
+        for task in tasks
+        if task.get("assigned_to") and task.get("status") == "in_progress"
+    })
+    result = _read_json(_project_dir(pid) / "run_result.json", {})
+    quality = None
+    if total:
+        quality = max(0, round(((done - failed) / total) * 100))
+    messages = meta.get("messages", [])
+    return {
+        "id": pid,
+        "name": meta["name"],
+        "status": _project_status(meta),
+        "date": meta["date"],
+        "lastMessage": messages[-1]["text"] if messages else "",
+        "done": done,
+        "total": total,
+        "progress": round(done / total * 100) if total else 0,
+        "failed": failed,
+        "blocked": blocked,
+        "activeAgents": active_agents,
+        "quality": quality,
+        "qualityPassed": result.get("quality_passed"),
+        "summary": result.get("quality_summary") or meta.get("last_run_summary", ""),
+    }
 
 
 def _read_task_counts(pid: str) -> tuple[int, int]:
@@ -310,6 +376,9 @@ class UpdateProjectBody(BaseModel):
 class SendMessageBody(BaseModel):
     text: str = Field(..., min_length=1, max_length=8000)
 
+class VerificationRunBody(BaseModel):
+    kind: str = Field(..., pattern="^(test|run)$")
+
 # ---------------------------------------------------------------------------
 # AUTH routes
 # ---------------------------------------------------------------------------
@@ -406,26 +475,95 @@ def list_projects(user: dict = Depends(_current_user)):
         try:
             meta = json.loads(pf.read_text(encoding="utf-8"))
             owner = meta.get("owner_id")
-            if owner and owner != user["id"] and user["id"] != "guest":
+            if owner and owner != user["id"]:
                 continue
             # Refresh live status
             live = _project_status(meta)
             if live != meta.get("status"):
                 meta["status"] = live
                 _save_project(meta)
-            msgs = meta.get("messages", [])
-            last_msg = msgs[-1]["text"] if msgs else ""
-            projects.append({
-                "id": meta["id"],
-                "name": meta["name"],
-                "status": meta["status"],
-                "date": meta["date"],
-                "lastMessage": last_msg,
-            })
+            projects.append(_project_summary(meta))
         except Exception:
             continue
     projects.sort(key=lambda p: p["date"], reverse=True)
     return {"projects": projects}
+
+
+@app.get("/api/portfolio")
+def get_portfolio(user: dict = Depends(_current_user)):
+    """Aggregate project, agent, blocker, and artifact data for the control center."""
+    projects = list_projects(user)["projects"]
+    all_tasks: list[dict] = []
+    artifacts: list[dict] = []
+
+    for project in projects:
+        pid = project["id"]
+        tasks = _read_queue_tasks(pid)
+        for task in tasks:
+            all_tasks.append({**task, "projectId": pid, "projectName": project["name"]})
+
+        component_graph = _read_json(_project_dir(pid) / "COMPONENT_GRAPH.json", {})
+        nodes = component_graph.get("nodes", {})
+        node_values = list(nodes.values()) if isinstance(nodes, dict) else nodes
+        for node in node_values[:20]:
+            file_path = node.get("file_path") or node.get("suggested_file")
+            if not file_path:
+                continue
+            resolved = _project_dir(pid) / "code" / file_path
+            artifacts.append({
+                "id": f"{pid}:{file_path}",
+                "projectId": pid,
+                "projectName": project["name"],
+                "name": file_path,
+                "type": Path(file_path).suffix.lstrip(".") or "file",
+                "status": "ready" if resolved.exists() else "planned",
+                "createdBy": node.get("owner") or node.get("assigned_to") or "swarm",
+            })
+
+    agent_keys = [f"dev_{i}" for i in range(1, 9)]
+    agents = []
+    for key in agent_keys:
+        assigned = [task for task in all_tasks if task.get("assigned_to") == key]
+        working = next((task for task in assigned if task.get("status") == "in_progress"), None)
+        agents.append({
+            "key": key,
+            "name": f"Engineer {key.split('_')[-1]}",
+            "status": "working" if working else ("done" if assigned else "idle"),
+            "currentTask": working.get("file") if working else None,
+            "tasksDone": sum(1 for task in assigned if task.get("status") == "completed"),
+            "tasksFailed": sum(1 for task in assigned if task.get("status") == "failed"),
+        })
+
+    blockers = [
+        {
+            "id": task.get("id", ""),
+            "projectId": task["projectId"],
+            "projectName": task["projectName"],
+            "file": task.get("file", "Unknown task"),
+            "status": task.get("status", "blocked"),
+            "agent": task.get("assigned_to"),
+        }
+        for task in all_tasks
+        if task.get("status") in ("failed", "blocked", "waiting")
+    ]
+    completed = sum(1 for task in all_tasks if task.get("status") == "completed")
+    quality = round(completed / len(all_tasks) * 100) if all_tasks else None
+
+    return {
+        "projects": projects,
+        "agents": agents,
+        "artifacts": artifacts[:50],
+        "blockers": blockers[:20],
+        "summary": {
+            "projects": len(projects),
+            "activeProjects": sum(1 for project in projects if project["status"] == "In Progress"),
+            "agentsWorking": sum(1 for agent in agents if agent["status"] == "working"),
+            "tasks": len(all_tasks),
+            "completedTasks": completed,
+            "blockers": len(blockers),
+            "quality": quality,
+        },
+    }
 
 
 @app.post("/api/projects", status_code=201)
@@ -448,8 +586,7 @@ def create_project(body: CreateProjectBody, user: dict = Depends(_current_user))
 @app.delete("/api/projects/{project_id}")
 def delete_project(project_id: str, user: dict = Depends(_current_user)):
     meta = _load_project(project_id)
-    if meta.get("owner_id") and meta["owner_id"] != user["id"] and user["id"] != "guest":
-        raise HTTPException(403, "Forbidden")
+    _authorize_project(meta, user)
     shutil.rmtree(_project_dir(project_id), ignore_errors=True)
     return {"success": True}
 
@@ -457,8 +594,7 @@ def delete_project(project_id: str, user: dict = Depends(_current_user)):
 @app.patch("/api/projects/{project_id}")
 def update_project(project_id: str, body: UpdateProjectBody, user: dict = Depends(_current_user)):
     meta = _load_project(project_id)
-    if meta.get("owner_id") and meta["owner_id"] != user["id"] and user["id"] != "guest":
-        raise HTTPException(403, "Forbidden")
+    _authorize_project(meta, user)
     if body.name is not None:
         meta["name"] = body.name
     if body.status is not None:
@@ -474,8 +610,7 @@ def update_project(project_id: str, body: UpdateProjectBody, user: dict = Depend
 def get_project_messages(project_id: str, page: int = 1, limit: int = 50,
                          user: dict = Depends(_current_user)):
     meta = _load_project(project_id)
-    if meta.get("owner_id") and meta["owner_id"] != user["id"] and user["id"] != "guest":
-        raise HTTPException(403, "Forbidden")
+    _authorize_project(meta, user)
     msgs = meta.get("messages", [])
     start = (page - 1) * limit
     return {"messages": msgs[start: start + limit]}
@@ -485,8 +620,7 @@ def get_project_messages(project_id: str, page: int = 1, limit: int = 50,
 def send_project_message(project_id: str, body: SendMessageBody,
                          user: dict = Depends(_current_user)):
     meta = _load_project(project_id)
-    if meta.get("owner_id") and meta["owner_id"] != user["id"] and user["id"] != "guest":
-        raise HTTPException(403, "Forbidden")
+    _authorize_project(meta, user)
 
     user_msg = _make_message(body.text, "user")
     meta.setdefault("messages", []).append(user_msg)
@@ -536,8 +670,164 @@ def send_project_message(project_id: str, body: SendMessageBody,
 # DASHBOARD endpoint â€” task tree + agent health
 # ---------------------------------------------------------------------------
 
+def _workflow_steps(meta: dict, tasks: list[dict], quality: dict, pdir: Path) -> list[dict]:
+    status = _project_status(meta)
+    has_tree = (pdir / "TASK_TREE.json").exists()
+    has_code = (pdir / "code").exists() and any((pdir / "code").rglob("*"))
+    tests = quality.get("verification", {}).get("test") or {}
+    run = quality.get("verification", {}).get("run") or {}
+    failed = status in ("Failed", "Stopped")
+    specs = [
+        ("brief", "Brief", bool(meta.get("messages"))),
+        ("plan", "Plan", has_tree),
+        ("build", "Build", has_code and bool(tasks)),
+        ("test", "Test", bool(tests) or bool(quality)),
+        ("run", "Run", bool(run) or bool(quality.get("quality_passed"))),
+        ("deliver", "Deliver", status == "Completed"),
+    ]
+    first_incomplete = next((key for key, _, complete in specs if not complete), "deliver")
+    steps = []
+    for key, label, complete in specs:
+        step_status = "complete" if complete else "pending"
+        if failed and key == first_incomplete:
+            step_status = "failed"
+        elif not failed and status == "In Progress" and key == first_incomplete:
+            step_status = "active"
+        steps.append({"key": key, "label": label, "status": step_status})
+    return steps
+
+
+def _canonical_tree(pdir: Path, tasks: list[dict]) -> dict:
+    raw_tree = _read_json(pdir / "TASK_TREE.json", {})
+    raw_nodes = raw_tree.get("nodes", {})
+    raw_values = list(raw_nodes.values()) if isinstance(raw_nodes, dict) else raw_nodes
+    descriptions = {
+        node.get("suggested_file"): node
+        for node in raw_values
+        if node.get("suggested_file")
+    }
+    root_id = raw_tree.get("root_id") or "project-root"
+    root = next((node for node in raw_values if node.get("id") == root_id), {})
+    nodes = [{
+        "id": root_id,
+        "name": root.get("name") or "Project goal",
+        "description": root.get("description") or raw_tree.get("goal", ""),
+        "parentId": None,
+        "depth": 0,
+        "file": None,
+        "status": "completed" if tasks else "pending",
+        "agent": None,
+        "complexity": root.get("complexity", "high"),
+        "dependsOn": [],
+        "retries": 0,
+    }]
+    edges = []
+    task_ids = {task.get("id") for task in tasks}
+    for task in tasks:
+        planned = descriptions.get(task.get("file"), {})
+        file_path = pdir / "code" / task.get("file", "")
+        task_status = task.get("status", "pending")
+        if file_path.is_file():
+            preview = file_path.read_text(encoding="utf-8", errors="replace")[:4000].lower()
+            if "auto-generated skeleton" in preview or "todo: implement this file" in preview:
+                task_status = "needs_review"
+        nodes.append({
+            "id": task.get("id"),
+            "name": planned.get("name") or Path(task.get("file") or task.get("id", "")).name,
+            "description": planned.get("description") or task.get("description", ""),
+            "parentId": root_id,
+            "depth": 1,
+            "file": None if task.get("file") == "__integration__" else task.get("file"),
+            "status": task_status,
+            "agent": task.get("assigned_to"),
+            "complexity": planned.get("complexity", "medium"),
+            "dependsOn": task.get("depends_on", []),
+            "retries": task.get("retries", 0),
+        })
+        edges.append({"from": root_id, "to": task.get("id"), "type": "hierarchy"})
+        edges.extend(
+            {"from": dep, "to": task.get("id"), "type": "dependency"}
+            for dep in task.get("depends_on", [])
+            if dep in task_ids
+        )
+    return {"rootId": root_id, "goal": raw_tree.get("goal", ""), "nodes": nodes, "edges": edges}
+
+
+def _meaningful_events(pdir: Path, tasks: list[dict]) -> list[dict]:
+    events = []
+    log_path = pdir / "run.log"
+    patterns = [
+        ("plan", "Plan created", re.compile(r"(TASK_TREE|component graph|initialized .*tasks)", re.I)),
+        ("assignment", "Agent assigned", re.compile(r"(claimed|assigned)", re.I)),
+        ("file", "File generated", re.compile(r"(writing |Created )", re.I)),
+        ("fix", "Fix applied", re.compile(r"(ManagerFix|auto-fixes applied|requeueing)", re.I)),
+        ("test", "Tests executed", re.compile(r"(test gate|passed in|pytest)", re.I)),
+        ("verification", "Verification", re.compile(r"(ALL GREEN|verified|done . status)", re.I)),
+    ]
+    if log_path.exists():
+        for index, line in enumerate(log_path.read_text(encoding="utf-8", errors="replace").splitlines()):
+            for event_type, title, pattern in patterns:
+                if pattern.search(line):
+                    events.append({
+                        "id": f"log-{index}",
+                        "type": event_type,
+                        "title": title,
+                        "detail": line[-500:],
+                        "timestamp": line[:8] if re.match(r"\d\d:\d\d:\d\d", line) else "",
+                    })
+                    break
+    stored = pdir / "events.jsonl"
+    if stored.exists():
+        for line in stored.read_text(encoding="utf-8", errors="replace").splitlines():
+            try:
+                events.append(json.loads(line))
+            except Exception:
+                pass
+    return events[-120:]
+
+
+def _approved_verification_commands(pdir: Path) -> dict:
+    code_dir = pdir / "code"
+    commands = {}
+    if (code_dir / "tests").exists():
+        commands["test"] = {
+            "label": "Run test suite",
+            "argv": [sys.executable, "-m", "pytest", "-q"],
+            "display": "python -m pytest -q",
+        }
+    entry = code_dir / "src" / "main.py"
+    if entry.exists():
+        commands["run"] = {
+            "label": "Run application proof",
+            "argv": [sys.executable, "src/main.py", "10", "+", "5"],
+            "display": "python src/main.py 10 + 5",
+        }
+    elif (code_dir / "main.py").exists():
+        commands["run"] = {
+            "label": "Run application",
+            "argv": [sys.executable, "main.py"],
+            "display": "python main.py",
+        }
+    return commands
+
+
+def _verification_state(pdir: Path) -> dict:
+    state = _read_json(pdir / "verification.json", {})
+    return {"commands": {
+        key: {"label": value["label"], "display": value["display"]}
+        for key, value in _approved_verification_commands(pdir).items()
+    }, **state}
+
+
+def _append_event(pdir: Path, event: dict) -> None:
+    with open(pdir / "events.jsonl", "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(event, ensure_ascii=False) + "\n")
+
+
 @app.get("/api/projects/{project_id}/dashboard")
 def get_project_dashboard(project_id: str, user: dict = Depends(_current_user)):
+    meta = _load_project(project_id)
+    _authorize_project(meta, user)
     pdir = _project_dir(project_id)
 
     # --- task tree nodes (name, depth, complexity) ---
@@ -598,13 +888,138 @@ def get_project_dashboard(project_id: str, user: dict = Depends(_current_user)):
 
     done = sum(1 for t in tasks_out if t["status"] == "completed")
     total = len(tasks_out)
+    quality = _read_json(pdir / "run_result.json", {})
+    quality["verification"] = _verification_state(pdir)
 
     return {
         "tasks": tasks_out,
         "agents": agents_out,
         "done": done,
         "total": total,
+        "status": _project_status(meta),
+        "quality": quality,
+        "workflow": _workflow_steps(meta, tasks_out, quality, pdir),
+        "tree": _canonical_tree(pdir, tasks_out),
+        "events": _meaningful_events(pdir, tasks_out),
     }
+
+
+@app.get("/api/projects/{project_id}/artifacts")
+def get_project_artifacts(project_id: str, user: dict = Depends(_current_user)):
+    meta = _load_project(project_id)
+    _authorize_project(meta, user)
+    code_dir = _project_dir(project_id) / "code"
+    artifacts = []
+    if code_dir.exists():
+        for path in code_dir.rglob("*"):
+            if path.is_file() and ".git" not in path.parts:
+                preview = path.read_text(encoding="utf-8", errors="replace")[:4000].lower()
+                artifact_status = "needs_review" if (
+                    "auto-generated skeleton" in preview or "todo: implement this file" in preview
+                ) else "ready"
+                artifacts.append({
+                    "name": path.relative_to(code_dir).as_posix(),
+                    "type": path.suffix.lstrip(".") or "file",
+                    "size": path.stat().st_size,
+                    "status": artifact_status,
+                })
+    return {"artifacts": artifacts[:250]}
+
+
+@app.get("/api/projects/{project_id}/artifacts/content")
+def get_project_artifact_content(project_id: str, path: str,
+                                 user: dict = Depends(_current_user)):
+    meta = _load_project(project_id)
+    _authorize_project(meta, user)
+    code_dir = (_project_dir(project_id) / "code").resolve()
+    target = (code_dir / path).resolve()
+    try:
+        target.relative_to(code_dir)
+    except ValueError:
+        raise HTTPException(400, "Invalid artifact path")
+    if not target.is_file():
+        raise HTTPException(404, "Artifact not found")
+    if target.stat().st_size > 500_000:
+        raise HTTPException(413, "Artifact is too large to preview")
+    return {
+        "path": target.relative_to(code_dir).as_posix(),
+        "content": target.read_text(encoding="utf-8", errors="replace"),
+        "language": target.suffix.lstrip(".") or "text",
+    }
+
+
+@app.get("/api/projects/{project_id}/verification")
+def get_project_verification(project_id: str, user: dict = Depends(_current_user)):
+    meta = _load_project(project_id)
+    _authorize_project(meta, user)
+    return _verification_state(_project_dir(project_id))
+
+
+@app.post("/api/projects/{project_id}/verification/run")
+def run_project_verification(project_id: str, body: VerificationRunBody,
+                             user: dict = Depends(_current_user)):
+    meta = _load_project(project_id)
+    _authorize_project(meta, user)
+    pdir = _project_dir(project_id)
+    code_dir = pdir / "code"
+    command = _approved_verification_commands(pdir).get(body.kind)
+    if not command:
+        raise HTTPException(400, f"No approved {body.kind} command detected")
+    started = time.monotonic()
+    try:
+        completed = subprocess.run(
+            command["argv"],
+            cwd=code_dir,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+        )
+        output = (completed.stdout + completed.stderr)[-20_000:]
+        result = {
+            "kind": body.kind,
+            "command": command["display"],
+            "exitCode": completed.returncode,
+            "passed": completed.returncode == 0,
+            "output": output,
+            "durationMs": round((time.monotonic() - started) * 1000),
+            "timestamp": _now_iso(),
+        }
+    except subprocess.TimeoutExpired as exc:
+        result = {
+            "kind": body.kind,
+            "command": command["display"],
+            "exitCode": None,
+            "passed": False,
+            "output": f"Command timed out after 30 seconds.\n{exc.stdout or ''}{exc.stderr or ''}",
+            "durationMs": 30_000,
+            "timestamp": _now_iso(),
+        }
+    state = _read_json(pdir / "verification.json", {})
+    state[body.kind] = result
+    (pdir / "verification.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
+    _append_event(pdir, {
+        "id": str(uuid.uuid4()),
+        "type": "test" if body.kind == "test" else "verification",
+        "title": "Tests passed" if body.kind == "test" and result["passed"] else (
+            "Application run verified" if result["passed"] else f"{body.kind.title()} failed"
+        ),
+        "detail": f'{result["command"]} exited with {result["exitCode"]}',
+        "timestamp": result["timestamp"],
+    })
+    return result
+
+
+@app.get("/api/projects/{project_id}/logs")
+def get_project_logs(project_id: str, limit: int = 300,
+                     user: dict = Depends(_current_user)):
+    meta = _load_project(project_id)
+    _authorize_project(meta, user)
+    log_path = _project_dir(project_id) / "run.log"
+    lines = []
+    if log_path.exists():
+        lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-min(limit, 1000):]
+    return {"lines": lines, "status": _project_status(meta)}
 
 
 # ---------------------------------------------------------------------------
@@ -614,8 +1029,7 @@ def get_project_dashboard(project_id: str, user: dict = Depends(_current_user)):
 @app.post("/api/projects/{project_id}/stop")
 def stop_project(project_id: str, user: dict = Depends(_current_user)):
     meta = _load_project(project_id)
-    if meta.get("owner_id") and meta["owner_id"] != user["id"] and user["id"] != "guest":
-        raise HTTPException(403, "Forbidden")
+    _authorize_project(meta, user)
 
     pid = meta.get("runner_pid")
     killed = False
@@ -649,8 +1063,7 @@ def stop_project(project_id: str, user: dict = Depends(_current_user)):
 def get_project_progress(project_id: str, user: dict = Depends(_current_user)):
     """Lightweight poll endpoint â€” returns latest task counts + last log line."""
     meta = _load_project(project_id)
-    if meta.get("owner_id") and meta["owner_id"] != user["id"] and user["id"] != "guest":
-        raise HTTPException(403, "Forbidden")
+    _authorize_project(meta, user)
 
     live_status = _project_status(meta)
     if live_status != meta.get("status"):

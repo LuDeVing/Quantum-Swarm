@@ -10,7 +10,7 @@ export default function AuthNavigator({ onLogin }) {
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: '#1a1a2e' },
+        contentStyle: { backgroundColor: '#071019' },
         animation: 'slide_from_right',
       }}
     >

@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // =====================================================
 // CONFIGURATION — Point this to your backend server
 // =====================================================
-const BASE_URL = 'http://localhost:3001/api';
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001/api';
 
 // =====================================================
 // HTTP client with auth token injection
@@ -25,10 +25,11 @@ async function request(endpoint, options = {}) {
     headers,
   });
 
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    const error = new Error(data.message || 'Request failed');
+    const detail = typeof data.detail === 'string' ? data.detail : data.detail?.error;
+    const error = new Error(detail || data.message || `Request failed (${res.status})`);
     error.status = res.status;
     error.data = data;
     throw error;
@@ -184,6 +185,10 @@ export async function getProjects() {
   return await request('/projects');
 }
 
+export async function getPortfolio() {
+  return await request('/portfolio');
+}
+
 /**
  * POST /api/projects
  * Body: { name }
@@ -295,6 +300,29 @@ export async function getProjectProgress(projectId) {
  */
 export async function getProjectDashboard(projectId) {
   return await request(`/projects/${encodeURIComponent(projectId)}/dashboard`);
+}
+
+export async function getProjectArtifacts(projectId) {
+  return await request(`/projects/${encodeURIComponent(projectId)}/artifacts`);
+}
+
+export async function getProjectArtifactContent(projectId, path) {
+  return await request(`/projects/${encodeURIComponent(projectId)}/artifacts/content?path=${encodeURIComponent(path)}`);
+}
+
+export async function getProjectLogs(projectId, limit = 300) {
+  return await request(`/projects/${encodeURIComponent(projectId)}/logs?limit=${limit}`);
+}
+
+export async function getProjectVerification(projectId) {
+  return await request(`/projects/${encodeURIComponent(projectId)}/verification`);
+}
+
+export async function runProjectVerification(projectId, kind) {
+  return await request(`/projects/${encodeURIComponent(projectId)}/verification/run`, {
+    method: 'POST',
+    body: JSON.stringify({ kind }),
+  });
 }
 
 export { BASE_URL };

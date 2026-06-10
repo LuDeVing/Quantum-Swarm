@@ -55,7 +55,7 @@ function openOAuthPopup(url) {
       modal: true,
       show: true,
       title: 'Sign In',
-      backgroundColor: '#1a1a2e',
+      backgroundColor: '#071019',
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
@@ -105,13 +105,13 @@ ipcMain.handle('oauth-login', async (event, provider) => {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 420,
-    height: 780,
-    minWidth: 360,
-    minHeight: 640,
-    title: 'MyApp',
+    width: 1440,
+    height: 960,
+    minWidth: 1024,
+    minHeight: 720,
+    title: 'Quantum Swarm',
     icon: path.join(__dirname, '..', 'assets', 'icon.png'),
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#071019',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

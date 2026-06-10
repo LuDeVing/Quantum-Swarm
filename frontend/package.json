@@ -1,5 +1,5 @@
 {
-  "name": "myapp",
+  "name": "quantum-swarm-frontend",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
@@ -33,14 +33,14 @@
   "private": true,
   "devDependencies": {
     "babel-preset-expo": "~54.0.10",
-    "concurrently": "^9.2.1",
+    "concurrently": "^10.0.3",
     "electron": "^41.2.1",
     "electron-builder": "^26.8.1",
     "wait-on": "^9.0.5"
   },
   "build": {
-    "appId": "com.myapp.desktop",
-    "productName": "MyApp",
+    "appId": "com.quantumswarm.desktop",
+    "productName": "Quantum Swarm",
     "extraMetadata": {
       "main": "electron/main.js"
     },

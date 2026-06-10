@@ -55,14 +55,14 @@ def _make_project(pid: str, owner_id: str) -> dict:
 # Core isolation guard — extracted so it can be tested independently
 # ---------------------------------------------------------------------------
 
-def _is_owner_or_guest(project_owner_id: str | None, user_id: str) -> bool:
+def _is_owner(project_owner_id: str | None, user_id: str) -> bool:
     """
     Mirrors the guard in api_server.py:
-        if meta.get("owner_id") and meta["owner_id"] != user["id"] and user["id"] != "guest":
+        if meta.get("owner_id") and meta["owner_id"] != user["id"]:
             raise HTTPException(403, "Forbidden")
     Returns True if access is allowed, False if it should be denied.
     """
-    if project_owner_id and project_owner_id != user_id and user_id != "guest":
+    if project_owner_id and project_owner_id != user_id:
         return False
     return True
 
@@ -75,7 +75,7 @@ def test_cross_user_access_denied():
     """User B must be denied access to a project owned by User A."""
     uid_a = str(uuid.uuid4())
     uid_b = str(uuid.uuid4())
-    assert _is_owner_or_guest(uid_a, uid_b) is False, \
+    assert _is_owner(uid_a, uid_b) is False, \
         "User B should be denied access to User A's project"
 
 
@@ -86,19 +86,21 @@ def test_cross_user_access_denied():
 def test_owner_access_allowed():
     """The legitimate owner must be granted access."""
     uid = str(uuid.uuid4())
-    assert _is_owner_or_guest(uid, uid) is True, \
+    assert _is_owner(uid, uid) is True, \
         "Owner must be allowed to access their own project"
 
 
 # ---------------------------------------------------------------------------
-# Test 3: Guest user is allowed (public/unauthenticated fallback)
+# Test 3: Guest cannot bypass ownership
 # ---------------------------------------------------------------------------
 
-def test_guest_access_allowed():
-    """Guest token must be allowed through the isolation guard."""
+def test_guest_access_denied_for_other_owner():
+    """Guest mode may only access projects explicitly owned by guest."""
     uid_a = str(uuid.uuid4())
-    assert _is_owner_or_guest(uid_a, "guest") is True, \
-        "Guest must bypass ownership check (public mode)"
+    assert _is_owner(uid_a, "guest") is False, \
+        "Guest must not bypass ownership checks"
+    assert _is_owner("guest", "guest") is True, \
+        "Guest must still access guest-owned local projects"
 
 
 # ---------------------------------------------------------------------------
@@ -108,9 +110,9 @@ def test_guest_access_allowed():
 def test_no_owner_id_is_open():
     """Projects without an owner_id are legacy/shared — any user may access."""
     uid_b = str(uuid.uuid4())
-    assert _is_owner_or_guest(None, uid_b) is True, \
+    assert _is_owner(None, uid_b) is True, \
         "Projects without an owner_id should be readable by all"
-    assert _is_owner_or_guest("", uid_b) is True, \
+    assert _is_owner("", uid_b) is True, \
         "Projects with an empty owner_id should be readable by all"
 
 
@@ -144,7 +146,7 @@ def test_list_projects_filesystem_isolation(tmp_path: Path):
             continue
         meta = json.loads(pf.read_text(encoding="utf-8"))
         owner = meta.get("owner_id")
-        if owner and owner != user_b_id and user_b_id != "guest":
+        if owner and owner != user_b_id:
             continue  # filtered out — belongs to another user
         visible.append(meta["id"])
 

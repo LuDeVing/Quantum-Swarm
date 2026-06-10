@@ -418,3 +418,20 @@ class TestManagerFixCollectErrors:
         assert len(errors) == 2
         assert "AssertionError" in errors[0]
         assert "BUILD" in errors[1] or "wheel" in errors[1]
+
+    def test_rejects_placeholder_tests_and_skeletons(self, tmp_path: Path) -> None:
+        _fresh_registry("web")
+        (tmp_path / "tests").mkdir()
+        (tmp_path / "tests" / "test.js").write_text(
+            'console.log("Skipping npm tests as the environment does not support npm");',
+            encoding="utf-8",
+        )
+        (tmp_path / "main.js").write_text("// TODO: implement this file", encoding="utf-8")
+        gate = MagicMock(skipped=False, passed=True, command="npm test", output="")
+        with (
+            patch("software_company.engineering._run_test_gate", return_value=gate),
+            patch("software_company.engineering._run_build_command", return_value=""),
+        ):
+            errors = _manager_fix_collect_errors(tmp_path, get_contracts())
+        assert any("PLACEHOLDER" in error for error in errors)
+        assert any("tests/test.js" in error and "main.js" in error for error in errors)

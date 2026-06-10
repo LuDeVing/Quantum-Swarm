@@ -875,6 +875,7 @@ def _registry_wants_pythonpath() -> bool:
 def _subprocess_env_for_project(code_dir: Path) -> Dict[str, str]:
     """Environment for child processes: copy os.environ; inject the active venv into PATH
     so agents use the same python/pip that runs this process, not the system Python."""
+    import shutil
     import sys as _sys
     cwd_s = str(Path(code_dir).resolve())
     env: Dict[str, str] = dict(os.environ)
@@ -891,6 +892,19 @@ def _subprocess_env_for_project(code_dir: Path) -> Dict[str, str]:
         # Also set VIRTUAL_ENV so pip knows it's inside a venv
         env["VIRTUAL_ENV"] = str(venv_bin.parent)
         env.pop("PYTHONHOME", None)  # PYTHONHOME confuses venv Python
+
+    # Codex desktop bundles a portable Node runtime outside the system PATH.
+    # Expose it to agents so node/npm/npx work without broad environment scans.
+    if not shutil.which("node", path=env.get("PATH", "")):
+        temp_root = Path(os.environ.get("TEMP", "")) / "quantum-swarm-node"
+        if temp_root.exists():
+            node_dirs = sorted(
+                (path for path in temp_root.glob("node-*-win-x64") if (path / "node.exe").is_file()),
+                reverse=True,
+            )
+            if node_dirs:
+                env["PATH"] = str(node_dirs[0]) + os.pathsep + env.get("PATH", "")
+                env["QUANTUM_SWARM_NODE_DIR"] = str(node_dirs[0])
 
     if not _registry_wants_pythonpath():
         return env

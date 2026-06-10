@@ -216,10 +216,13 @@ class InterfaceContractRegistry:
         if self.endpoints:
             return "web"
 
-        # Sample the entry point and dependencies file so the LLM can see what was built
         code_dir = OUTPUT_DIR / "code"
+        if (code_dir / "index.html").exists():
+            return "web"
+
+        # Sample the entry point and dependencies file so the LLM can see what was built
         samples: list[str] = []
-        for fname in ["main.py", "app.py", "server.py", "index.js",
+        for fname in ["index.html", "main.py", "app.py", "server.py", "index.js",
                       "requirements.txt", "package.json", "Cargo.toml"]:
             f = code_dir / fname
             if f.exists():

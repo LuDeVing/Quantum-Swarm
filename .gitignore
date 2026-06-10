@@ -3,6 +3,8 @@
 venv/
 env/
 ENV/
+node_modules/
+.expo/
 
 # Python
 __pycache__/
@@ -15,6 +17,7 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+target/
 *.dist-info/
 
 # Pytest / coverage
@@ -48,6 +51,11 @@ logs/
 logs/*
 !logs/episodes.jsonl
 !logs/audit.jsonl
+projects/
+data/
+eng_output/
+eval/results/
+frontend/npm-audit-production.json
 
 # IDE
 .vscode/
